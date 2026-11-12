@@ -22,6 +22,12 @@ global:
     cluster: 'khaaos-run'
     environment: 'staging'
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+
 rule_files:
   - '/etc/prometheus/rules/khaaos-slo-recording-rules.yml'
   - '/etc/prometheus/rules/khaaos-slo-alerts.yml'
@@ -43,7 +49,7 @@ scrape_configs:
           node: 'staging-2'
           component: 'app'
 
-  # ── Servidor raiz TS (dist/index.cjs — cadeia mesh/gateway/2PC) ──
+  # ── Servidor raiz TS (dist/index.mjs — cadeia mesh/gateway/2PC) ──
   # Mesmo endpoint /metrics (module server/game/metrics.ts).
   - job_name: 'khaaos-app-staging'
     metrics_path: '/metrics'

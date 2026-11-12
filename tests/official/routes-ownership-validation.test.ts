@@ -89,8 +89,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "transferência negativa", path: "/api/bank/transfer", body: { amountKrc: -1, destination: "fbm" } },
     { name: "transferência com usuário forjado", path: "/api/bank/transfer", body: { amountKrc: 5, destination: "fbm", userId: "victim" } },
     { name: "empréstimo fracionário", path: "/api/loans", body: { amountKrc: 100.5, days: 1 } },
-    { name: "compra com produto inexistente", path: "/api/items/purchase", body: { catalogId: "produto-inexistente" } },
-    { name: "compra com atributos econômicos forjados", path: "/api/items/purchase", body: { catalogId: "rifle-de-plasma", name: "Rifle barato", priceKrc: 1, stats: { damage: 999 } } },
+    { name: "craft com receita inexistente", path: "/api/items/craft", body: { catalogId: "produto-inexistente" } },
+    { name: "craft com fee, receita ou atributos forjados", path: "/api/items/craft", body: { catalogId: "rifle-de-plasma", armorerFeeKrc: 1, recipe: [], stats: { damage: 999 } } },
     { name: "equipamento com proprietário forjado", path: "/api/items/1/equip", body: { isEquipped: true, userId: "victim" } },
     { name: "uso de item com campo extra", path: "/api/items/1/use", body: { userId: "victim" } },
     { name: "reparo abaixo do mínimo", path: "/api/items/1/repair", body: { amountKrc: 0 } },
@@ -103,6 +103,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "salário diário com campo extra", path: "/api/player/daily-salary", body: { userId: "victim" } },
     { name: "especialização desconhecida", path: "/api/player/specialization", body: { specializationId: "ADMIN" } },
     { name: "especialização com usuário forjado", path: "/api/player/specialization", body: { specializationId: "INFANTARIA", userId: "victim" } },
+    { name: "operativo inexistente", path: "/api/player/operative", body: { operativeId: "OP_ADMIN" } },
+    { name: "operativo com usuário forjado", path: "/api/player/operative", body: { operativeId: "OP_MALE_TALON", userId: "victim" } },
     { name: "respawn com campo extra", path: "/api/player/respawn", body: { userId: "victim" } },
     { name: "prévia de empréstimo fora do limite", path: "/api/economy/loan-preview", body: { principal: 0, days: 1 } },
     { name: "simulação fora do limite", path: "/api/economy/simulate", body: { agents: 501, days: 30 } },
@@ -121,6 +123,32 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
       );
     });
   }
+});
+
+test("rotas Monte Carlo carregam o simulador sob demanda e retornam resultados", async () => {
+  const single = await request("POST", "/api/economy/simulate", "player-1", {
+    agents: 10,
+    days: 7,
+    seed: "lazy-monte-carlo-route",
+  });
+  assert.equal(single.status, 200);
+  const singleResult = await single.json() as {
+    config: { agents: number; days: number; seed: string };
+    daily: unknown[];
+  };
+  assert.equal(singleResult.config.agents, 10);
+  assert.equal(singleResult.config.days, 7);
+  assert.equal(singleResult.config.seed, "lazy-monte-carlo-route");
+  assert.equal(singleResult.daily.length, 7);
+
+  const batch = await request("POST", "/api/economy/simulate-batch", "player-1", {
+    runs: 2,
+    agents: 10,
+    days: 7,
+  });
+  assert.equal(batch.status, 200);
+  const batchResult = await batch.json() as { runs: unknown[] };
+  assert.equal(batchResult.runs.length, 2);
 });
 
 test("IDs inválidos são rejeitados antes de acessar o storage", async (t) => {
@@ -143,12 +171,12 @@ test("IDs inválidos são rejeitados antes de acessar o storage", async (t) => {
 });
 
 test("mutações financeiras usam o serviço idempotente e preservam status e DTOs", async () => {
-  const methodNames = ["transfer", "requestLoan", "payLoan", "purchaseItem", "repairItem", "claimDailySalary"];
+  const methodNames = ["transfer", "requestLoan", "payLoan", "craftItem", "repairItem", "claimDailySalary"];
   const replies: Record<string, { status: number; body: Record<string, unknown> }> = {
     transfer: { status: 200, body: { message: "Transferência realizada", newBalance: "113.00", operationId: "00000000-0000-4000-8000-000000000012" } },
     requestLoan: { status: 201, body: { id: 12, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000013" } },
     payLoan: { status: 200, body: { message: "Empréstimo pago", operationId: "00000000-0000-4000-8000-000000000014" } },
-    purchaseItem: { status: 201, body: { id: 13, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000015" } },
+    craftItem: { status: 201, body: { id: 13, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000015" } },
     repairItem: { status: 200, body: { message: "Reparado Item", newDurability: "55.00", operationId: "00000000-0000-4000-8000-000000000016" } },
     claimDailySalary: { status: 200, body: { message: "Salário recebido", amount: "100.00", operationId: "00000000-0000-4000-8000-000000000017" } },
   };
@@ -164,7 +192,7 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
     { method: "transfer", path: "/api/bank/transfer", body: { amountKrc: "10.00", destination: "fbm" }, key: "route-transfer-key-0001", args: ["player-1", "route-transfer-key-0001", "10.00", "fbm"] },
     { method: "requestLoan", path: "/api/loans", body: { amountKrc: 100, days: 2 }, key: "route-loan-key-000001", args: ["player-1", "route-loan-key-000001", 100, 2] },
     { method: "payLoan", path: "/api/loans/1/pay", body: {}, key: "route-payloan-key-0001", args: ["player-1", "route-payloan-key-0001", 1] },
-    { method: "purchaseItem", path: "/api/items/purchase", body: { catalogId: "rifle-de-plasma" }, key: "route-purchase-key-0001", args: ["player-1", "route-purchase-key-0001", { catalogId: "rifle-de-plasma" }] },
+    { method: "craftItem", path: "/api/items/craft", body: { catalogId: "rifle-de-plasma" }, key: "route-craft-key-0001", args: ["player-1", "route-craft-key-0001", { catalogId: "rifle-de-plasma" }] },
     { method: "repairItem", path: "/api/items/1/repair", body: { amountKrc: "1.00" }, key: "route-repair-key-00001", args: ["player-1", "route-repair-key-00001", 1, "1.00"] },
     { method: "claimDailySalary", path: "/api/player/daily-salary", body: {}, key: "route-salary-key-0001", args: ["player-1", "route-salary-key-0001"] },
   ];
@@ -359,4 +387,19 @@ test("especialização exige os requisitos EP555 e grava apenas no perfil da ses
   assert.equal(selected.status, 200);
   assert.deepEqual(await selected.json(), { specializationId: "INFANTARIA" });
   assert.deepEqual(updates, [{ userId: "player-1", specializationId: "INFANTARIA" }]);
+});
+
+test("seleção de operativo aceita apenas catálogo confiável e grava somente no perfil da sessão", async () => {
+  const updates: { userId: string; selectedOperativeId?: string }[] = [];
+  stubStorage("updatePlayerStats", async (userId: string, values: { selectedOperativeId?: string }) => {
+    updates.push({ userId, ...values });
+    return { userId, selectedOperativeId: values.selectedOperativeId };
+  });
+
+  const selected = await request("POST", "/api/player/operative", "player-1", {
+    operativeId: "OP_MALE_TALON",
+  });
+  assert.equal(selected.status, 200);
+  assert.deepEqual(await selected.json(), { selectedOperativeId: "OP_MALE_TALON" });
+  assert.deepEqual(updates, [{ userId: "player-1", selectedOperativeId: "OP_MALE_TALON" }]);
 });

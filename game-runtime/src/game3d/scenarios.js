@@ -15,10 +15,14 @@ export const SCENARIOS = Object.freeze({
     label: 'CIGKV — Campo de Instrução',
     shortLabel: 'CIGKV',
     mapLabel: 'Khaaos Ville', // F42 — README: "Khaaos Ville" (antes: typo 'Khaoos Ville')
+    // Ingresso canônico do campo: o esquadrão chega no trem do ZU, no solo.
+    // O airdrop permanece somente como fixture legado explícito.
+    zuIngress: Object.freeze({ protocol: 'zu_train_v1', eventProtocol: 'ZU_TRAIN_V1', mode: 'train', durationMs: 3400 }),
     sectorNames: ['Pátio de Armamento', 'Proving Grounds', 'Parque Abandonado', 'Urbano Denso', 'Terminal ZEX'],
     playerSpawn: { x: 0, z: 150 },
     ringDamageMultiplier: 1,
-    krcMultiplier: 1,
+    krcMultiplier: 0.5,
+    xpMultiplier: 1.0,
     // F42 — PULSO KHAAOS (README, Protocolo CIGKV): "a cada 10 minutos, alteração
     // climática ou drop de loot lendário". A anomalia KHAOS (pilões de contenção
     // que drenam escudo/vida fora deles) é o Pulso do campo de instrução — números
@@ -45,7 +49,8 @@ export const SCENARIOS = Object.freeze({
     sectorNames: ['Área Urbana e Comercial', 'Setor Industrial', 'Parque Abandonado', 'Zona de Extração', 'Terminal ZEX'],
     playerSpawn: { x: 90, z: 150 },
     ringDamageMultiplier: 1.5,
-    krcMultiplier: 1.5,
+    krcMultiplier: 1.0,
+    xpMultiplier: 1.25,
     // F42 — README W1: "anel de conflito fecha em 10 min em direção ao Parque".
     ringFinal: Object.freeze({ x: -100, z: 95, name: 'Parque Abandonado' }),
     groundTint: '#d9d4ca',
@@ -60,7 +65,8 @@ export const SCENARIOS = Object.freeze({
     sectorNames: ['Área Pantanosa', 'Bosque', 'Área de Caça', 'Templo Antigo', 'Terminal ZEX'],
     playerSpawn: { x: -90, z: 150 },
     ringDamageMultiplier: 1.75,
-    krcMultiplier: 2,
+    krcMultiplier: 1.5,
+    xpMultiplier: 1.5,
     // F42 — README W2 ("Emboscada Verde"): "anel fecha no templo; neblina com
     // esporos tóxicos pune atraso". A neblina-teto sobe até sporeTopY (o tsunami
     // canônico migrou para W4/Arukheea).
@@ -78,7 +84,8 @@ export const SCENARIOS = Object.freeze({
     sectorNames: ['Resort Abandonado', 'Vilarejo dos Beduínos', 'Refinaria de Petróleo', 'Areia Movediça', 'Terminal ZEX'],
     playerSpawn: { x: 150, z: -90 },
     ringDamageMultiplier: 2,
-    krcMultiplier: 2.5,
+    krcMultiplier: 2.25,
+    xpMultiplier: 2.0,
     // F42 — README W3 ("Assassino Silencioso"): "a partir de 5 min o anel fecha
     // na Vila Sombria sob fumaça tóxica". A fumaça-teto sobe até smokeTopY (a
     // erupção de lava saiu — as lagoas de óleo em chamas seguem como cenário).
@@ -96,7 +103,8 @@ export const SCENARIOS = Object.freeze({
     sectorNames: ['Bosque dos Perdidos', 'Prisão do Sol da Noite', 'Fábrica / Cemitério das Baleias', 'Marina Fantasma', 'Terminal ZEX'],
     playerSpawn: { x: -150, z: -90 },
     ringDamageMultiplier: 2.25,
-    krcMultiplier: 3,
+    krcMultiplier: 3.5,
+    xpMultiplier: 3.0,
     // F42 — README W4 ("Tsunami"): "anel fecha na Prisão; quem não sobe no
     // helicóptero torna-se 'grito calado'". A anomalia KHAOS migrou para o
     // Pulso do CIGKV (Protocolo CIGKV).

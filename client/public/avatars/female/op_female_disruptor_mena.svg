@@ -86,7 +86,7 @@
     <!-- Codename & Ethnicity Watermark -->
     <rect x="24" y="456" width="464" height="36" rx="4" fill="#000000" fill-opacity="0.85" stroke="#EF444466" stroke-width="1.5"/>
     <text x="36" y="480" font-family="system-ui, sans-serif" font-size="15" font-weight="bold" fill="#ffffff">
-      SORAYA HADDAD <tspan fill="#F59E0B" font-size="12">(Levantina / Oriente Médio (Libanesa))</tspan>
+      SORAYA HADD <tspan fill="#F59E0B" font-size="12">(Levantina / Oriente Médio (Libanesa))</tspan>
     </text>
   </g>
 </svg>

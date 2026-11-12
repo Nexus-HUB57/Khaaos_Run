@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
-import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements } from './detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements, naturalDressingPlacements } from './detail3d.js';
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
@@ -24,12 +24,13 @@ import {
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
   roadMaterial, sidewalkMaterial, crosswalkTexture, barrelMaterial,
   sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
+  biomeSurfaceProfile,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 // Fase 31 — vegetação de produção: árvores por arquétipo de mundo, arbustos
 // em cluster, tufos de grama curvados e vento por shader (vegetation3d).
 import {
-  treeArchetypeFor, buildTreeField, buildBushField,
+  treeArchetypeFor, buildTreeField, buildBushField, buildNaturalDressingField,
   buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
   grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
   bushShadowEntries,                                   // F38 — sombra de contato dos arbustos
@@ -222,9 +223,14 @@ function buildTraffic(scene, layout, q) {
 }
 
 // ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
-function buildRoads(scene, layout) {
+function buildRoads(scene, layout, scenarioId = 'CIGKV') {
   const road = roadMaterial();
+  const surface = biomeSurfaceProfile(scenarioId);
+  road.roughness = surface.asphalt;
+  road.envMapIntensity = surface.env;
   const walk = sidewalkMaterial();
+  walk.roughness = Math.min(1, surface.concrete + .06);
+  walk.envMapIntensity = surface.env;
   const group = new THREE.Group();
   for (const seg of roadSegments(layout)) {
     const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
@@ -368,9 +374,9 @@ export function buildContactShadows(scene, entries) {
   const im = new THREE.InstancedMesh(geo, mat, entries.length);
   const dummy = new THREE.Object3D();
   entries.forEach((e, i) => {
-    dummy.position.set(e.x, 0.012 + i * 0.0006, e.z); // stagger evita z-fighting entre blobs
+    dummy.position.set(e.x, (e.y ?? 0) + 0.012 + (i % 24) * 0.00015, e.z); // segue relevo; stagger limitado a 3,5mm
     dummy.rotation.set(-Math.PI / 2, 0, e.rot ?? 0);
-    dummy.scale.setScalar(e.size ?? 1);
+    dummy.scale.set(e.sizeX ?? e.size ?? 1, e.sizeZ ?? e.size ?? 1, 1);
     dummy.updateMatrix();
     im.setMatrixAt(i, dummy.matrix);
   });
@@ -621,7 +627,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
   // ---- árvores (arquétipo por mundo — identidade W1-W4) ----
-  const TREES = Math.max(8, Math.round(52 * q.treeFactor));
+  const TREES = Math.max(8, Math.round(64 * q.treeFactor));
   const shadowSpots = []; // Fase 7 — sombras de contato da natureza
   const seedBase = `${scenario?.id ?? 'CIGKV'}`.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const archetype = treeArchetypeFor(scenario?.id ?? 'CIGKV');
@@ -629,11 +635,13 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   let ti = 0, guard = 0;
   while (ti < TREES && guard++ < 600) {
     const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
-    if (!free(x, z) || !districtClear(x, z)) continue;
+    if (!free(x, z) || !districtClear(x, z) || treeSpots.some((p) => Math.hypot(x - p.x, z - p.z) < 5.5)) continue;
     const s = .8 + rng.next() * .7;
-    shadowSpots.push({ x, z, size: 3.1 * s });
+    shadowSpots.push({ x, y: terrainHeightAt(x, z, scenario?.id), z, sizeX: 3.1 * s, sizeZ: 2.35 * s });
     treeSpots.push({
-      x, z, s, rot: rng.next() * Math.PI * 2, tilt: (rng.next() - .5) * .1,
+      x, y: terrainHeightAt(x, z, scenario?.id), z, s,
+      sx: .87 + rng.next() * .26, sy: .92 + rng.next() * .20, sz: .87 + rng.next() * .26,
+      rot: rng.next() * Math.PI * 2, tilt: (rng.next() - .5) * .1,
       tint: scenario ? scenarioCanopyTint(scenario, rng) : canopyTint(rng),
       trunkTint: rng.next() < .5 ? '#6b5433' : '#7a6140',
     });
@@ -641,6 +649,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   }
   const field = buildTreeField({ archetype, seed: seedBase + 1, spots: treeSpots });
   scene.add(field.trunks, field.canopies);
+  scene.userData.treeSpotCount = treeSpots.length;
 
   // ---- arbustos (clusters de 5 blobs — Fase 31; tint por instância) ----
   const BUSH = Math.max(6, Math.round(40 * q.bushFactor));
@@ -653,12 +662,27 @@ function buildNature(scene, layout, rng, q, scenario = null) {
       ? '#' + new THREE.Color(scenarioCanopyTint(scenario, rng)).multiplyScalar(.78).getHexString()
       : '#45542c';
     bushSpots.push({
-      x, z, s: .75 + rng.next() * .6, rot: rng.next() * Math.PI * 2, tint: tintHex,
+      x, y: terrainHeightAt(x, z, scenario?.id), z,
+      s: .75 + rng.next() * .6, rot: rng.next() * Math.PI * 2, tint: tintHex,
     });
     bi++;
   }
   const bushes = buildBushField({ seed: seedBase + 2, spots: bushSpots });
   scene.add(bushes);
+  const groundDressingSpots = naturalDressingPlacements(layout, {
+    seed: `${scenario?.id ?? 'CIGKV'}:ground`, density: q.rockFactor,
+    avoidSpots: [...treeSpots, ...bushSpots],
+  }).map((p) => ({ ...p, y: terrainHeightAt(p.x, p.z, scenario?.id) }));
+  const groundDressing = buildNaturalDressingField({ placements: groundDressingSpots, seed: seedBase + 3 });
+  scene.add(groundDressing.group);
+  scene.userData.groundDressingSpots = groundDressingSpots;
+  scene.userData.groundDressingMeshes = groundDressing.meshes;
+  scene.userData.groundDressingCounts = groundDressing.counts;
+  shadowSpots.push(...groundDressingSpots.filter((p) => p.type !== 'fern').map((p) => {
+    const length = (p.type === 'fallenLog' ? 2.5 : 1.55) * p.scale;
+    const width = (p.type === 'fallenLog' ? .82 : 1.2) * p.scale;
+    return { x: p.x, y: p.y, z: p.z, rot: p.rot, sizeX: length, sizeZ: width };
+  }));
   scene.userData.swayMats = [
     field.canopies.material, bushes.material,
   ];
@@ -666,7 +690,9 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   // só árvores/pedras/scrub ancoravam no chão — o cluster de blobs "flutuava"
   // sobre o solo liso. 1 disco por arbusto (bushShadowEntries, PURO), mesmo
   // InstancedMesh/estagger das demais sombras de natureza.
-  const bushShadows = bushShadowEntries(bushSpots);
+  const bushShadows = bushShadowEntries(bushSpots).map((p) => ({
+    ...p, y: terrainHeightAt(p.x, p.z, scenario?.id), sizeX: p.size * 1.1, sizeZ: p.size * .85,
+  }));
   shadowSpots.push(...bushShadows);
   scene.userData.bushShadowSpots = bushShadows;   // inspeção/teste (padrão propPlacements)
 
@@ -722,7 +748,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   }
 
   // ---- pedras ----
-  const ROCKS = Math.max(6, Math.round(30 * q.rockFactor));
+  const ROCKS = Math.max(6, Math.round(40 * q.rockFactor));
   const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
   const rockMat = new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .92, flatShading: true });
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, ROCKS);
@@ -733,9 +759,11 @@ function buildNature(scene, layout, rng, q, scenario = null) {
     const x = (rng.next() - .5) * 390, z = (rng.next() - .5) * 390;
     if (!free(x, z, 3) || !districtClear(x, z, 2)) continue;
     const rs = .5 + rng.next() * .9;
-    shadowSpots.push({ x, z, size: 1.5 * rs });
-    rockDummy.position.set(x, .25 + rng.next() * .2, z);
-    rockDummy.scale.set(rs, .35 + rng.next() * .5, .5 + rng.next() * .9);
+    const groundY = terrainHeightAt(x, z, scenario?.id);
+    const rockYScale = .35 + rng.next() * .5;
+    shadowSpots.push({ x, y: groundY, z, sizeX: 1.5 * rs, sizeZ: 1.25 * rs });
+    rockDummy.position.set(x, groundY + .9 * rockYScale, z);
+    rockDummy.scale.set(rs, rockYScale, .5 + rng.next() * .9);
     rockDummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
     rockDummy.updateMatrix();
     rocks.setMatrixAt(ri++, rockDummy.matrix);
@@ -824,22 +852,27 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // praça central de asfalto
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(34, 40),
-    asphaltMaterial(8)
+    asphaltMaterial(8, scenario.id)
   );
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
   plaza.receiveShadow = true;
   scene.add(plaza);
 
   // Fase 6 — viação (estradas/calçadas/faixas) por cima do terreno
-  buildRoads(scene, layout);
+  buildRoads(scene, layout, scenario.id);
 
   // ---- estruturas ----
+  const surface = biomeSurfaceProfile(scenario.id);
   const concrete = concreteMaterial(2.2);
   const concrete2 = concreteMaterial(1.4);
   const metalRust = metalMaterial('#7a4a2b');
   const metalBlue = metalMaterial('#31556b');
   const metalGreen = metalMaterial('#3d5a3a');
   const metalGray = metalMaterial('#4c4f55');
+  for (const m of [concrete, concrete2]) { m.roughness = surface.concrete; m.envMapIntensity = surface.env; }
+  for (const m of [metalRust, metalBlue, metalGreen, metalGray]) {
+    m.roughness = surface.metal; m.metalness = surface.metalness; m.envMapIntensity = surface.env;
+  }
   const winTex = windowsTexture();
   const crateTex = crateTexture();
 

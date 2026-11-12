@@ -48,7 +48,14 @@ test("persistência: upsertUser usa conflito pela chave primária e retorna o re
   let insertedTable: unknown;
   let insertedValues: unknown;
   let conflictOptions: { target?: unknown; set?: Record<string, unknown> } | undefined;
-  const fakeDb = {
+  let transactionLockUsed = false;
+  const fakeTransaction = {
+    execute: async () => { transactionLockUsed = true; },
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => [] }),
+      }),
+    }),
     insert: (table: unknown) => {
       insertedTable = table;
       return {
@@ -64,6 +71,9 @@ test("persistência: upsertUser usa conflito pela chave primária e retorna o re
       };
     },
   };
+  const fakeDb = {
+    transaction: async (callback: (tx: typeof fakeTransaction) => Promise<unknown>) => callback(fakeTransaction),
+  };
   const storage = new AuthStorage(fakeDb as never);
   const input = {
     id: storedUser.id,
@@ -76,6 +86,7 @@ test("persistência: upsertUser usa conflito pela chave primária e retorna o re
   const result = await storage.upsertUser(input);
 
   assert.equal(insertedTable, users);
+  assert.equal(transactionLockUsed, true, "upsert deve usar transação com lock de email normalizado");
   assert.deepEqual(insertedValues, input);
   assert.equal(conflictOptions?.target, users.id);
   assert.deepEqual(conflictOptions?.set && Object.keys(conflictOptions.set).sort(), [

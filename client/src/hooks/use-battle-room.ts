@@ -8,12 +8,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
 import { api } from "@shared/routes";
 import type { WarIActionItem } from "@shared/war-i";
+import type { OperativeAvatarRuntime } from "@shared/operative-avatar-catalog";
 
 export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 
 export interface BattlePlayer {
   userId: string;
   displayName: string;
+  selectedOperativeId?: string;
+  avatar?: OperativeAvatarRuntime;
   posX: number;
   posY: number;
   carryCapacity?: number;
@@ -81,6 +84,7 @@ type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: BattlePlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "loot_material_collected"; materialId: string; quantity: number; totalQuantity: number }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "packback_ready"; items: WarIActionItem[] }
   | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
@@ -282,6 +286,9 @@ export function useBattleRoom() {
                 ? { ...prev, loot: prev.loot.filter((l) => l.id !== msg.lootId) }
                 : prev,
             );
+            break;
+          case "loot_material_collected":
+            void queryClient.invalidateQueries({ queryKey: [api.items.materials.path] });
             break;
           case "damage_dealt":
             setPlayers((prev) =>

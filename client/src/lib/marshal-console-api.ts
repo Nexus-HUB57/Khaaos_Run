@@ -1,11 +1,11 @@
 export const MARSHAL_API_ROOT = "/api/console/v1/marshal";
 
 export const MARSHAL_WORLDS = [
-  { id: "CIGKV", name: "Khaaos Ville", capacity: 50 },
+  { id: "CIGKV", name: "Khaaos Ville", capacity: 100 },
   { id: "W1", name: "Barburhen", capacity: 100 },
-  { id: "W2", name: "Priadus", capacity: 75 },
-  { id: "W3", name: "Ckesalth", capacity: 60 },
-  { id: "W4", name: "Arukheea", capacity: 80 },
+  { id: "W2", name: "Priadus", capacity: 100 },
+  { id: "W3", name: "Ckesalth", capacity: 100 },
+  { id: "W4", name: "Arukheea", capacity: 100 },
 ] as const;
 
 export type MarshalWorldId = (typeof MARSHAL_WORLDS)[number]["id"];

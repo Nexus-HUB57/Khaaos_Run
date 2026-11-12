@@ -40,9 +40,9 @@ void Expect(bool Condition, const char* Description)
 
 int main()
 {
-    Expect(MapByte(0) == Variant::Zu1_Cinto,   "byte 0 maps to Zu1 (caminhão/cinto)");
-    Expect(MapByte(1) == Variant::Zu2_Saltar,  "byte 1 maps to Zu2 (capotamento/saltar)");
-    Expect(MapByte(2) == Variant::Zu3_Mascara, "byte 2 maps to Zu3 (ponte/máscara)");
+    Expect(MapByte(0) == Variant::Zu1_Cinto,   "byte 0 maps to Zu1 (trem/cinto)");
+    Expect(MapByte(1) == Variant::Zu2_Saltar,  "byte 1 maps to Zu2 (trem/saltar)");
+    Expect(MapByte(2) == Variant::Zu3_Mascara, "byte 2 maps to Zu3 (trem/máscara)");
     Expect(MapByte(99) == Variant::Zu1_Cinto,  "unknown byte falls back to Zu1 (defensive default)");
     Expect(MapByte(255) == Variant::Zu1_Cinto, "byte 255 falls back to Zu1 (defensive default)");
 

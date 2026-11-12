@@ -161,7 +161,13 @@ export class RateLimiter {
  * fazendo o tier MEDIUM pagar SSR completo (custo de GPU alto demais p/ o
  * ganho visual em telas de touch). SSR permanece exclusivo do high. */
 export function postFxPlanFor(tier = 'high') {
-  if (tier === 'high') return { ssr: true, bloomStrength: 0.24, grain: 0.022 };
-  if (tier === 'medium') return { ssr: false, bloomStrength: 0.18, grain: 0.016 };
+  if (tier === 'high') return {
+    ssr: true, bloomStrength: 0.24, grain: 0.018, sharpen: 0.16,
+    ssao: { resolutionScale: .62, intensity: 1.35, scale: 7, bias: .12, kernelRadius: 18, minResolution: .0001, blurRadius: 5, blurStdDev: 3 },
+  };
+  if (tier === 'medium') return {
+    ssr: false, bloomStrength: 0.18, grain: 0.012, sharpen: 0.12,
+    ssao: { resolutionScale: .42, intensity: .95, scale: 5, bias: .16, kernelRadius: 12, minResolution: .0002, blurRadius: 3, blurStdDev: 2 },
+  };
   return null; // low: render direto, sem composer
 }

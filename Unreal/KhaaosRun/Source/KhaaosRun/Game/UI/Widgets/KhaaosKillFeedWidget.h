@@ -18,7 +18,8 @@ enum class EKhaaosKillCause : uint8
 	Zona      UMETA(DisplayName = "ZONA"),
 	Queda     UMETA(DisplayName = "QUEDA"),
 	Veiculo   UMETA(DisplayName = "VEICULO"),
-	ReviveFail UMETA(DisplayName = "REVIVE_FAIL")
+	ReviveFail UMETA(DisplayName = "REVIVE_FAIL"),
+	Ambiental UMETA(DisplayName = "AMBIENTE")
 };
 
 /**

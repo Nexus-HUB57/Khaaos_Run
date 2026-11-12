@@ -18,8 +18,15 @@ export const twoPcRouter = Router();
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
+// Zod 4 restringe .uuid() às versões RFC 9562. O protocolo 2PC aceita UUIDs
+// legados já persistidos, portanto validamos o formato sem restringir a versão.
+const TransactionIdSchema = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  "transactionId deve ser um UUID válido",
+);
+
 const PrepareSchema = z.object({
-  transactionId:  z.string().uuid(),
+  transactionId:  TransactionIdSchema,
   idempotencyKey: z.string().min(1).max(128),
   amountKrc:      z.number().int().positive(),
   playerId:       z.number().int().positive(),
@@ -30,12 +37,12 @@ const PrepareSchema = z.object({
 });
 
 const CommitSchema = z.object({
-  transactionId: z.string().uuid(),
+  transactionId: TransactionIdSchema,
   playerId:      z.number().int().positive(),
 });
 
 const AbortSchema = z.object({
-  transactionId: z.string().uuid(),
+  transactionId: TransactionIdSchema,
   playerId:      z.number().int().positive(),
   reason:        z.string().optional(),
 });
@@ -129,7 +136,7 @@ twoPcRouter.post("/prepare", async (req: Request, res: Response) => {
     return res.json({ prepared: true, transactionId });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ prepared: false, code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ prepared: false, code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Prepare error:", error);
     return res.status(500).json({ prepared: false, code: "INTERNAL_ERROR", message: "Erro interno no servidor" });
@@ -204,7 +211,7 @@ twoPcRouter.post("/commit", async (req: Request, res: Response) => {
     return res.json({ committed: true, transactionId, amountKrc: amount });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Commit error:", error);
     return res.status(500).json({ code: "INTERNAL_ERROR", message: "Erro interno no servidor" });
@@ -282,7 +289,7 @@ twoPcRouter.post("/abort", async (req: Request, res: Response) => {
     return res.json({ aborted: true, transactionId, refundKrc: amount });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Abort error:", error);
     return res.status(500).json({ code: "INTERNAL_ERROR", message: "Erro interno no servidor" });

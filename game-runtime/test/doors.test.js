@@ -21,6 +21,7 @@ import { resolveScenario } from '../src/game3d/scenarios.js';
 import { buildScene } from '../src/game3d/world3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { GameAudio } from '../src/game3d/audio3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão das demais fases)
 const ctx2d = {
@@ -326,9 +327,12 @@ test('doorDown da madeira carrega kind no payload (áudio escolhe o material)', 
 // ============================================================================
 
 test('MatchRoom3D: folhas iniciam fechadas e sólidas; E do humano abre com doorToggle global', () => {
-  const room = new MatchRoom3D({ id: 'r-door', seed: 'F25-R1', capacity: 4, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
+  // Task 53 — botFill 2: com 1 ator a partida acabaria no 1º tick (último vivo)
+  // e os ticks de pouso do desembarque não processariam o input de E.
+  const room = new MatchRoom3D({ id: 'r-door', seed: 'F25-R1', capacity: 4, botFill: 2, airdrop: false, scenarioId: 'CIGKV' });
   room.addPlayer('p1', 'A');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.doors.length >= 8, 'sala tem folhas');
   const d = room.doors[0];
   assert.ok(room.physicsWorld.colliders.some((c) => c.doorId === d.id), 'folha fechada sólida na sala');
@@ -350,6 +354,7 @@ test('MatchRoom3D: sala tem loot INTERIOR e spots de invasão da IA', () => {
   const room = new MatchRoom3D({ id: 'r-door2', seed: 'F25-R2', capacity: 4, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
   room.addPlayer('p1', 'A');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const interior = room.loot.filter((l) => String(l.id).startsWith('loot-i') || String(l.id).startsWith('loot-m'));
   assert.ok(interior.length >= 8, `loot interior na sala (${interior.length})`);
   assert.ok(interior.some((l) => l.y > 2.5), 'item no mezanino');
@@ -360,6 +365,7 @@ test('MatchRoom3D: bot abre folha fechada e cruza o vão (mesma IA da sim offlin
   const room = new MatchRoom3D({ id: 'r-door3', seed: 'F25-R3', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   room.addPlayer('p1', 'A');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const d = room.doors.find((x) => x.horizontal);
   const b = room.bots[0];
   b.x = d.x + d.nx * 8; b.z = d.z + d.nz * 8; b.y = 0;

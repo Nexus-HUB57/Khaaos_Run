@@ -4,7 +4,7 @@
 // counters, gauges (push e sampler) e histograms com labels acotunados.
 //
 // Decisões de design (staging SRE, M3):
-//  - ZERO dependências: sem prom-client — o bundle de produção (dist/index.cjs)
+//  - ZERO dependências: sem prom-client — o bundle de produção (dist/index.mjs)
 //    não cresce e não há superfície de supply-chain nova.
 //  - Cardinalidade CONTROLADA: labels são sempre de enum fechado (method,
 //    route normalizada, status, outcome) — nunca userId/roomId (o padrão

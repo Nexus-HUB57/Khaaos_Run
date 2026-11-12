@@ -6,7 +6,8 @@ import { MatchRoom3D, KILL_XP, KILL_KRC, EXTRACT_XP } from '../server/room3d.js'
 import { validateInput3D } from '../server/antiCheat.js';
 import { chooseRoom } from '../server/matchmaking.js';
 import { MatchRoom } from '../server/room.js';
-import { PULSE_INTERVAL, WEAPONS3D } from '../src/game3d/sim3d.js';
+import { PULSE_INTERVAL, WEAPONS3D, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
 
@@ -28,6 +29,7 @@ test('room3d: lobby → start preenche bots, aplica entrada e emite matchStart',
   assert.equal(before.state, 'LOBBY');
   assert.equal(before.player.name, 'JOGADOR-1');
   assert.ok(room.start('p1', 'belt'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const after = room.snapshot('p1');
   assert.equal(after.state, 'IN_PROGRESS');
   assert.equal(after.player.armor, 60);
@@ -39,18 +41,23 @@ test('room3d: lobby → start preenche bots, aplica entrada e emite matchStart',
   assert.ok(events.some((e) => e.type === 'matchStart'));
   // start repetido é ignorado (sala já iniciada)
   assert.equal(room.start('p2', 'rush'), false);
+  disembarcarSala(room, 'p2'); // Task 53 — protocolo do trem cumprido antes do teste
 });
 
 test('room3d: start exige entrada válida e sala em lobby', () => {
   const room = makeRoom({ humans: 1 });
   assert.equal(room.start('p1', 'teleport'), false);
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.start('ghost', 'belt'), false);
+  disembarcarSala(room, 'ghost'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.start('p1', 'rush'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
 });
 
 test('room3d: movimento com input do humano (frente = -Z com yaw 0)', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const z0 = room.humans.get('p1').z;
   for (let i = 0; i < 30; i++) {
     room.input('p1', blankInput({ seq: i + 1, dy: -1 }));
@@ -64,6 +71,7 @@ test('room3d: movimento com input do humano (frente = -Z com yaw 0)', () => {
 test('room3d: colisão mantém ator dentro do mundo e fora de colliders', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.x = 197; p.z = 197; // borda (limite = 198)
   for (let i = 0; i < 60; i++) {
@@ -76,8 +84,10 @@ test('room3d: colisão mantém ator dentro do mundo e fora de colliders', () => 
 test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
   const room = makeRoom({ humans: 3 }); // p3 observador do killfeed
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
+  const krcBefore = p1.krc;
   // coloca p2 a 4m a leste de p1
   p2.x = p1.x + 4; p2.z = p1.z; p2.armor = 0;
   // yaw que aponta p1 para p2: frente (-sin, -cos) = (1, 0) → yaw = -PI/2
@@ -91,9 +101,12 @@ test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
   assert.equal(p2.alive, false, 'p2 deve ser eliminado');
   assert.equal(p1.kills, 1);
   assert.ok(p1.xp >= KILL_XP);
-  assert.ok(p1.krc >= 250 + KILL_KRC);
+  const expectedKnockKrc = Math.round(5 * room.scenario.krcMultiplier);
+  const expectedKillKrc = Math.round(KILL_KRC * room.scenario.krcMultiplier);
+  assert.equal(p1.krc, krcBefore + expectedKnockKrc + expectedKillKrc);
   const p1Events = room.drainEvents('p1');
-  assert.ok(p1Events.some((e) => e.type === 'kill' && e.target === 'JOGADOR-2'));
+  assert.ok(p1Events.some((e) => e.type === 'knock' && e.target === 'JOGADOR-2' && e.krc === expectedKnockKrc));
+  assert.ok(p1Events.some((e) => e.type === 'kill' && e.target === 'JOGADOR-2' && e.krc === expectedKillKrc));
   const p3Events = room.drainEvents('p3');
   assert.ok(p3Events.some((e) => e.type === 'killfeed' && e.victim === 'JOGADOR-2'));
   const p2Events = room.drainEvents('p2');
@@ -104,6 +117,7 @@ test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
 test('room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando alto', () => {
   const room = makeRoom({ humans: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p2.armor = 0;
@@ -122,6 +136,7 @@ test('room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando al
 test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.x = 195; p.z = 0; // fora do anel inicial (170)
   const r0 = room.ring.radius;
@@ -138,8 +153,9 @@ test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
 });
 
 test('room3d: coleta de loot e extração em terminal ZEX', () => {
-  const room = makeRoom({ humans: 1, botFill: 1 });
+  const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const item = room.loot.find((i) => i.active);
   p.x = item.x; p.z = item.z; p.y = 0;
@@ -155,15 +171,229 @@ test('room3d: coleta de loot e extração em terminal ZEX', () => {
   const xp0 = p.xp;
   room.input('p1', blankInput({ seq: 2, interact: true }));
   room.tick(DT);
-  assert.equal(t.active, false);
+  assert.equal(t.active, true, 'o terminal permanece ativo durante a canalização');
+  assert.ok(p.zexChannel, 'a interação inicia a canalização');
+  assert.equal(p.extracted, 0);
+  for (let i = 0; i < Math.ceil(ZEX_CHANNEL_SECONDS / DT) + 1 && t.active; i++) room.tick(DT);
+  assert.equal(t.active, false, 'o terminal só é consumido ao concluir');
   assert.equal(p.extracted, 1);
   assert.equal(p.xp, xp0 + EXTRACT_XP);
   assert.ok(room.drainEvents('p1').some((e) => e.type === 'extract'));
 });
 
+test('room3d: MP-ZEX-10 porta vence loot e terminal quando os alcances empatam', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  const item = room.loot.find((i) => i.active), door = room.doors[0];
+  assert.ok(item && door, 'fixture precisa de loot e porta');
+  for (const i of room.loot) i.active = false;
+  for (const d of room.doors) d.destroyed = true;
+  item.active = true;
+  door.destroyed = false;
+  // Sobreposição efêmera em memória para exercitar os empates; layout canônico não é alterado.
+  p.x = t.x; p.z = t.z; p.y = t.y ?? 0;
+  item.x = door.x = t.x; item.z = door.z = t.z; item.y = p.y; door.yMin = p.y;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+
+  assert.equal(t.active, true);
+  assert.equal(p.zexChannel, null);
+  assert.equal(item.active, true, 'a porta tem prioridade sobre o loot');
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'doorToggle'));
+});
+
+test('room3d: MP-ZEX-10 loot vence terminal quando os alcances empatam', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  const item = room.loot.find((i) => i.active);
+  assert.ok(item, 'fixture precisa de loot');
+  for (const i of room.loot) i.active = false;
+  for (const d of room.doors) d.destroyed = true;
+  item.active = true;
+  // Sobreposição efêmera em memória para exercitar os empates; layout canônico não é alterado.
+  p.x = t.x; p.z = t.z; p.y = t.y ?? 0;
+  item.x = t.x; item.z = t.z; item.y = p.y;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+
+  assert.equal(item.active, false);
+  assert.equal(t.active, true);
+  assert.equal(p.zexChannel, null);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'loot'));
+});
+
+test('room3d: terminal ZEX fica reservado, cancela por movimento e pode ser retomado', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  p1.x = p2.x = t.x; p1.z = p2.z = t.z;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.input('p2', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p1', 'o primeiro jogador reserva o terminal');
+  assert.ok(p1.zexChannel);
+  assert.equal(p2.zexChannel, null, 'o segundo jogador não inicia em paralelo');
+  const spectatorSnapshot = room.snapshot('p2');
+  assert.equal(spectatorSnapshot.terminals.find((item) => item.id === t.id).channeling, true);
+  assert.equal(spectatorSnapshot.player.zexChannel, null);
+  assert.ok(spectatorSnapshot.events.some((e) => e.type === 'extractUnavailable'));
+
+  p1.x += 1;
+  room.tick(DT);
+  assert.equal(p1.zexChannel, null, 'deslocamento acima do limite cancela');
+  assert.equal(t.channelerId, null, 'cancelamento libera a reserva');
+  room.input('p2', blankInput({ seq: 2, interact: false }));
+  room.tick(DT);
+  room.input('p2', blankInput({ seq: 3, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p2', 'outro jogador consegue iniciar após liberação');
+  assert.equal(p2.extracted, 0);
+});
+
+test('room3d: dano recebido cancela canal ZEX sem conceder XP', () => {
+  const room = makeRoom({ humans: 1, botFill: 1 });
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  for (const item of room.loot) item.active = false;
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  p.x = t.x; p.z = t.z;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p.zexChannel);
+  const xp0 = p.xp;
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  room.tick(DT);
+  assert.equal(p.zexChannel, null);
+  assert.equal(t.active, true);
+  assert.equal(p.xp, xp0);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'extractCancelled' && e.reason === 'damage'));
+});
+
+test('room3d: MP-ZEX-07 nocaute cancela o canal, libera o terminal e outro jogador assume', () => {
+  // sala SQUAD (privada): DBNO ativo — primeiro dano letal NOCAUTEIA, não mata
+  const room = new MatchRoom3D({ id: 'ring3d-knock', seed: 'TESTE-KNOCK', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  room.addPlayer('p1', 'CAÇADOR');
+  room.addPlayer('p2', 'RETAKE');
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  assert.ok(p1.squad && p1.squad === p2.squad, 'mesmo esquadrão → DBNO ativo');
+
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  // dano letal determinístico: vida fixada em 1 e ring DESLOCADO (raio 0 não
+  // fere quem está exatamente no centro — dist > radius), nocauteia em ~5 ticks
+  p1.life = 1;
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
+  assert.ok(p1.knocked, 'nocaute aconteceu (squad, não morte)');
+  assert.equal(p1.zexChannel, null, 'nocaute cancela a canalização');
+  assert.equal(t.active, true, 'terminal permanece utilizável');
+  assert.equal(t.channelerId, null, 'reserva liberada sem deixar órfã');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'nocaute não concede XP de extração');
+  // o MESMO tick que nocauteia cancela o canal como 'damage' (a 1ª linha de
+  // #damage cancela antes do knock pousar); 'knocked'/'death' no advanceZex
+  // são defense-in-depth. UM único cancelamento = zero dupla recompensa.
+  const knocks = room.drainEvents('p1').filter((e) => e.type === 'extractCancelled');
+  assert.equal(knocks.length, 1, 'exatamente um cancelamento (sem dupla concessão)');
+  assert.equal(knocks[0].reason, 'damage');
+
+  // afasta o ring e o retake: outro jogador assume sem reiniciar a sala
+  room.ring.radius = 500;
+  p2.x = t.x; p2.z = t.z;
+  room.input('p2', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p2', 'outro jogador assume o terminal após o nocaute');
+  assert.ok(p2.zexChannel);
+  assert.equal(p2.extracted, 0);
+});
+
+test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal utilizável', () => {
+  const room = new MatchRoom3D({ id: 'ring3d-death', seed: 'TESTE-DEATH', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  room.addPlayer('p1', 'VÍTIMA');
+  room.addPlayer('p2', 'TESTEMUNHA');
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  p2.x = t.x + 40; p2.z = t.z; // longe do ring
+
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  p1.life = 1; // dano letal determinístico (ver teste do nocaute)
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
+  assert.ok(p1.knocked);
+  // Dano adicional não antecipa o prazo fixo de recuperação de sete segundos.
+  for (let i = 0; i < 50 && p1.alive; i++) { room.input('p1', blankInput({ seq: 500 + i })); room.tick(DT); }
+  assert.equal(p1.alive, true, 'vítima permanece viva durante a janela DBNO');
+  assert.equal(p1.knocked, true, 'dano repetido não elimina antes do timeout');
+  assert.ok(p1.knockT > 0, 'prazo de recuperação ainda está ativo');
+  for (let i = 0; i < 300 && p1.alive; i++) { room.input('p1', blankInput({ seq: 600 + i })); room.tick(DT); }
+  assert.equal(p1.alive, false, 'morte final ocorre quando o deadline DBNO expira');
+  assert.equal(p1.zexChannel, null, 'nenhum canal sobrevive à morte');
+  assert.equal(t.active, true, 'terminal segue utilizável para quem chegar');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'morte não concede XP de extração');
+  const events = room.drainEvents('p1');
+  // UM único cancelamento (no tick do nocaute) — a morte não concede nem cancela de novo
+  const cancels = events.filter((e) => e.type === 'extractCancelled');
+  assert.equal(cancels.length, 1, 'exatamente um cancelamento em todo o ciclo nocaute→morte');
+  assert.equal(cancels[0].reason, 'damage');
+  assert.ok(events.some((e) => e.type === 'knocked'), 'vítima recebe evento knocked');
+  assert.ok(events.some((e) => e.type === 'eliminated'), 'vítima recebe evento eliminated');
+});
+
+test('room3d: MP-ZEX-07 fim de partida cancela todos os canais sem XP nem reserva órfã', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1');
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  room.time = 0.05; // relógio da partida encerra com canalização em curso
+  room.tick(DT);
+  assert.equal(room.state, 'FINISHED');
+  assert.equal(p1.zexChannel, null, 'fim de partida cancela o canal');
+  assert.equal(t.active, true, 'terminal não é consumido pelo cancelamento');
+  assert.equal(t.channelerId, null, 'nenhuma reserva órfã após o match_end');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'cancelamento por fim de partida não concede XP');
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'extractCancelled' && e.reason === 'match_end'));
+});
+
 test('room3d: recarga conserva munição de reserva', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.ammoMag = 0;
   room.input('p1', blankInput({ seq: 1, reload: true }));
@@ -181,6 +411,7 @@ test('room3d: recarga conserva munição de reserva', () => {
 test('room3d: bots se movem, engajam e atiram em humanos', () => {
   const room = makeRoom({ humans: 1, botFill: 6 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.bots.length, 6);
   const p = room.humans.get('p1');
   // coloca bot 1 ao lado do humano para engajamento rápido
@@ -200,6 +431,7 @@ test('room3d: bots se movem, engajam e atiram em humanos', () => {
 test('room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos drenados uma vez', () => {
   const room = makeRoom({ humans: 3, botFill: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const s1 = room.snapshot('p1');
   assert.equal(s1.mode, '3d');
   assert.equal(s1.roomId, 'ring3d-test');
@@ -214,6 +446,7 @@ test('room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos dren
 test('room3d: remoção de jogador emite killfeed e limpa eventos', () => {
   const room = makeRoom({ humans: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.removePlayer('p2');
   assert.equal(room.humans.has('p2'), false);
   const events = room.drainEvents('p1');
@@ -223,6 +456,7 @@ test('room3d: remoção de jogador emite killfeed e limpa eventos', () => {
 test('room3d: vitória por tempo e encerramento da sala', () => {
   const room = makeRoom({ humans: 2, botFill: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.time = 0.02;
   room.tick(DT);
   assert.equal(room.state, 'FINISHED');
@@ -235,6 +469,7 @@ test('room3d: vitória por tempo e encerramento da sala', () => {
 test('room3d: partida termina quando só resta um ator vivo', () => {
   const room = makeRoom({ humans: 1, botFill: 3 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   for (const b of room.bots) b.alive = false;
   room.tick(DT);
@@ -296,6 +531,7 @@ test('matchmaking: chooseRoom só agrupa clientes do mesmo modo', () => {
 test('room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (predição)', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const z0 = p.z;
   // 5 inputs enfileirados; 1º tick processa até 3
@@ -314,6 +550,7 @@ test('room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (prediç
 test('room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorados', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const z0 = p.z;
   // rajada: 50 inputs de uma vez (spam de rede)
@@ -332,6 +569,7 @@ test('room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorad
 test('room3d: rtt reportado no input é armazenado com clamp', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.input('p1', blankInput({ seq: 1, rtt: 180 }));
   room.tick(DT);
   assert.equal(room.humans.get('p1').rtt, 180);
@@ -343,6 +581,7 @@ test('room3d: rtt reportado no input é armazenado com clamp', () => {
 test('room3d: lag compensation acerta alvo na posição rebobinada que o atirador via', () => {
   const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-1' });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1'); // atirador (rtt alto)
   const p2 = room.humans.get('p2'); // vítima em movimento
   p1.cooldown = 0; p1.rtt = 400;             // 400ms de RTT → rewind ≈ 11 ticks
@@ -374,6 +613,7 @@ test('room3d: lag compensation NÃO acerta posição presente quando alvo já sa
   // vítima nunca esteve na linha de tiro: rewind = presente, nenhum hit
   const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-2' });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p1.yaw = -Math.PI / 2; // mira leste
@@ -381,7 +621,9 @@ test('room3d: lag compensation NÃO acerta posição presente quando alvo já sa
   p2.x = p1.x + 4; p2.z = p1.z;
   for (let i = 0; i < 6; i++) { room.input('p1', blankInput({ seq: i + 1 })); room.tick(DT); }
   p2.x = p1.x + 4; p2.z = p1.z + 90; // vítima ao NORTE da linha leste
-  for (let i = 0; i < 8; i++) { room.input('p1', blankInput({ seq: 10 + i })); room.tick(DT); }
+  // Task 53 — 30 ticks: a linha leste SAI do buffer de rewind (26) — a intenção
+  // do teste (alvo fora do rewind) fica incontestável
+  for (let i = 0; i < 30; i++) { room.input('p1', blankInput({ seq: 10 + i })); room.tick(DT); }
   const life0 = p2.life;
   room.input('p1', blankInput({ seq: 50, yaw: -Math.PI / 2, fire: true }));
   room.tick(DT);

@@ -32,7 +32,7 @@ test('identidade por mundo: cada cenário materializa seus marcos assinatura', (
     Barburhen: ['coolingTowers', 'smokestacks', 'pipeBridges'],      // setor industrial
     Priadus: ['waterPlane', 'temple', 'coralDomes', 'mangroves'],    // arquipélago abissal
     Ckesalth: ['mesas', 'columns', 'flareStack', 'dunes'],           // deserto vertical/refinaria
-    Arukheea: ['fragments', 'spires', 'anchorPylons', 'rifts'],      // singularidade dimensional
+    Arukheea: ['fragments', 'spires', 'anchorPylons', 'rifts', 'sea', 'sharks'], // singularidade + F43 mar/tubarões
   };
   for (const [id, kinds] of Object.entries(expected)) {
     const { scene } = buildScene(1234, id, null, 'high');
@@ -75,6 +75,7 @@ test('marcos FORA da área jogável (anel ≥190 m) — zero impacto em gameplay
     scene.traverse((o) => {
       if (!o.isMesh || o.isInstancedMesh) return;              // origem do instanced é o 0 (sem sentido p/ bounds)
       if (o.name === 'priadus-water-ring') return;             // anel centrado na origem (por definição)
+      if (o.name === 'arukheea-sea-ring') return;              // F43 — mar de Arukheea, anel na origem (por definição)
       if (o.name === 'barburhen-pipe-bridge') return;          // vão ENTRE pilares do anel
       let p = o, under = false, anchor = false;
       while (p) {

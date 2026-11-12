@@ -25,11 +25,42 @@ void UKhaaosAbility_ZheersPassive::ActivateAbility(const FGameplayAbilitySpecHan
 	const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	if (!ActorInfo || !ActorInfo->AbilitySystemComponent.IsValid())
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Zheers Passive: activation has no valid AbilitySystemComponent"));
+		return;
+	}
 
-	// Apply Adaptabilidade: +10% environment resistance
-	// This modifies the incoming damage based on the current world type
-	// Implementation: Apply GameplayEffect with tag Effect.Buff.Adaptabilidade
-	UE_LOG(LogKhaaosRun, Log, TEXT("Zheers Passive: Adaptabilidade activated (+10%% env resistance)"));
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	const AActor* OwnerActor = ASC->GetOwnerActor();
+	const FGameplayAbilitySpec* AbilitySpec = ASC->FindAbilitySpecFromHandle(Handle);
+	if (!OwnerActor || !OwnerActor->HasAuthority() || !AbilitySpec || !AbilitySpec->IsActive())
+	{
+		return;
+	}
+
+	UGameplayEffect* PassiveEffect = UKhaaosGameplayEffects::CreateZheersPassiveEffect(EnvironmentResistancePercent);
+	if (!PassiveEffect)
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Zheers Passive: failed to create Adaptabilidade GameplayEffect"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+	EffectContext.AddSourceObject(this);
+	const FGameplayEffectSpec PassiveSpec(PassiveEffect, EffectContext, GetAbilityLevel());
+	const FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(PassiveSpec);
+	if (!ActiveHandle.IsValid())
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Zheers Passive: ASC rejected Adaptabilidade GameplayEffect"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	ActiveEffectHandles.Add(ActiveHandle);
+	UE_LOG(LogKhaaosRun, Log, TEXT("Zheers Passive: Adaptabilidade applied (%.0f%% world-environment damage reduction)"),
+		FMath::Clamp(EnvironmentResistancePercent, 0.0f, 1.0f) * 100.0f);
 
 	// Do NOT end ability — passives are persistent
 }

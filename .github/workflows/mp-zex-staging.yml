@@ -1,0 +1,235 @@
+# =============================================================================
+# Khaaos Run — MP-ZEX 08+09 em staging: DESPACHO ÚNICO (dois dispositivos reais)
+# =============================================================================
+# Um único workflow_dispatch executa, em sequência e contra o MESMO staging
+# real (environment "staging"):
+#   1. MP-ZEX-08 (gate de release): duas contas reais, mesma sala, canal ZEX
+#      de A, queda abrupta do socket, liberação para B, resume sem XP
+#      (run-mp-zex-08-staging.mjs);
+#   2. MP-ZEX-09: o mesmo par de contas, agora com o cliente A sob
+#      DegradedLink (RTT 130 ms nominal ± jitter, "perda" ~2% como picos de
+#      retransmissão) contra o staging remoto (run-mp-zex-09-degraded.mjs no
+#      modo KR_ZEX09_BASE_URL) — conclusão/interrupção comparadas ao baseline,
+#      atraso visual B→A dentro do bound p95 e convergência pós-drain.
+#
+# "Dois dispositivos reais": duas sessões autenticadas independentes
+# (KR_STAGING_TEST_USER_A/B) contra o servidor de staging — nunca mock, nunca
+# sala local. A serialização (needs + concurrency) respeita a doutrina de uma
+# partida de teste por vez no staging.
+#
+# PRs: roda apenas o gate (secrets ausentes ⇒ skip limpo com resumo; o código
+# é coberto por test/mpzex-staging-env.test.js e mpzex-staging-selftest.mjs).
+# Despacho sem secrets ⇒ falha ANTES de tocar o staging, com os nomes exatos.
+#
+# Contratos (grep): MP-ZEX-08 PASS | RELATÓRIO (MP-ZEX-09)
+# =============================================================================
+
+name: MP-ZEX 08+09 — Despacho único em staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: 'Cenários (08, 09 ou 08,09)'
+        type: string
+        default: '08,09'
+      rtt_up_ms:
+        description: 'MP-ZEX-09 — atraso base cliente→servidor (ms)'
+        type: string
+        default: '65'
+      rtt_down_ms:
+        description: 'MP-ZEX-09 — atraso base servidor→cliente (ms)'
+        type: string
+        default: '65'
+      jitter_ms:
+        description: 'MP-ZEX-09 — jitter ± por quadro (ms)'
+        type: string
+        default: '30'
+      loss_pct:
+        description: 'MP-ZEX-09 — probabilidade de spike de retransmissão (%)'
+        type: string
+        default: '2'
+  pull_request:
+    branches: ain]
+    paths:
+      - 'game-runtime/scripts/run-mp-zex-08-staging.mjs'
+      - 'game-runtime/scripts/run-mp-zex-09-degraded.mjs'
+      - 'game-runtime/scripts/mpzex-staging-env.mjs'
+      - 'game-runtime/scripts/mpzex-staging-selftest.mjs'
+      - 'game-runtime/test/mpzex-staging-env.test.js'
+      - '.github/workflows/mp-zex-staging.yml'
+
+permissions:
+  contents: read
+
+# Uma partida de teste por vez no staging; nunca cancela execução ativa,
+# pois cancelar sockets no meio do canal pode deixar a sala de teste aberta.
+concurrency:
+  group: mp-zex-staging
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────── Gate de configuração ──────────────────────────
+  config:
+    name: Gate — secrets do environment staging (nomes apenas)
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      has_secrets: ${{ steps.gate.outputs.has_secrets }}
+      run_08: ${{ steps.gate.outputs.run_08 }}
+      run_09: ${{ steps.gate.outputs.run_09 }}
+    steps:
+      - name: Verificar presença dos secrets (valores omitidos)
+        id: gate
+        env:
+          KR_STAGING_BASE_URL: ${{ secrets.KR_STAGING_BASE_URL }}
+          KR_STAGING_TEST_USER_A: ${{ secrets.KR_STAGING_TEST_USER_A }}
+          KR_STAGING_TEST_PASSWORD_A: ${{ secrets.KR_STAGING_TEST_PASSWORD_A }}
+          KR_STAGING_TEST_USER_B: ${{ secrets.KR_STAGING_TEST_USER_B }}
+          KR_STAGING_TEST_PASSWORD_B: ${{ secrets.KR_STAGING_TEST_PASSWORD_B }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in KR_STAGING_BASE_URL KR_STAGING_TEST_USER_A KR_STAGING_TEST_PASSWORD_A KR_STAGING_TEST_USER_B KR_STAGING_TEST_PASSWORD_B; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+          event="${{ github.event_name }}"
+          scenarios="${{ github.event.inputs.scenarios || '' }}"
+          if (( ${#missing[@]} )); then
+            names="${missing[*]}"
+            if [[ "$event" == "workflow_dispatch" ]]; then
+              printf '::error::Environment "staging" sem os secrets obrigatórios: %s\nConfigure via scripts/staging/setup_staging_secrets.sh (docs/MPZEX_STAGING_DISPATCH.md).\n' "$names"
+              exit 1
+            fi
+            echo "ℹ️ PR sem secrets de staging — jobs de staging serão PULADOS (código coberto por unit test + selftest local)."
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "run_08=false" >> "$GITHUB_OUTPUT"
+            echo "run_09=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "✅ Secrets obrigatórios presentes; valores omitidos."
+          echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          if [[ "$event" == "workflow_dispatch" && "$scenarios" == *"09"* ]]; then echo "run_09=true" >> "$GITHUB_OUTPUT"; else echo "run_09=false" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$event" == "workflow_dispatch" && "$scenarios" == *"08"* ]]; then echo "run_08=true" >> "$GITHUB_OUTPUT"; else echo "run_08=false" >> "$GITHUB_OUTPUT"; fi
+
+  # ───────────────────────────── MP-ZEX-08 (gate) ────────────────────────────
+  mpzex-08:
+    name: MP-ZEX-08 — desconexão/resume em staging (2 contas reais)
+    needs: config
+    if: needs.config.outputs.has_secrets == 'true' && needs.config.outputs.run_08 == 'true'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Instalar dependências runtime
+        working-directory: game-runtime
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: MP-ZEX-08 contra o staging real
+        working-directory: game-runtime
+        env:
+          KR_STAGING_BASE_URL: ${{ secrets.KR_STAGING_BASE_URL }}
+          KR_STAGING_TEST_USER_A: ${{ secrets.KR_STAGING_TEST_USER_A }}
+          KR_STAGING_TEST_PASSWORD_A: ${{ secrets.KR_STAGING_TEST_PASSWORD_A }}
+          KR_STAGING_TEST_USER_B: ${{ secrets.KR_STAGING_TEST_USER_B }}
+          KR_STAGING_TEST_PASSWORD_B: ${{ secrets.KR_STAGING_TEST_PASSWORD_B }}
+          KR_STAGING_ALLOW_CUSTOM_HOST: ${{ vars.KR_STAGING_ALLOW_CUSTOM_HOST }}
+        run: |
+          set -o pipefail
+          node scripts/run-mp-zex-08-staging.mjs 2>&1 | tee /tmp/mpzex-08-staging.log
+          grep -q "MP-ZEX-08 PASS" /tmp/mpzex-08-staging.log || { echo "❌ contrato MP-ZEX-08 PASS ausente"; exit 1; }
+
+      - name: Artefato de evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp-zex-08-staging-${{ github.run_id }}
+          path: /tmp/mpzex-08-staging.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ───────────────────── MP-ZEX-09 (mesmo staging, A degradado) ──────────────
+  mpzex-09:
+    name: MP-ZEX-09 — rede degradada em staging (DegradedLink em A)
+    needs: [config, mpzex-08]
+    if: |
+      !failure() && !cancelled() &&
+      needs.config.outputs.has_secrets == 'true' && needs.config.outputs.run_09 == 'true'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Instalar dependências runtime
+        working-directory: game-runtime
+        run: npm ci --omit=dev --no-audit --no-fund
+
+      - name: MP-ZEX-09 contra o staging real (modo remoto)
+        working-directory: game-runtime
+        env:
+          # Modo remoto do run-mp-zex-09-degraded.mjs: mesmo staging, mesmas
+          # duas contas reais; a degradação fica NO CLIENTE A (DegradedLink).
+          KR_ZEX09_BASE_URL: ${{ secrets.KR_STAGING_BASE_URL }}
+          KR_ZEX09_TEST_USER_A: ${{ secrets.KR_STAGING_TEST_USER_A }}
+          KR_ZEX09_TEST_PASSWORD_A: ${{ secrets.KR_STAGING_TEST_PASSWORD_A }}
+          KR_ZEX09_TEST_USER_B: ${{ secrets.KR_STAGING_TEST_USER_B }}
+          KR_ZEX09_TEST_PASSWORD_B: ${{ secrets.KR_STAGING_TEST_PASSWORD_B }}
+          KR_ZEX09_ALLOW_CUSTOM_HOST: ${{ vars.KR_STAGING_ALLOW_CUSTOM_HOST }}
+          KR_ZEX09_UP_MS: ${{ github.event.inputs.rtt_up_ms || '65' }}
+          KR_ZEX09_DOWN_MS: ${{ github.event.inputs.rtt_down_ms || '65' }}
+          KR_ZEX09_JITTER_MS: ${{ github.event.inputs.jitter_ms || '30' }}
+          KR_ZEX09_LOSS_P: ${{ github.event.inputs.loss_pct || '2' }}
+        run: |
+          set -o pipefail
+          node scripts/run-mp-zex-09-degraded.mjs 2>&1 | tee /tmp/mpzex-09-staging.log
+          grep -q "\[MP-ZEX-09\] RELATÓRIO:" /tmp/mpzex-09-staging.log || { echo "❌ relatório MP-ZEX-09 ausente"; exit 1; }
+
+      - name: Artefato de evidência
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp-zex-09-staging-${{ github.run_id }}
+          path: /tmp/mpzex-09-staging.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ───────────────────────────────── Resumo ──────────────────────────────────
+  summary:
+    name: Resumo do despacho
+    needs: [config, mpzex-08, mpzex-09]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consolidar resultado
+        env:
+          HAS_SECRETS: ${{ needs.config.outputs.has_secrets }}
+          RUN_08: ${{ needs.config.outputs.run_08 }}
+          RUN_09: ${{ needs.config.outputs.run_09 }}
+          J08: ${{ needs.mpzex-08.result }}
+          J09: ${{ needs.mpzex-09.result }}
+        run: |
+          {
+            echo "## MP-ZEX 08+09 — despacho único em staging"
+            echo ""
+            echo "| Cenário | Seleção | Resultado |"
+            echo "|---|---|---|"
+            echo "| MP-ZEX-08 (desconexão/resume, 2 contas reais) | ${RUN_08} | ${J08} |"
+            echo "| MP-ZEX-09 (rede degradada, DegradedLink em A) | ${RUN_09} | ${J09} |"
+            echo ""
+            if [[ "$HAS_SECRETS" != "true" ]]; then
+              echo "**Secrets do environment \`staging\` ausentes** — configure via \`scripts/staging/setup_staging_secrets.sh\` (ver docs/MPZEX_STAGING_DISPATCH.md)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

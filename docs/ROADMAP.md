@@ -1,28 +1,24 @@
 # Roadmap mestre de engenharia — Khaaos Run
 
-**Última revisão:** 20 de outubro de 2026
-**Base examinada:** `main` em `26758e008c9671f92a8f543eb5fbb2d0a2b3f369` (`26758e0`).
-**Escopo:** repositório oficial `Nexus-HUB57/Khaaos_Run`; status baseado em código, testes e evidência disponível nessa revisão. Não presume datas, tamanho de equipe ou disponibilidade de infraestrutura.
+**Última revisão:** 1 de novembro de 2026
+**Base examinada:** `main` em `189c65f0ba8b53d706b6659cb5cf0ca5b9fde77f` (`189c65f`).
+**Escopo:** repositório oficial `Nexus-HUB57/Khaaos_Run`; status baseado em código, testes e evidência disponível nesta revisão. Não presume tamanho de equipe ou disponibilidade de infraestrutura.
 
 ## Estado atual
 
 O repositório contém um vertical slice executável em React/TypeScript, Express, PostgreSQL e WebSocket: autenticação OIDC/sessões, inventário War’I, matchmaking, salas, zona, combate, loot, ranking e resultado. Também mantém um runtime Node separado, documentação e uma trilha Unreal Engine 5.8. A trilha UE5 **ainda não foi comprovada por build com UnrealBuildTool nem Automation Tests em instalação real**; checks C++/portáveis no CI não substituem isso.
 
-**Evidência desta branch:** o checkout Stripe BRL test-only, migration 0005, validação de raw-body webhook e testes de state machine estão em revisão. Localmente passaram `npm run check`, `npm run build`, `npm run test:official`, `npm run verify:all`, `drizzle-kit check` e geração Drizzle sem diff. O teste PostgreSQL Stripe foi escrito, mas não foi executado neste sandbox por ausência de serviço local; a execução CI com PostgreSQL efêmero permanece gate obrigatório antes do merge.
+**Estado Stripe:** a implementação do checkout de pacotes fixos BRL/KRC foi mesclada pelo PR [#82](https://github.com/Nexus-HUB57/Khaaos_Run/pull/82). Continua restrita a `sk_test_` e desabilitada por padrão; não existe autorização de cobrança live, resgate de KRC ou token/Mainnet.
 
-Executado em `main` no SHA acima: `npm run verify:all`, com todas as etapas configuradas aprovadas.
+**Validação remota mais recente:** o workflow [CI principal](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41365466378) e a integração [PostgreSQL](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41365466419) passaram no SHA `189c65f`. A integração aplicou migrations em banco efêmero e terminou com 169 testes, 167 aprovados, 0 falhas e 2 ignorados; o cenário Stripe de checkout idempotente, fulfillment atômico e state machine fail-closed passou. Os testes E2E Economy 2PC (15) e observabilidade (8) também passaram. Isso não representa acesso ou alteração de banco de produto.
 
-- Aplicação oficial: **221 aprovados, 0 falhas, 1 ignorado** na suíte oficial principal; **39/39 aprovados** na suíte E2E adicional.
-- Integração PostgreSQL: **1 teste aprovado** na execução local atual. A integração real do CI usa PostgreSQL efêmero; isso não representa auditoria nem migração no banco de produto.
-- `game-runtime`: **14 aprovados, 0 falhas, 2 ignorados**; o build e o stress test passaram.
-- TypeScript, build do app, build do runtime e checks portáveis de regras UE5 passaram.
-- A execução remota do workflow `CI` para o commit `26758e0` terminou com sucesso.
+**Staging Render:** `khaaos-run-staging` está na branch `main`, com Auto-Deploy Off; build command e health check `/healthz.json` coincidem com `render.yaml`. O último deploy consta como concluído para o commit `e652696`, mas uma consulta pública a `/healthz.json` expirou após 20 segundos sem resposta. Uma tentativa de inicialização anterior registrou `SESSION_SECRET_CURRENT must contain at least 32 bytes`; essa mensagem não foi encontrada no filtro de logs posterior ao último deploy. O staging, portanto, **não está confirmado saudável** e os gates de OIDC/checkout continuam pendentes. Nenhum valor de variável/segredo foi consultado ou alterado.
 
-Os totais acima são por etapa/comando e **não devem ser somados como casos únicos**, pois há conjuntos e verificações sobrepostos. `1 ignorado` na suíte oficial e `2 ignorados` no runtime refletem testes condicionais/serviços externos que não estavam ativos na execução local. Não foi feita aqui execução com UnrealBuildTool, ambiente OIDC de produção, staging do jogo ou banco de produto.
+Não foi feita aqui execução com UnrealBuildTool, autenticação OIDC de produção, pagamento Stripe real ou banco de produto. O teste Stripe ocorreu apenas em PostgreSQL efêmero do CI; o checkout no Render permanece explicitamente desligado.
 
-### Estado das issues relacionadas
+### Snapshot histórico de issues relacionadas (20/10/2026)
 
-Na consulta de 20/10/2026, as issues **#53–#60 estavam abertas**. Issue aberta não prova ausência de código, e presença de implementação parcial não fecha automaticamente sua issue: cada issue precisa ser atualizada com escopo, testes e evidência próprios. O roadmap descreve o status técnico verificado, não substitui o estado do GitHub Projects/Issues.
+Na consulta de 20/10/2026, as issues **#53–#60 estavam abertas**. O estado atual delas não foi reconsultado nesta revisão. Issue aberta não prova ausência de código, e presença de implementação parcial não fecha automaticamente sua issue: cada issue precisa ser atualizada com escopo, testes e evidência próprios. O roadmap descreve o status técnico verificado, não substitui o estado do GitHub Projects/Issues.
 
 ### Legenda de status
 
@@ -70,7 +66,7 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 - [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
 - [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
 
-**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. O depósito sem prova de liquidação permanece desabilitado com HTTP 503; as demais operações internas continuam no ledger. A entrega Stripe desta branch é exclusivamente test-mode, desabilitada por padrão, e não cria checkout nem cobrança sem configuração. Nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Resgate, refund/chargeback e rollout live não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](./STRIPE_BRAZIL_CHECKOUT.md).
+**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. O depósito sem prova de liquidação permanece desabilitado com HTTP 503; as demais operações internas continuam no ledger. O checkout Stripe test-only foi mesclado no PR #82; segue desligado por padrão e sem teste de staging concluído. Nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Resgate, refund/chargeback e rollout live não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](./STRIPE_BRAZIL_CHECKOUT.md).
 
 **Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
 
@@ -93,11 +89,12 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 - [x] Validar assinatura Stripe em raw body, restringir integração a `sk_test_`, exigir webhook secret e preservar checkout desativado no Render.
 - [x] Gravar crédito Weapons, histórico e ledger balanceado append-only na mesma transação do webhook pago; deduplicar IDs de evento e conferir SKU, jogador, sessão, moeda e valor.
 - [x] Escrever testes unitários de catálogo/assinatura e teste PostgreSQL de checkout idempotente, fulfillment concorrente, colisão de evento, divergência e estados terminais.
-- [ ] Passar o teste PostgreSQL no CI com migration 0005 aplicada e validar a execução de staging com credenciais Stripe test-only.
+- [x] Passar o teste PostgreSQL no CI com migration 0005 aplicada; o cenário Stripe foi aprovado no run de integração `41365466419`.
+- [ ] Confirmar health do staging, executar o teste OIDC e validar checkout exclusivamente com credenciais Stripe test-only. O endpoint de health não respondeu na última verificação; não habilitar checkout até resolver isso.
 - [ ] Definir nomes, quantidades KRC e preços BRL dos pacotes; confirmar elegibilidade da conta para métodos (Pix está sujeito a disponibilidade/ativação Stripe).
 - [ ] Configurar segredos e webhook somente em staging; validar um pagamento de teste e estados pendentes/expirados/retries sem chave live.
 - [ ] Implementar refunds, chargebacks, suporte, impostos, termos e lançamentos compensatórios antes de qualquer venda live.
-- [ ] Fazer revisão jurídica/fiscal e aprovação explícita do titular antes de remover qualquer gate de produção; a intenção global não libera mercados além do Brasil.
+- [ ] Fazer revisão jurídica/fiscal e aprovação explícita do titular antes de remover qualquer gate de produção; o lançamento global do jogo não amplia automaticamente os mercados de monetização, que permanecem limitados ao Brasil nesta fase.
 
 ### 0.3 Auditoria e reconciliação da economia
 
@@ -132,8 +129,12 @@ Esta etapa transforma a atomicidade já implementada em evidência operacional a
 - [x] Calcular zona na retomada com raio interpolado e tempos restantes coerentes com o tick do servidor; renderizar a geometria como elipse no canvas responsivo.
 - [x] Expor estado de conexão, impedir ações enquanto offline e oferecer controle de movimento pelo teclado (setas; Shift para passo maior), com foco e instruções acessíveis.
 - [x] Expandir E2E WebSocket autenticado para cobrir match, PackBack, granada/dano/durabilidade, coleta só após persistência, rollback de coleta e retomada sem desconexão falsa.
+- [x] Persistir seleção de operativo/avatar no perfil autenticado (migration 0012), validar IDs contra catálogo local dos 16 canônicos + Talon e apresentar seleção no perfil sem misturar com a imagem OIDC.
+- [x] Carregar o ID salvo do banco no join e propagar pelo room_state/AOI; atualizar lobbies locais abertos e manter identidade de countdown/partida como snapshot estável.
+- [x] Cobrir paridade dos catálogos/SVGs, autorização de seleção, persistência PostgreSQL, propagação WebSocket relayada e seleção visual Playwright.
 - [ ] Adicionar testes de UI em navegador para teclado, leitor de tela, estados de erro, loading e breakpoints móveis.
 - [ ] Validar fluxo completo de lobby/inventário/partida/pós-partida com dois clientes reais em ambiente de staging, incluindo perda de rede e expiração de sessão.
+- [ ] Propagar atualizações de perfil a lobbies cujo nó proprietário seja remoto; até lá, um lobby remoto ou match iniciado usa o avatar no próximo ingresso/sala.
 - [ ] Definir por produto como lidar com desconexão prolongada, reconexão após reinício do processo e retorno a uma partida já finalizada.
 
 **Gate de aceite:** nenhum item aparece como coletado nem produz efeito antes da gravação persistida; falha deixa inventário, carga e grid consistentes; reconnect do mesmo usuário recupera exatamente uma participação e um snapshot; inputs offline não são silenciosamente exibidos como enviados. A jornada automatizada atual cobre servidor/WebSocket e falhas simuladas de persistência; teste de navegador/leitor de tela e prova com múltiplos clientes em staging ainda estão pendentes.

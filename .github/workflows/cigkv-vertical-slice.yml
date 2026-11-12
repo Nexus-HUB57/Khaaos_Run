@@ -1,0 +1,135 @@
+name: CIGKV Character Vertical Slice
+
+on:
+  pull_request:
+    paths:
+      - 'Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/**'
+      - 'Unreal/KhaaosRun/Content/Materials/CIGKV/**'
+      - 'scripts/ue5/**'
+      - 'scripts/build/provision_ue58_gpu_runner.sh'
+      - 'scripts/build/ue58_gpu_diagnostic.py'
+      - 'scripts/build/run_cigkv_headless_gpu_pipeline.sh'
+      - 'scripts/build/simulate_cigkv_headless_gpu.py'
+      - 'scripts/build/prepare_nvidia_gpu_guest.sh'
+      - 'scripts/ue5_editor/cigkv_headless_bake.py'
+      - 'scripts/ue5_editor/**'
+      - '.github/workflows/cigkv-vertical-slice.yml'
+  workflow_dispatch:
+    inputs:
+      run_engine:
+        description: 'Executar importação, retarget e screenshots no runner UE5.8 licenciado'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  recipe:
+    name: Validate CIGKV slice recipe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON and Python scripts
+        run: |
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_visual_lighting_test_matrix.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_headless_render_bake.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/validate_cigkv_avatar_realism.py scripts/ue5/analyze_cigkv_material_configuration.py scripts/build/simulate_cigkv_headless_gpu.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py scripts/ue5_editor/configure_cigkv_sss_anisotropy.py scripts/ue5_editor/cigkv_headless_bake.py
+          bash -n scripts/build/run_cigkv_headless_gpu_pipeline.sh scripts/build/prepare_nvidia_gpu_guest.sh
+      - name: Run local mock GPU orchestration
+        run: |
+          python3 scripts/build/simulate_cigkv_headless_gpu.py \
+            --output artifacts/cigkv-vertical-slice/mock-headless
+          test -s artifacts/cigkv-vertical-slice/mock-headless/mock-headless-pipeline-report.json
+      - name: Validate hero avatar realism contract
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          python3 scripts/ue5/validate_cigkv_avatar_realism.py \
+            --output artifacts/cigkv-vertical-slice/avatar-realism-contract-report.json
+          test -s artifacts/cigkv-vertical-slice/avatar-realism-contract-report.json
+      - name: Audit source mesh quality and provenance
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          python3 scripts/ue5/audit_cigkv_character_assets.py \
+            --output artifacts/cigkv-vertical-slice/asset-quality-report.json
+          test -s artifacts/cigkv-vertical-slice/asset-quality-report.json
+      - name: Prepare engine-less report
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          set +e
+          python3 scripts/ue5/prepare_cigkv_vertical_slice.py --output artifacts/cigkv-vertical-slice/prepare-report.json
+          code=$?
+          test "$code" -eq 0 || test "$code" -eq 2
+          test -s artifacts/cigkv-vertical-slice/prepare-report.json
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cigkv-vertical-slice-recipe
+          path: artifacts/cigkv-vertical-slice/*-report.json
+
+  engine:
+    name: UE5.8 import retarget and screenshots
+    needs: recipe
+    if: inputs.run_engine == true && vars.UE58_ENABLED == 'true'
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    timeout-minutes: 90
+    env:
+      UE5_ROOT: ${{ vars.UE5_ROOT || '/opt/UnrealEngine' }}
+      UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Verify UE5.8 GPU runner
+        run: |
+          test -x "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd"
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          test "${CIGKV_GPU_RUNNER:-1}" = "1"
+      - name: Write GPU/UE5.8/Blender diagnostic
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          python3 scripts/build/ue58_gpu_diagnostic.py \
+            --ue-root "$UE5_ROOT" \
+            --output artifacts/cigkv-vertical-slice/ue58-gpu-diagnostic.json \
+            --require-gpu
+      - name: Validate Subsurface Profiles and hair anisotropy in Editor
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
+            -unattended -nop4 -nosplash -nullrhi=false \
+            -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/configure_cigkv_sss_anisotropy.py" \
+            -log
+          test -s artifacts/cigkv-vertical-slice/material-configuration-report.json
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
+            -unattended -nop4 -nosplash -nullrhi=false \
+            -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/validate_cigkv_materials.py" \
+            -log
+          test -s artifacts/cigkv-vertical-slice/material-validation-report.json
+          python3 scripts/ue5/analyze_cigkv_material_configuration.py \
+            --input artifacts/cigkv-vertical-slice/material-configuration-report.json \
+            --output artifacts/cigkv-vertical-slice/material-configuration-analysis.json
+      - name: Normalize sources on the runner
+        run: |
+          mkdir -p Build/CIGKVVerticalSlice/Source artifacts/cigkv-vertical-slice
+          echo 'Execute scripts/ue5/normalize_cigkv_character_blender.py for each manifest source with Blender 4.x.'
+          test -f client/public/figures/glb/FIG_kane.glb
+          test -f mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae
+          test -f Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json
+      - name: Pre-bake and headless GPU render matrix
+        run: |
+          chmod +x scripts/build/run_cigkv_headless_gpu_pipeline.sh
+          scripts/build/run_cigkv_headless_gpu_pipeline.sh
+
+      - name: Verify real captures
+        run: |
+          test -s artifacts/cigkv-vertical-slice/engine-report.json
+          test "$(find artifacts/cigkv-vertical-slice -name 'CIGKV_*.png' | wc -l)" -ge 24
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cigkv-vertical-slice-ue58-${{ github.sha }}
+          path: artifacts/cigkv-vertical-slice

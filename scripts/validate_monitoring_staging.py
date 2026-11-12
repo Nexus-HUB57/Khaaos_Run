@@ -19,6 +19,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -36,13 +37,17 @@ def http_get(base_url: str, path: str, timeout: float = 10.0) -> tuple:
         return resp.status, resp.read().decode("utf-8", errors="replace")
 
 
-def http_post_json(base_url: str, path: str, payload: dict, timeout: float = 10.0) -> tuple:
+def http_post_json(base_url: str, path: str, payload: dict, timeout: float = 10.0, headers: dict = None) -> tuple:
+    """POST JSON. `headers` adiciona cabeçalhos extras (ex.: x-2pc-node-secret)."""
     data = json.dumps(payload).encode("utf-8")
+    merged = {"Content-Type": "application/json"}
+    if headers:
+        merged.update(headers)
     req = urllib.request.Request(
         base_url + path,
         data=data,
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers=merged,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -127,6 +132,11 @@ def main() -> int:
     parser.add_argument("--dashboard", default="infra/grafana/khaaos-economy-dashboard.json")
     parser.add_argument("--player-id", type=int, default=777)
     parser.add_argument("--skip-2pc", action="store_true", help="pula o fluxo 2PC ao vivo")
+    parser.add_argument(
+        "--node-secret",
+        default=os.environ.get("ECONOMY_2PC_NODE_SECRET", ""),
+        help="segredo de nó confiável 2PC (header x-2pc-node-secret); padrão: env ECONOMY_2PC_NODE_SECRET",
+    )
     args = parser.parse_args()
 
     failures = []
@@ -164,6 +174,11 @@ def main() -> int:
             seed_wallet(args.player_id, "1000.00")
             time.sleep(0.2)
 
+            # Nó confiável: o staging sobe com NODE_ENV=production e
+            # ECONOMY_2PC_NODE_SECRET (auth opção 1 da rota 2PC). Sem o header
+            # a rota recusa 401 em produção POR DESIGN — o guard é intocado.
+            two_pc_headers = {"x-2pc-node-secret": args.node_secret} if args.node_secret else None
+
             _, metrics_before = http_get(args.base_url, "/metrics")
             baseline = sum(parse_metric_samples(metrics_before, "khaaos_economy_2pc_requests_total"))
 
@@ -178,7 +193,7 @@ def main() -> int:
                 "coordinatorNodeId": "ci-monitoring-node-01",
                 "expiryTimestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 60)),
             }
-            status, body = http_post_json(args.base_url, "/api/economy/2pc/prepare", payload)
+            status, body = http_post_json(args.base_url, "/api/economy/2pc/prepare", payload, headers=two_pc_headers)
             prepared = None
             transaction_id = None
             try:
@@ -197,7 +212,7 @@ def main() -> int:
                 "playerId": args.player_id,
                 "reason": "validacao 13-monitoring: rollback do staging",
             }
-            status, body = http_post_json(args.base_url, "/api/economy/2pc/abort", abort_payload)
+            status, body = http_post_json(args.base_url, "/api/economy/2pc/abort", abort_payload, headers=two_pc_headers)
             if status < 200 or status >= 300:
                 failures.append("2PC abort falhou: status=%s body=%s" % (status, body[:200]))
             else:
@@ -212,6 +227,8 @@ def main() -> int:
                 failures.append("contadores 2PC nao moveram: antes=%.0f depois=%.0f" % (baseline, after_total))
         except Exception as exc:  # noqa: BLE001
             failures.append("fluxo 2PC ao vivo: %s" % exc)
+        if not args.node_secret:
+            failures.append("ECONOMY_2PC_NODE_SECRET ausente: com NODE_ENV=production a rota 2PC recusa 401 por design — o job precisa prover o segredo do nó")
 
     # ── 4. Contrato dashboard ↔ métricas (após o aquecimento do fluxo 2PC) ──
     try:

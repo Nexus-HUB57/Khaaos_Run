@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M009",
+  "operative_id": "M-09",
+  "codename": "SKW-05",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Skeetw",
+    "name": "Skeetw",
+    "type": "avian",
+    "skeleton": "SK_Gwen",
+    "passive": "Visao Espectral - enxerga camuflagem/fumaca 20m + glide 3s (-50% fall damage)",
+    "base_stats": {
+      "health": 80,
+      "energy": 120,
+      "speed": 1.3
+    },
+    "physical": {
+      "height_cm": 172,
+      "weight_kg": 55
+    },
+    "abbr": "SKW"
+  },
+  "world": {
+    "id": "W3",
+    "name": "Ckesalth",
+    "capacity": 100
+  },
+  "rank": "VENEX",
+  "specialization": "Recon Estratosferico e Marcacao de Alvos",
+  "ethnicity": {
+    "label": "Andino/Quechua",
+    "heritage": "Peruano (paterno) + Quechua/Aymara (materno)",
+    "region": "Altiplano Andino - Puno (PE) / La Paz (BO)",
+    "cultural_fusion": "Tradio Quechua do condor e das cristas altas combinada com o voo planado Skeetw. Nome KUNTURI (condor em Quechua) + WAMAN (falco/hawk em Quechua) - o observador dos picos agora observa de cima."
+  },
+  "phenotype": {
+    "skin_tone": "Morena altiplanica (#8C5A3C) com bochechas marcadas por vento de altitude e subtom frio de gelo",
+    "hair": "Preto reto, tranas finas colhidas em coque alto de voo, pontas tingidas com bioluminescencia Skeetw AZUL (#00BFFF)",
+    "eyes": "Castanho-escuros com membrana nictitante Skeetw visivel - anel dourado (#FFD700) acende quando a Visao Espectral ativa",
+    "facial_structure": "Macas do rosto altas e rosy (tradio altiplanica), nariz reto largo, queixo firme de quem respira fino",
+    "body_type": "Leve e pneumatico (ossos Skeetw ocos) - 170 cm, 58 kg. Frame de voo com lombares reforadas por anos de carga de mochila-radar",
+    "distinctive_silhouette": "Postura flight-ready com poncho dobrado em asa nas costas; pontas azuis do cabelo funcionam como farol de formacao. Silhueta de crista - imovel na borda, decai no ar."
+  },
+  "cultural_markers": {
+    "tattoos": "Smbolo Chakana (cruz andina) no antebraco interno esquerdo, estilo ponto fino; linha de altitude (4.800m) tatuada no pulso direito",
+    "scars": "Nenhuma de bala - queda de voo de treino deixou cicatriz fina em L no ombro direito (conserto de asa)",
+    "ornaments": "Pingente de cobre do Kuntur Wasi (colar do condor), wawi (chupo de chumbo Quechua) amarrado ao cinto de carga",
+    "clothing_style": "Poncho de voo modular - l tecido Altiplano dobrado em asa sobre aramor leve Skeetw; culotes de queda com bolsos de marcador bioluminescente"
+  },
+  "species_traits": {
+    "visible_modification": "Crista de penas Skeetw ao longo dos antebraos - iridescente azul-preto, erectable em combate; bioluminescencia azul nas pontas das tranas; unhas dos pes parcialmente fusionadas (garra de pouso)",
+    "passive_manifestation": "Visao Espectral: enxerga atraves de camuflagem e fumaca (20m) - olhos ganham glow azul-espectral; +10% crit em alvos marcados; glide de 3s apos salto com -50% fall damage",
+    "combat_style_id": "Estilo condor-ops - recon de cristas, marcacao laser-biologica de alvos pelo olho, dive-bomb com retreat to air. Leitura de thermals andinos adaptada a updrafts de Ckesalth."
+  },
+  "distinguishing_summary": "Unico Andino/Quechua do roster; crista de penas azul nos antebraos + tranas bioluminescentes; poncho-asa; Chakana no antebraco; olho com anel dourado de Visao Espectral; recon de altitude nico.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "SKW-05",
+  "operative_ref": "OP_SKW_M_01",
+  "avatar_ref": "AVT_SKW_M_01",
+  "legacy_codename": "KUNTURI WAMAN",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

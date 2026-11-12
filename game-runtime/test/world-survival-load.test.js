@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // Fase 42 — sobrevivências 1:1 com o README:
 //   Ckesalth (W3) — TOXIC_SMOKE  "Assassino Silencioso" (fumaça até smokeTopY 180)
@@ -12,6 +13,7 @@ import { MatchRoom3D } from '../server/room3d.js';
 test('Ckesalth toxic smoke floods low terrain and preserves high exploration routes', () => {
   const sim = new KhaaosSim3D({ seed: 'CKESALTH-SMOKE', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.player.x = 0;
   sim.player.z = 0;
   sim.smokeTimer = 139.99;
@@ -22,6 +24,7 @@ test('Ckesalth toxic smoke floods low terrain and preserves high exploration rou
 
   const high = new KhaaosSim3D({ seed: 'CKESALTH-FORGE', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
   high.start('belt');
+  disembarcarSim(high); // Task 53 — protocolo do trem cumprido antes do teste
   high.player.x = 0;
   high.player.z = 0;
   high.player.y = 220;
@@ -35,6 +38,7 @@ test('Ckesalth toxic smoke floods low terrain and preserves high exploration rou
 test('CIGKV Pulso Khaaos drains exposed shields while quantum anchors protect explorers', () => {
   const exposed = new KhaaosSim3D({ seed: 'CIGKV-EXPOSED', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   exposed.start('belt');
+  disembarcarSim(exposed); // Task 53 — protocolo do trem cumprido antes do teste
   exposed.player.x = 160;
   exposed.player.z = -90;
   exposed.player.vy = 6;
@@ -50,6 +54,7 @@ test('CIGKV Pulso Khaaos drains exposed shields while quantum anchors protect ex
 
   const anchored = new KhaaosSim3D({ seed: 'CIGKV-ANCHOR', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   anchored.start('belt');
+  disembarcarSim(anchored); // Task 53 — protocolo do trem cumprido antes do teste
   anchored.player.x = 0;
   anchored.player.z = 0;
   const anchoredArmor = anchored.player.armor;
@@ -64,6 +69,7 @@ test('CIGKV authoritative room replicates anomaly events and anchor protection',
   assert.ok(room.addPlayer('exposed', 'EXPOSED'));
   assert.ok(room.addPlayer('anchored', 'ANCHORED'));
   assert.ok(room.start('exposed', 'belt'));
+  disembarcarSala(room, 'exposed'); // Task 53 — protocolo do trem cumprido antes do teste
   room.humans.get('exposed').x = 160;
   room.humans.get('exposed').z = -90;
   room.humans.get('anchored').x = 0;
@@ -84,6 +90,7 @@ test('Arukheea tsunami integrates 60 players and remains within the simulation b
   const room = new MatchRoom3D({ id: 'arukheea-load', seed: 'ARUKHEEA-60P', region: 'sa-east', capacity: 60, botFill: 0, airdrop: false, scenarioId: 'Arukheea' });
   for (let i = 0; i < 60; i++) assert.ok(room.addPlayer(`p${i}`, `OPERADOR-${i}`));
   assert.ok(room.start('p0', 'belt'));
+  disembarcarSala(room, 'p0'); // Task 53 — protocolo do trem cumprido antes do teste
   // REFÚGIO PISÁVEL (Fase 24): floors são a mecânica de superfícies altas
   // (mezaninos); uma plataforma em y=95 (> submergeBelowY 90) abriga 12 atores
   // que CAEM de 120m e pousam (pouso varrido) — o tsunami completa o ciclo

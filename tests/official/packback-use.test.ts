@@ -27,6 +27,7 @@ async function prepareMatch(item: any, playerCount = 2) {
   const originalGetItemForUser = storage.getItemForUser;
   const originalConsumeItemDurability = storage.consumeItemDurability;
   const originalCreateItem = storage.createItem;
+  const originalPickupLoot = storage.pickupLoot;
   const ownerSocket = fakeSocket();
   let consumed = 0;
   let itemReads = 0;
@@ -46,6 +47,7 @@ async function prepareMatch(item: any, playerCount = 2) {
     return item;
   };
   storage.createItem = async (values) => ({ ...values, id: 9900 } as any);
+  storage.pickupLoot = async (lootId, userId) => ({ loot: { id: lootId, pickedUpBy: userId } as any, item: { id: lootId, userId } as any });
 
   const roomId = await roomManager.createLobbyFromMatchmaking([
     { userId: ownerId, displayName: "Operativo PackBack", rating: 1000, ws: ownerSocket.socket as any },
@@ -78,6 +80,7 @@ async function prepareMatch(item: any, playerCount = 2) {
       storage.getItemForUser = originalGetItemForUser;
       storage.consumeItemDurability = originalConsumeItemDurability;
       storage.createItem = originalCreateItem;
+      storage.pickupLoot = originalPickupLoot;
     },
   };
 }

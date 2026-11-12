@@ -3,7 +3,11 @@
 #include "Game/WorldGen/KhaaosEnvironmentalHazard.h"
 #include "KhaaosRun.h"
 
+#include "Player/KhaaosCharacter.h"
+#include "Game/WorldGen/KhaaosEnvironmentalDamagePolicy.h"
+#include "Kismet/GameplayStatics.h"
 #include "Math/UnrealMathUtility.h"
+#include "Player/KhaaosPlayerState.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -21,6 +25,17 @@ UKhaaosEnvironmentalHazardComponent::UKhaaosEnvironmentalHazardComponent()
 
 int32 UKhaaosEnvironmentalHazardComponent::SpawnHazard(const FKhaaosHazardConfig& Config, const FVector& Location)
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return INDEX_NONE;
+	}
+
+	const FName SourceWorldId = KhaaosEnvironmentalDamagePolicy::GetActiveWorldId(GetWorld());
+	if (SourceWorldId.IsNone())
+	{
+		return INDEX_NONE;
+	}
+
 	if (ActiveHazardMap.Num() >= MaxActiveHazards)
 	{
 		UE_LOG(LogKhaaosRun, Warning, TEXT("EnvironmentalHazard::SpawnHazard - MAX HAZARDS reached (%d/%d)"),
@@ -34,6 +49,7 @@ int32 UKhaaosEnvironmentalHazardComponent::SpawnHazard(const FKhaaosHazardConfig
 	FKhaaosActiveHazard Hazard;
 	Hazard.Config = Config;
 	Hazard.OriginLocation = Location;
+	Hazard.SourceWorldId = SourceWorldId;
 	Hazard.RemainingTime = Config.DurationSeconds;
 	Hazard.bIsActive = false; // Not damaging yet — warning first
 	Hazard.AffectedPlayerIds.Empty();
@@ -55,6 +71,11 @@ int32 UKhaaosEnvironmentalHazardComponent::SpawnHazard(const FKhaaosHazardConfig
 
 bool UKhaaosEnvironmentalHazardComponent::RemoveHazard(int32 HazardId)
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
 	FKhaaosActiveHazard Hazard;
 	if (FKhaaosActiveHazard* Found = ActiveHazardMap.Find(HazardId))
 	{
@@ -92,7 +113,9 @@ bool UKhaaosEnvironmentalHazardComponent::IsLocationInHazard(const FVector& Loca
 	for (const auto& Pair : ActiveHazardMap)
 	{
 		const FKhaaosActiveHazard& Hazard = Pair.Value;
-		if (Hazard.bIsActive && IsInRadius(Location, Hazard.OriginLocation, Hazard.Config.Radius))
+		if (Hazard.bIsActive &&
+			KhaaosEnvironmentalDamagePolicy::IsSourceWorldActive(GetWorld(), Hazard.SourceWorldId) &&
+			IsInRadius(Location, Hazard.OriginLocation, Hazard.Config.Radius))
 		{
 			return true;
 		}
@@ -107,7 +130,9 @@ float UKhaaosEnvironmentalHazardComponent::GetHazardDamageAtLocation(const FVect
 	for (const auto& Pair : ActiveHazardMap)
 	{
 		const FKhaaosActiveHazard& Hazard = Pair.Value;
-		if (Hazard.bIsActive && IsInRadius(Location, Hazard.OriginLocation, Hazard.Config.Radius))
+		if (Hazard.bIsActive &&
+			KhaaosEnvironmentalDamagePolicy::IsSourceWorldActive(GetWorld(), Hazard.SourceWorldId) &&
+			IsInRadius(Location, Hazard.OriginLocation, Hazard.Config.Radius))
 		{
 			TotalDamage += Hazard.Config.DamagePerSecond * GlobalDamageMultiplier;
 		}
@@ -118,6 +143,11 @@ float UKhaaosEnvironmentalHazardComponent::GetHazardDamageAtLocation(const FVect
 
 void UKhaaosEnvironmentalHazardComponent::TickHazards(float DeltaTime)
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	// ─── Process Warning Timers ─────────────────────────────────────────────
 
 	TArray<int32> WarningIds;
@@ -148,6 +178,11 @@ void UKhaaosEnvironmentalHazardComponent::TickHazards(float DeltaTime)
 
 	TArray<int32> HazardIds;
 	ActiveHazardMap.GetKeys(HazardIds);
+	TArray<AActor*> PlayerCharacters;
+	if (GetWorld())
+	{
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), AKhaaosCharacter::StaticClass(), PlayerCharacters);
+	}
 
 	for (const int32 HazardId : HazardIds)
 	{
@@ -156,11 +191,36 @@ void UKhaaosEnvironmentalHazardComponent::TickHazards(float DeltaTime)
 
 		Hazard->RemainingTime -= DeltaTime;
 
-		// Apply damage to affected players
+		// Apply damage only when this server world is still the source world.
 		const float DamageThisTick = Hazard->Config.DamagePerSecond * GlobalDamageMultiplier * DeltaTime;
-		for (const int32 PlayerId : Hazard->AffectedPlayerIds)
+		Hazard->AffectedPlayerIds.Reset();
+		if (DamageThisTick > 0.0f &&
+			KhaaosEnvironmentalDamagePolicy::IsSourceWorldActive(GetWorld(), Hazard->SourceWorldId))
 		{
-			OnPlayerDamagedByHazard.Broadcast(PlayerId, DamageThisTick, Hazard->Config.HazardType);
+			for (AActor* Actor : PlayerCharacters)
+			{
+				AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(Actor);
+				if (!Character || !Character->IsPlayerControlled() ||
+					!IsInRadius(Character->GetActorLocation(), Hazard->OriginLocation, Hazard->Config.Radius))
+				{
+					continue;
+				}
+
+				AKhaaosPlayerState* PlayerState = Cast<AKhaaosPlayerState>(Character->GetPlayerState());
+				if (!PlayerState)
+				{
+					continue;
+				}
+
+				const float ActualDamage = PlayerState->ApplyWorldEnvironmentalDamage(
+					DamageThisTick, GetOwner(), Hazard->SourceWorldId);
+				if (ActualDamage > 0.0f)
+				{
+					const int32 PlayerId = PlayerState->GetPlayerId();
+					Hazard->AffectedPlayerIds.AddUnique(PlayerId);
+					OnPlayerDamagedByHazard.Broadcast(PlayerId, ActualDamage, Hazard->Config.HazardType);
+				}
+			}
 		}
 
 		// Check if hazard expired

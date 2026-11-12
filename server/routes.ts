@@ -14,7 +14,6 @@ import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/roomManagerSingleton";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
-import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
 import { distributedState } from "./game/DistributedState";
@@ -36,6 +35,10 @@ import {
 } from "./game/mutationSchemas";
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
+import { createEnrollmentRouter } from "./routes/enrollment";
+import { createPostgresEnrollmentStore } from "./game/enrollmentStore.postgres";
+import { recordEnrollmentFeeLedger } from "./game/enrollmentLedger";
+import { createEnrollmentFeeGatewayFromEnv, createEnrollmentFeePaymentService, isEnrollmentFeeEvent } from "./payments/enrollmentFeePayment";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
@@ -97,6 +100,31 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   // Register 2PC only after the /api-wide CSRF and rate-limit guards above.
   registerEconomy2PCRoutes(app);
 
+  // ── Alistamento E2E (T1.1) — 3 etapas + taxa U$1 idempotente ─────────
+  // Fase 47.1: persistência PostgreSQL (ENROLLMENT_STORE=postgres, migration
+  // 0011) + ledger REAL da taxa (double-entry economy_ledger_entries +
+  // bank_accounts) — o guard financeiro roda ANTES de marcar a sessão paga.
+  // Task 44 — store de alistamento compartilhada entre o router e o
+  // processador de webhook da taxa: o fulfillment precisa enxergar a MESMA
+  // sessão que o router criou. O protocolo único resolve o usuário no banco;
+  // o subject interno não é enviado à metadata Stripe. O gateway (test-only) exige
+  // store postgres — sem ela o webhook não sobreviveria a restart e a
+  // sessão poderia nunca concluir (fail-closed no boot).
+  const enrollmentStore = process.env.ENROLLMENT_STORE === "postgres" ? createPostgresEnrollmentStore() : undefined;
+  const enrollmentFeeGateway = createEnrollmentFeeGatewayFromEnv();
+  if (enrollmentFeeGateway && !enrollmentStore) {
+    console.error("[enrollment] ENROLLMENT_FEE_GATEWAY=stripe exige ENROLLMENT_STORE=postgres — gateway da taxa permanece DESLIGADO");
+  }
+  const enrollmentFeePaymentService = enrollmentFeeGateway && enrollmentStore
+    ? createEnrollmentFeePaymentService({ store: enrollmentStore })
+    : null;
+  app.use(createEnrollmentRouter({
+    authenticate: isAuthenticated,
+    ...(enrollmentStore ? { store: enrollmentStore } : {}),
+    ledger: { recordEnrollmentFeeLedger },
+    ...(enrollmentFeeGateway && enrollmentStore ? { gateway: enrollmentFeeGateway } : {}),
+  }));
+
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
   registerMarshalConsoleRoutes(app, { recoverPending: options.recoverPendingCouncils });
@@ -106,11 +134,13 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     const userId = getUserId(req);
+    const sessionUser = req.user as { authenticatedAtMs?: number; claims?: { iat?: number } };
+    const authenticatedAtMs = sessionUser.authenticatedAtMs ?? (sessionUser.claims?.iat ? sessionUser.claims.iat * 1000 : Date.now());
     void distributedState.rateLimit(`auth:ws-token:${userId}:${req.ip}`, 20, 60_000).then((limit) => {
       if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many WebSocket token requests" });
       try {
         res.setHeader("Cache-Control", "no-store");
-        res.json(createWsAccessToken(userId, undefined, req.sessionID));
+        res.json(createWsAccessToken(userId, undefined, req.sessionID, authenticatedAtMs));
       } catch {
         res.status(503).json({ message: "Autenticação WebSocket indisponível" });
       }
@@ -132,7 +162,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   const parseMutationBody = <T extends z.ZodTypeAny>(req: any, res: any, inputSchema: T): z.infer<T> | null => {
     const parsed = inputSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Entrada inválida" });
+      res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Entrada inválida" });
       return null;
     }
     return parsed.data;
@@ -168,7 +198,17 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
 
     try {
-      await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      // Task 44 — eventos da taxa de alistamento (metadata.kind =
+      // "enrollment_fee") NÃO são pedidos de pacote KRC: o processador de
+      // pacotes rejeitaria metadata sem orderId UUID. Roteia para o
+      // fulfillment dedicado, que deduplica na mesma payment_webhook_events.
+      // Sem o gateway ligado (default), eventos de taxa não existem —
+      // qualquer evento cai no processador de pacotes como antes.
+      if (enrollmentFeePaymentService && isEnrollmentFeeEvent(event)) {
+        await enrollmentFeePaymentService.processEvent(event, sha256Payload(rawBody));
+      } else {
+        await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      }
       return res.status(200).json({ received: true });
     } catch (error: any) {
       console.error("Stripe webhook processing failed", { name: error?.name, code: error?.code });
@@ -289,7 +329,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.transfer(userId, key, input.amountKrc, input.destination);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -314,7 +354,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.requestLoan(userId, key, input.amountKrc, input.days);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -339,6 +379,10 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     res.json(await storage.getItems(getUserId(req)));
   });
 
+  app.get(api.items.materials.path, requireAuth, async (req, res) => {
+    res.json(await storage.getPlayerMaterials(getUserId(req)));
+  });
+
   app.post(api.items.equip.path, requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -352,22 +396,22 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       res.json(item);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  app.post(api.items.purchase.path, requireAuth, async (req, res) => {
+  app.post(api.items.craft.path, requireAuth, async (req, res) => {
     try {
-      const input = parseMutationBody(req, res, api.items.purchase.input);
+      const input = parseMutationBody(req, res, api.items.craft.input);
       if (!input) return;
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const result = await economyService.purchaseItem(userId, key, { catalogId: input.catalogId });
+      const result = await economyService.craftItem(userId, key, { catalogId: input.catalogId });
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -410,7 +454,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.repairItem(userId, key, id, input.amountKrc);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -435,7 +479,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   app.post(api.player.specialization.path, requireAuth, async (req, res) => {
     const parsed = api.player.specialization.input.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Especialização inválida" });
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Especialização inválida" });
     }
 
     try {
@@ -453,6 +497,24 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       res.json({ specializationId: updated.specializationId ?? specialization.id });
     } catch {
       res.status(500).json({ message: "Não foi possível registrar a especialização" });
+    }
+  });
+
+  app.post(api.player.operative.path, requireAuth, async (req, res) => {
+    const parsed = api.player.operative.input.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Operativo inválido" });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const updated = await storage.updatePlayerStats(userId, {
+        selectedOperativeId: parsed.data.operativeId,
+      });
+      roomManager.updateSelectedOperative(userId, updated.selectedOperativeId);
+      res.json({ selectedOperativeId: updated.selectedOperativeId });
+    } catch {
+      res.status(500).json({ message: "Não foi possível registrar o operativo" });
     }
   });
 
@@ -720,10 +782,11 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   });
 
   // ── MONTE-CARLO ECONOMY SIMULATION ───────────────────────────────────────
-  app.post("/api/economy/simulate", requireAuth, (req, res) => {
+  app.post("/api/economy/simulate", requireAuth, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, economySimulationInput);
       if (!input) return;
+      const { runMonteCarlo } = await import("./game/MonteCarloEconomy");
       const result = runMonteCarlo({ ...input, seed: input.seed ?? Date.now() });
       res.json(result);
     } catch (err: any) {
@@ -731,11 +794,12 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
   });
 
-  app.post("/api/economy/simulate-batch", requireAuth, (req, res) => {
+  app.post("/api/economy/simulate-batch", requireAuth, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, economyBatchSimulationInput);
       if (!input) return;
       const { runs, ...simulation } = input;
+      const { runMonteCarloBatch } = await import("./game/MonteCarloEconomy");
       const result = runMonteCarloBatch(runs, simulation);
       // Don't send full per-run daily arrays to keep payload small
       res.json({

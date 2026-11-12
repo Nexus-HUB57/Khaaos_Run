@@ -10,6 +10,7 @@ import { DEFAULT_INPUT, PULSE_INTERVAL, WEAPONS3D } from '../src/game3d/sim3d.js
 import { trafficPlacements } from '../src/game3d/detail3d.js';
 import { buildWorldLayout } from '../src/game3d/layout3d.js';
 import { nightnessFor, nightSceneState, mixHex, lerp, NIGHT, MAX_NIGHT_PULSE } from '../src/game3d/skyPhase.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
 const idle = (over = {}) => ({ ...DEFAULT_INPUT, ...over });
@@ -64,6 +65,7 @@ test('fase8 identidade: setOperative valida catálogo e só muda em LOBBY', () =
   assert.equal(room.setOperative('p1', 'OP_QUE_NAO_EXISTE'), false);
   assert.equal(room.humans.get('p1').operativeId, 'OP_FEMALE_SNIPER');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.setOperative('p1', 'OP_MALE_VANGUARD'), false); // partida iniciada
   assert.equal(room.humans.get('p1').operativeId, 'OP_FEMALE_SNIPER');
 });
@@ -72,6 +74,7 @@ test('fase8 identidade: addPlayer aceita operativo e snapshot carrega self+other
   const room = new MatchRoom3D({ id: 'f8b', seed: 'ID-1', capacity: 8, botFill: 3, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1', 'OP_FEMALE_VALKYRIE');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const snap = room.snapshot('p1');
   assert.equal(snap.player.operativeId, 'OP_FEMALE_VALKYRIE'); // addPlayer validou (id do catálogo)
   assert.ok(snap.player.abilityState && 'cooldownTicks' in snap.player.abilityState);
@@ -93,6 +96,7 @@ test('fase8 habilidade: heal (Coágulo de Campo) cura com teto e entra em cooldo
   const room = makeRoom({ humans: 1 });
   room.setOperative('p1', 'OP_MALE_MEDIC_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.life = 50;
   room.input('p1', blankInput({ seq: 1, ability: true }));
@@ -115,6 +119,7 @@ test('fase8 habilidade: heal respeita vida cheia (abilityUnavailable, sem custo)
   const room = makeRoom({ humans: 1 });
   room.setOperative('p1', 'OP_MALE_MEDIC_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.input('p1', blankInput({ seq: 1, ability: true }));
   room.tick(DT);
   const events = room.drainEvents('p1');
@@ -126,6 +131,7 @@ test('fase8 habilidade: cooldownTicks no snapshot segue a convenção 30Hz', () 
   const room = makeRoom({ humans: 1 });
   room.setOperative('p1', 'OP_MALE_MEDIC_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.humans.get('p1').life = 50; // sem isso o heal é recusado (vida cheia)
   room.input('p1', blankInput({ seq: 1, ability: true }));
   room.tick(DT);
@@ -137,6 +143,7 @@ test('fase8 habilidade: dash (Ruptura de Viela) limita o deslocamento ao orçame
   const dash = makeRoom({ humans: 1, seed: 'DASH-1' });
   dash.setOperative('p1', 'OP_MALE_VANGUARD');
   dash.start('p1', 'belt');
+  disembarcarSala(dash, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const a = dash.humans.get('p1');
   const z0 = a.z;
   dash.input('p1', blankInput({ seq: 1, ability: true, dy: -1 }));
@@ -161,6 +168,7 @@ test('fase8 habilidade: speed (Investida Quebramar) amplia o deslocamento ~1.45x
   const withSpeed = makeRoom({ humans: 1, seed: 'SPD-1' });
   withSpeed.setOperative('p1', 'OP_MALE_BERSERKER_PACIFIC');
   withSpeed.start('p1', 'belt');
+  disembarcarSala(withSpeed, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const a = withSpeed.humans.get('p1');
   a.x = 0; a.z = 40;
   withSpeed.input('p1', blankInput({ seq: 1, ability: true }));
@@ -171,6 +179,7 @@ test('fase8 habilidade: speed (Investida Quebramar) amplia o deslocamento ~1.45x
 
   const normal = makeRoom({ humans: 1, seed: 'SPD-2' });
   normal.start('p1', 'belt');
+  disembarcarSala(normal, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const b = normal.humans.get('p1');
   b.x = 0; b.z = 40;
   const z0b = b.z;
@@ -184,6 +193,7 @@ test('fase8 habilidade: precision ativa o multiplicador de precisão no ator', (
   const room = makeRoom({ humans: 1 });
   room.setOperative('p1', 'OP_FEMALE_SNIPER');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   room.input('p1', blankInput({ seq: 1, ability: true }));
   room.tick(DT);
@@ -198,6 +208,7 @@ test('fase8 habilidade: damageReduction reduz o dano direto recebido em 25%', ()
   const hard = makeRoom({ humans: 2, seed: 'DR-1' });
   hard.setOperative('p2', 'OP_FEMALE_TACTICIAN_SOUTHASIAN');
   hard.start('p1', 'belt');
+  disembarcarSala(hard, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   hard._botsAway();
   const v = hard.humans.get('p2');
   const spot = openSpot(hard);
@@ -212,6 +223,7 @@ test('fase8 habilidade: damageReduction reduz o dano direto recebido em 25%', ()
 
   const soft = makeRoom({ humans: 2, seed: 'DR-1' }); // MESMA seed: geometria idêntica
   soft.start('p1', 'belt');
+  disembarcarSala(soft, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   soft._botsAway();
   const v2 = soft.humans.get('p2');
   const spot2 = openSpot(soft);
@@ -230,6 +242,7 @@ test('fase8 habilidade: temporaryArmor absorve dano e expira zerando', () => {
   const room = makeRoom({ humans: 2, seed: 'TA-1' });
   room.setOperative('p2', 'OP_FEMALE_HEAVY_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room._botsAway();
   const v = room.humans.get('p2');
   const spot = openSpot(room);
@@ -253,6 +266,7 @@ test('fase8 habilidade: recon marca bots no raio e o snapshot revela para o mini
   const room = makeRoom({ humans: 1, botFill: 3, seed: 'RC-1' });
   room.setOperative('p1', 'OP_MALE_RECON_ASIAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const near = room.bots[0], far = room.bots[1];
   near.x = p.x + 10; near.z = p.z; // dentro do raio 28
@@ -277,6 +291,7 @@ test('fase8 habilidade: stun congela o bot (sem mover/atirar) durante a duraçã
   const room = makeRoom({ humans: 1, botFill: 2, seed: 'ST-1' });
   room.setOperative('p1', 'OP_FEMALE_DISRUPTOR_MENA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const bot = room.bots[0];
   bot.x = p.x + 4; bot.z = p.z; // dentro do raio 9
@@ -296,6 +311,7 @@ test('fase8 habilidade: concealment impede que a IA adquira o alvo ocultado', ()
   const room = makeRoom({ humans: 1, botFill: 1, seed: 'CC-1' });
   room.setOperative('p1', 'OP_FEMALE_STEALTH_ASIAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   // Fase 25 — folhas dinâmicas no mundo físico: teste valida PERCEPÇÃO, não LOS
   room.doors.length = 0;
   room.physicsWorld.colliders = room.world.colliders;
@@ -317,6 +333,7 @@ test('fase8 habilidade: concealment impede que a IA adquira o alvo ocultado', ()
   const room2 = makeRoom({ humans: 1, botFill: 1, seed: 'CC-1' });
   room2.setOperative('p1', 'OP_FEMALE_STEALTH_ASIAN');
   room2.start('p1', 'belt');
+  disembarcarSala(room2, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   // Fase 25 — mesmo mundo limpo da parte 1 (o teste valida ocultação, não LOS)
   room2.doors.length = 0;
   room2.physicsWorld.colliders = room2.world.colliders;
@@ -335,6 +352,7 @@ test('fase8 habilidade: ringResistance reduz o dano do Ring em 40%', () => {
   const guarded = makeRoom({ humans: 1, seed: 'RR-1' });
   guarded.setOperative('p1', 'OP_FEMALE_SURVIVOR_INDIGENOUS');
   guarded.start('p1', 'belt');
+  disembarcarSala(guarded, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const g = guarded.humans.get('p1');
   g.armor = 0; g.life = 100;
   g.x = 175; g.z = 0; // fora do anel inicial (168)
@@ -346,6 +364,7 @@ test('fase8 habilidade: ringResistance reduz o dano do Ring em 40%', () => {
 
   const bare = makeRoom({ humans: 1, seed: 'RR-2' });
   bare.start('p1', 'belt');
+  disembarcarSala(bare, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const b = bare.humans.get('p1');
   b.armor = 0; b.life = 100;
   b.x = 175; b.z = 0;
@@ -365,6 +384,7 @@ test('fase8 habilidade: bloqueada caído, no ar e antes do start', () => {
   room.tick(DT); // ainda em LOBBY
   assert.equal(p.abilityState.cooldownT, 0);
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   p.dropPhase = 'sky'; p.onGround = false;
   room.input('p1', blankInput({ seq: 2, ability: true }));
   room.tick(DT);
@@ -380,6 +400,7 @@ test('fase8 habilidade: evento chega a humanos próximos com isSelf=false', () =
   const room = makeRoom({ humans: 2, seed: 'EV-1' });
   room.setOperative('p1', 'OP_MALE_MEDIC_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const a = room.humans.get('p1'), b = room.humans.get('p2');
   a.x = 0; a.z = 0; b.x = 8; b.z = 0; // a 8m — dentro do raio 90
   a.life = 50;
@@ -459,8 +480,9 @@ test('fase8 ceu: mixHex e lerp utilitários', () => {
 });
 
 test('fase8 snapshot: pulso do ring disponível p/ o cliente dirigir a noite', () => {
-  const room = makeRoom({ humans: 1, botFill: 0 });
+  const room = makeRoom({ humans: 1, botFill: 1 }); // Task 53 — 1 ator encerra a sala no 1º tick
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const snap = room.snapshot('p1');
   assert.ok(snap.ring && 'pulse' in snap.ring);
   assert.equal(snap.ring.pulse, 0);

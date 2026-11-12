@@ -1,0 +1,113 @@
+# =============================================================================
+# Khaaos Run — Deploy manual do staging real (VPS GoodCode Games)
+# =============================================================================
+# Publica o game-runtime (server + client dist) na VPS da plataforma
+# GoodCode Games (docs/GOODCODE_PLATFORM.md): build no runner, envio por SSH
+# (chave no secret CREDENCIAIS_SSH), systemctl restart e health gate.
+#
+# workflow_dispatch APENAS (deploy é decisão consciente): reiniciar o runtime
+# no meio de uma partida de teste viola a doutrina de uma partida por vez
+# (docs/MPZEX_STAGING_DISPATCH.md). Despachos MP-ZEX devem rodar ANTES ou
+# DEPOIS de um deploy, nunca durante.
+#
+# Contratos (grep): VPS_STAGING_DEPLOY_OK | VPS_STAGING_DEPLOY_FAIL
+# =============================================================================
+
+name: VPS Staging Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      restart:
+        description: 'Reiniciar o serviço khaaos-staging após o envio'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build + publicar na VPS + health gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Build do runtime + client
+        working-directory: game-runtime
+        run: |
+          set -euo pipefail
+          npm ci --include=dev --no-audit --no-fund
+          npm run build
+
+      - name: Preparar chave SSH
+        env:
+          CREDENCIAIS_SSH: ${{ secrets.CREDENCIAIS_SSH }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CREDENCIAIS_SSH" ]]; then
+            echo "::error::Secret CREDENCIAIS_SSH ausente (chave ed25519 vps-mavis)"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CREDENCIAIS_SSH" > ~/.ssh/khaaos_vps
+          chmod 600 ~/.ssh/khaaos_vps
+          ssh-keyscan -p 22022 143.95.213.237 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Empacotar e enviar (server + client + scripts)
+        working-directory: game-runtime
+        run: |
+          set -euo pipefail
+          tar czf /tmp/kr-runtime.tgz \
+            --exclude=node_modules --exclude=.data --exclude=coverage \
+            --exclude=artifacts --exclude='*.cab' --exclude='*.dll' \
+            --exclude='*.exe' --exclude='*.msi' .
+          tar czf /tmp/kr-dist.tgz -C dist .
+          scp -P 22022 -i ~/.ssh/khaaos_vps /tmp/kr-runtime.tgz \
+            root@143.95.213.237:/opt/khaaos-staging/uploads/kr-runtime.tgz
+          scp -P 22022 -i ~/.ssh/khaaos_vps /tmp/kr-dist.tgz root@143.95.213.237:/tmp/kr-dist.tgz
+
+      - name: Publicar, reiniciar e validar health
+        if: ${{ always() }}
+        env:
+          RESTART: ${{ inputs.restart }}
+        run: |
+          set -euo pipefail
+          ssh -p 22022 -i ~/.ssh/khaaos_vps root@143.95.213.237 bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/khaaos-staging/app
+          tar xzf /opt/khaaos-staging/uploads/kr-runtime.tgz
+          npm ci --include=dev --no-audit --no-fund >/dev/null 2>&1
+          rm -rf dist && mkdir -p dist
+          tar xzf /tmp/kr-dist.tgz -C dist
+          chown -R khaaos:khaaos /opt/khaaos-staging
+          chmod 600 /opt/khaaos-staging/app/.env
+          if [[ "${RESTART:-true}" == "true" ]]; then
+            systemctl restart khaaos-staging
+            sleep 3
+          fi
+          systemctl is-active khaaos-staging
+          rm -f /tmp/kr-dist.tgz
+          REMOTE
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              https://staging.143-95-213-237.sslip.io/healthz || true)
+            if [[ "$code" == "200" ]]; then
+              echo "VPS_STAGING_DEPLOY_OK (healthz 200 na tentativa $i)"
+              exit 0
+            fi
+            echo "healthz $code (tentativa $i/20)"; sleep 6
+          done
+          echo "VPS_STAGING_DEPLOY_FAIL (healthz não ficou 200)"
+          exit 1

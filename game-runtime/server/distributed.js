@@ -337,7 +337,8 @@ export function createDistributed({
   };
   const metrics = {
     acquired: 0, renewed: 0, lost: 0, released: 0, fenceViolations: 0,
-    redirects: 0, mirrorApplied: 0, mirrorGaps: 0, publishes: 0,
+    redirects: 0, mirrorApplied: 0, mirrorGaps: 0, mirrorDuplicates: 0,
+    mirrorReadErrors: 0, publishes: 0, publishSuccesses: 0, publishErrors: 0,
     invitesPublished: 0, inviteLookups: 0, inviteHits: 0,
   };
   let heartbeatTimer = null;
@@ -375,8 +376,10 @@ export function createDistributed({
       const events = await relay.read(GLOBAL_STREAM_KEY, mirror.lastSeq, { limit: 64 });
       const accepted = mirror.feed(events);
       metrics.mirrorApplied += accepted.length;
+      metrics.mirrorDuplicates = mirror.duplicates;
+      metrics.mirrorGaps = mirror.gaps;
       for (const e of accepted) mirrorHandlers.get(e.type)?.(e.payload, e);
-    } catch { /* driver indisponível: próxima passada */ }
+    } catch { metrics.mirrorReadErrors++; /* driver indisponível: próxima passada */ }
   }
 
   const mirrorHandlers = new Map();
@@ -391,6 +394,7 @@ export function createDistributed({
     enabled: Boolean(enabled),
     replicaId: id,
     metrics,
+    redisReady() { return redisClient ? (redisClient.isReady ? 1 : 0) : 0; },
     relayGlobalKey: () => GLOBAL_STREAM_KEY,
     frozen,
     held,
@@ -470,13 +474,20 @@ export function createDistributed({
     publish(roomId, type, payload) {
       if (!enabled || !rly) return null;
       metrics.publishes++;
-      const event = rly.publish(roomId, type, payload);
+      const track = (operation) => Promise.resolve(operation).then((result) => {
+        metrics.publishSuccesses++;
+        return result;
+      }).catch((error) => {
+        metrics.publishErrors++;
+        throw error;
+      });
+      const event = track(rly.publish(roomId, type, payload));
       // Espelho GLOBAL de ciclo de vida: o mirrorLoop de cada réplica consome o
       // stream '__global__' — sem esta publicação o relay entre réplicas é
       // INERTE (publish escreve só no stream por sala; o mirror lê o global e
       // mirrorApplied fica eternamente em 0). O roomId vai no payload para as
       // réplicas remotas terem contexto. Best-effort: nunca derruba o caller.
-      void Promise.resolve(rly.publish(GLOBAL_STREAM_KEY, type, { ...(payload ?? {}), roomId })).catch(() => {});
+      void track(rly.publish(GLOBAL_STREAM_KEY, type, { ...(payload ?? {}), roomId })).catch(() => {});
       return event;
     },
     isFrozen(roomId) { return frozen.has(roomId); },

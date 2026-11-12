@@ -96,7 +96,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     getEquippedItems: storage.getEquippedItems,
     getItemForUser: storage.getItemForUser,
     consumeItemDurability: storage.consumeItemDurability,
-    createItem: storage.createItem,
+    pickupLoot: storage.pickupLoot,
   };
   let durabilityWrites = 0;
   storage.getPlayerStats = async () => ({
@@ -221,10 +221,10 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     let allowPersistence!: () => void;
     const persistenceGate = new Promise<void>((resolve) => { allowPersistence = resolve; });
     releaseLootPersistence = allowPersistence;
-    storage.createItem = async (input) => {
+    storage.pickupLoot = async (id, userId) => {
       signalPersistenceStarted();
       await persistenceGate;
-      return { ...input, id: lootId } as any;
+      return { loot: { ...loot, id, isPickedUp: true, pickedUpBy: userId } as any, item: { id, userId, name: loot.name } as any };
     };
     let lootBroadcastSeen = false;
     const monitorLootBroadcast = (raw: WebSocket.RawData) => {
@@ -256,7 +256,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     room.loot.push(failedLoot);
     room.lootGrid.insert({ ...failedLoot });
     const carriedWeightBefore = owner.carriedWeight;
-    storage.createItem = async () => { throw new Error("fixture: PostgreSQL indisponível"); };
+    storage.pickupLoot = async () => { throw new Error("fixture: PostgreSQL indisponível"); };
     const persistenceErrorPromise = waitForMessage(
       ownerSocket,
       (message) => message.type === "error" && message.message.includes("Falha ao persistir o loot"),
@@ -336,6 +336,6 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     storage.getEquippedItems = originals.getEquippedItems;
     storage.getItemForUser = originals.getItemForUser;
     storage.consumeItemDurability = originals.consumeItemDurability;
-    storage.createItem = originals.createItem;
+    storage.pickupLoot = originals.pickupLoot;
   }
 });

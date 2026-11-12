@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ARMORER_CATALOG } from "../../shared/armorer-catalog";
+import { ARMORER_CATALOG, ARMORER_MATERIALS } from "../../shared/armorer-catalog";
 
 type MockInventoryItem = {
   id: number;
@@ -52,10 +52,13 @@ const zone = {
   centerY: 50,
 };
 
-async function mockPlayerApis(page: Page) {
+async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
   const inventory = items.map((item) => ({ ...item, stats: { ...item.stats } }));
-  const purchaseRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
+  const craftRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
+  const balances = ARMORER_MATERIALS.map((material) => ({ materialId: material.id, quantity: initialMaterialQuantity }));
   const equipRequests: Array<{ itemId: number; isEquipped: boolean }> = [];
+  const operativeRequests: string[] = [];
+  let selectedOperativeId = "OP_MALE_VANGUARD";
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -63,16 +66,30 @@ async function mockPlayerApis(page: Page) {
     let status = 200;
     let body: unknown;
 
-    if (pathname === "/api/items/purchase" && request.method() === "POST") {
+    if (pathname === "/api/player/operative" && request.method() === "POST") {
+      const input = request.postDataJSON() as { operativeId?: string };
+      if (typeof input.operativeId !== "string") {
+        status = 400;
+        body = { message: "Operativo inválido." };
+      } else {
+        selectedOperativeId = input.operativeId;
+        operativeRequests.push(selectedOperativeId);
+        body = { selectedOperativeId };
+      }
+    } else if (pathname === "/api/items/craft" && request.method() === "POST") {
       const input = request.postDataJSON() as { catalogId?: string };
-      purchaseRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
+      craftRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
       const product = ARMORER_CATALOG.find((candidate) => candidate.id === input.catalogId);
       if (!product) {
         status = 400;
         body = { message: "Produto de fixture desconhecido." };
       } else {
+        for (const ingredient of product.recipe) {
+          const balance = balances.find((entry) => entry.materialId === ingredient.materialId)!;
+          balance.quantity -= ingredient.quantity;
+        }
         const purchasedItem: MockInventoryItem = {
-          id: 200 + purchaseRequests.length,
+          id: 200 + craftRequests.length,
           userId: playerId,
           name: product.name,
           type: product.type,
@@ -88,9 +105,11 @@ async function mockPlayerApis(page: Page) {
         status = 201;
         body = {
           ...purchasedItem,
-          operationId: `00000000-0000-4000-8000-${String(purchaseRequests.length).padStart(12, "0")}`,
+          operationId: `00000000-0000-4000-8000-${String(craftRequests.length).padStart(12, "0")}`,
         };
       }
+    } else if (pathname === "/api/armorer/materials" && request.method() === "GET") {
+      body = balances;
     } else if (pathname === "/api/items" && request.method() === "GET") {
       body = inventory;
     } else {
@@ -118,7 +137,7 @@ async function mockPlayerApis(page: Page) {
           case "/api/player/me":
             body = {
               user: { id: playerId, firstName: "Zheers", lastName: "Teste" },
-              stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0 },
+              stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0, selectedOperativeId },
             };
             break;
           case "/api/zone/status":
@@ -137,10 +156,10 @@ async function mockPlayerApis(page: Page) {
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
 
-  return { purchaseRequests, equipRequests };
+  return { craftRequests, equipRequests, operativeRequests };
 }
 
-async function mockBattleSocket(page: Page, inMatch: boolean) {
+async function mockBattleSocket(page: Page, inMatch: boolean, lobbyRoom?: Record<string, unknown>) {
   await page.routeWebSocket("**/ws", (socket) => {
     socket.onMessage((rawMessage) => {
       let message: { type?: string; itemId?: number };
@@ -152,6 +171,9 @@ async function mockBattleSocket(page: Page, inMatch: boolean) {
 
       if (message.type === "join" || message.type === "resume") {
         socket.send(JSON.stringify({ type: "welcome", userId: playerId, roomId }));
+        if (lobbyRoom) {
+          socket.send(JSON.stringify({ type: "room_state", room: lobbyRoom }));
+        }
         if (!inMatch) return;
 
         const player = {
@@ -193,12 +215,81 @@ async function mockBattleSocket(page: Page, inMatch: boolean) {
 }
 
 async function openApp(page: Page, path: string, inMatch: boolean) {
-  await mockPlayerApis(page);
+  const apiMocks = await mockPlayerApis(page);
   await mockBattleSocket(page, inMatch);
   await page.goto(path);
+  return apiMocks;
 }
 
+test("perfil salva avatar do catálogo e exibe o mesmo ID selecionado", async ({ page }) => {
+  const { operativeRequests } = await openApp(page, "/profile", false);
+  const talon = page.getByTestId("select-operative-avatar-OP_MALE_TALON");
+
+  await expect(talon).toBeVisible();
+  await expect(talon).toHaveAttribute("aria-pressed", "false");
+  await talon.click();
+
+  await expect(talon).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("img", { name: "Avatar de TALON" })).toHaveAttribute("src", "/avatars/male/op_male_talon.svg");
+  expect(operativeRequests).toEqual(["OP_MALE_TALON"]);
+});
+
+test("lobby carrega retrato realista do operativo e mantém texto de identidade", async ({ page }) => {
+  await mockPlayerApis(page);
+  const operative = {
+    id: "OP_GNG_FEMALE_PIXEL",
+    codename: "PIXEL",
+    fullName: "Pixel",
+    gender: "FEMININO",
+    rank: "ZHEERS",
+    ueAssetId: null,
+    skeleton: "SK_Gwen",
+    avatarPath: "/avatars/female/op_gng_female_pixel.svg",
+    realisticAvatarPath: "/avatars/realistic/op_gng_female_pixel.webp",
+    canonical: true,
+    branch: "GANGUE_URBANA",
+  };
+  const player = {
+    userId: playerId,
+    displayName: "Zheers Teste",
+    selectedOperativeId: operative.id,
+    avatar: operative,
+    posX: 0,
+    posY: 0,
+    health: 100,
+    maxHealth: 100,
+    status: "VIVO",
+    kills: 0,
+    isConnected: true,
+    isReady: false,
+    isHost: true,
+    rating: 1000,
+  };
+  await mockBattleSocket(page, false, {
+    id: roomId,
+    status: "LOBBY",
+    maxPlayers: 16,
+    minPlayersToStart: 2,
+    playerCount: 1,
+    readyCount: 0,
+    players: [player],
+    zone: null,
+    loot: [],
+    hostId: playerId,
+    isPrivate: false,
+    inviteCode: "PIXEL01",
+  });
+
+  await page.goto("/lobby");
+  const portrait = page.getByRole("img", { name: "Avatar PIXEL" });
+  await expect(portrait).toBeVisible();
+  await expect(portrait).toHaveAttribute("src", "/avatars/realistic/op_gng_female_pixel.webp");
+  await expect(page.getByText("PIXEL · ELO 1000")).toBeVisible();
+  await expect.poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+});
+
 test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", async ({ page }) => {
+  test.setTimeout(60_000);
   await openApp(page, "/inventory", false);
   await expect(page.getByRole("heading", { name: "WAR’I" })).toBeVisible();
   await expect(page.getByText("4/6")).toBeVisible();
@@ -219,25 +310,31 @@ test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", a
   await expect(page.getByTestId("card-item-101")).not.toBeVisible();
 });
 
-test("todos os produtos da Forja sincronizam identidade e atributos com o War’I e a PackBack", async ({ page }) => {
+test("receitas da Forja consomem materiais, cobram serviço e sincronizam produtos com War’I/PackBack", async ({ page }) => {
   test.setTimeout(60_000);
-  const { purchaseRequests, equipRequests } = await mockPlayerApis(page);
+  const { craftRequests, equipRequests } = await mockPlayerApis(page);
   await mockBattleSocket(page, false);
   await page.goto("/market");
 
   for (const [index, product] of ARMORER_CATALOG.entries()) {
     const offer = page.getByTestId(`card-market-item-${index}`);
     await expect(offer).toContainText(product.name);
-    await expect(offer).toContainText(`${product.priceKrc} KRC`);
+    await expect(offer).toContainText(`${product.armorerFeeKrc} KRC`);
+    await expect(offer).toContainText("TRABALHO DO ARMEIRO");
     await expect(offer).toContainText(product.rarity);
     await expect(offer).toContainText(product.type);
     await expect(offer).toContainText(product.description);
-    const buyButton = page.getByTestId(`button-buy-${index}`);
-    await buyButton.click();
-    await expect.poll(() => purchaseRequests.length).toBe(index + 1);
-    await expect(buyButton).toBeEnabled();
-    expect(purchaseRequests[index].catalogId).toBe(product.id);
-    expect(purchaseRequests[index].idempotencyKey).toBeTruthy();
+    const craftButton = page.getByTestId(`button-craft-${index}`);
+    for (const ingredient of product.recipe) {
+      const material = ARMORER_MATERIALS.find((entry) => entry.id === ingredient.materialId)!;
+      await expect(offer.getByTestId(`ingredient-${product.id}-${material.id}`)).toContainText(material.name);
+      await expect(offer.getByTestId(`ingredient-${product.id}-${material.id}`)).toContainText(new RegExp(`\\d+/${ingredient.quantity}$`));
+    }
+    await craftButton.click();
+    await expect.poll(() => craftRequests.length).toBe(index + 1);
+    await expect(craftButton).toBeEnabled();
+    expect(craftRequests[index].catalogId).toBe(product.id);
+    expect(craftRequests[index].idempotencyKey).toBeTruthy();
   }
 
   await page.goto("/inventory");
@@ -267,6 +364,18 @@ test("todos os produtos da Forja sincronizam identidade e atributos com o War’
     await page.getByRole("button", { name: "FECHAR" }).click();
     if (product.id === "granada-de-fragmentacao") await expect(itemCard).toContainText("PACKBACK");
   }
+});
+
+test("Forja informa ingrediente ausente e impede fabricação sem estoque suficiente", async ({ page }) => {
+  const { craftRequests } = await mockPlayerApis(page, 0);
+  await mockBattleSocket(page, false);
+  await page.goto("/market");
+  const offer = page.getByTestId("card-market-item-0");
+  const craftButton = page.getByTestId("button-craft-0");
+  await expect(offer.getByTestId("ingredient-lamina-nano-metal")).toContainText("0/3");
+  await expect(craftButton).toContainText("FALTAM MATERIAIS");
+  await expect(craftButton).toBeDisabled();
+  await expect.poll(() => craftRequests.length).toBe(0);
 });
 
 test("Zona exibe a PackBack no celular, evita toque duplicado e confirma durabilidade", async ({ page }) => {

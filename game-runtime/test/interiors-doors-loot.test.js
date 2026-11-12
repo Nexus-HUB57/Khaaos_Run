@@ -20,6 +20,19 @@ import {
 } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { resolveScenario, SCENARIOS } from '../src/game3d/scenarios.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
+
+// Task 53 — a entrada canônica é o trem: desembarque pela porta (janela oficial,
+// 8 s) antes de exercitar mecânicas de combate/coleta — a bordo a ação é bloqueada.
+const STEP_ = 1 / 30;
+const idle_ = (o = {}) => ({ dx: 0, dy: 0, yaw: 0, pitch: 0, sprint: false, crouch: false, jump: false, fire: false, ads: false, reload: false, interact: false, medkit: false, throw: false, gloo: false, ability: false, slot: 0, ...o });
+function desembarcaDoTrem(s) {
+  for (let i = 0; i < 30 * 20 && !s.doorJump(); i++) s.step(idle_(), STEP_); // janela abre em 8 s
+  for (let i = 0; i < 30 * 4; i++) s.step(idle_(), STEP_); // pousa
+  s.combatLockedUntil = s.trainT; // fim imediato do grace (teste = combate liberado)
+  s.step(idle_(), STEP_);
+  s.consumeEvents();
+}
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão das demais fases)
 const ctx2d = {
@@ -200,6 +213,8 @@ test('porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorM
 test('sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo físico', () => {
   const s = new KhaaosSim3D({ seed: 'F25-SIM-1', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
+  desembarcaDoTrem(s); // Task 53 — protocolo do trem (combate liberado após o salto+grace)
   assert.equal(s.doors.length, s.world.doors.length, 'folhas nasceram do layout');
   // HOTFIX pós-merge #185 — vocabulário canônico: folha íntegra = !destroyed && !open
   // Fase 26 — HP por MATERIAL: depot/hangar nascem METÁLICOS (500); demais 200
@@ -225,6 +240,8 @@ test('sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo 
 test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)', () => {
   const s = new KhaaosSim3D({ seed: 'F25-SHOOT', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
+  desembarcaDoTrem(s); // Task 53
   const spec = interiorDressing(s.world, s.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
   const st = s.world.structures[spec.index];
   // HOTFIX pós-merge #185 — folhas são doorways (structIndex)
@@ -256,6 +273,8 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
 test('sim offline: MELEE arrebenta a folha de MADEIRA rápido (mult 3,0×) e prioriza carne', () => {
   const s = new KhaaosSim3D({ seed: 'F25-MELEE', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
+  desembarcaDoTrem(s); // Task 53
   const spec = interiorDressing(s.world, s.scenario, { density: 1 })
     .structures.find((sp) => DOOR_KINDS.has(sp.kind) && doorMaterialOf(sp.kind) === 'wood');
   assert.ok(spec, 'CIGKV tem estrutura com folha de madeira');
@@ -308,9 +327,10 @@ test('sim offline: loot interior nos ids loot-i*, mezanino pegável só de cima'
 // ============================================================================
 
 test('room3d: portas autoritativas (snapshot, doorDown global, collider fora do mundo)', () => {
-  const room = new MatchRoom3D({ id: 'ring3d-f25', seed: 'F25-ROOM', region: 'sa-east', capacity: 8, botFill: 0, airdrop: false });
+  const room = new MatchRoom3D({ id: 'ring3d-f25', seed: 'F25-ROOM', region: 'sa-east', capacity: 8, botFill: 2, airdrop: false }) // Task 53 — 1 ator encerra a sala no 1º tick;
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.doors.length, room.world.doors.length, 'painéis nasceram do layout');
   const snap1 = room.snapshot('p1');
   assert.ok(Array.isArray(snap1.doors) && snap1.doors.length === room.doors.length, 'snapshot traz portas');
@@ -341,6 +361,7 @@ test('room3d: bala do humano desgasta a porta (autoritativo, ponta a ponta)', ()
   const room = new MatchRoom3D({ id: 'ring3d-f25b', seed: 'F25-ROOMB', region: 'sa-east', capacity: 8, botFill: 2, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const world = getWorldLayout('F25-ROOMB', room.scenario.id);
   const spec = interiorDressing(world, room.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
   const st = world.structures[spec.index];

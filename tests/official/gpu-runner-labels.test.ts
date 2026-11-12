@@ -1,9 +1,7 @@
-// Contrato: consistência de labels do GPU runner self-hosted.
-// Protege contra o bug real que bloqueava o CI: o workflow exigia
-// runs-on: [self-hosted, gpu] mas o setup script registrava o runner com
-// labels "self-hosted,linux,ue5.8,x64" — nenhum runner atendia o job e a
-// compilação UE5 ficava em fila para sempre. Toda mudança de labels precisa
-// bater nos DOIS lados (workflow ↔ setup script).
+// Contrato: consistência das labels do runner UE5 self-hosted.
+// A compilação/automação usa -NullRHI e não exige GPU; benchmarks gráficos
+// ficam em workflow separado e mantêm a label gpu. Mudanças devem bater nos
+// DOIS lados do job headless (workflow ↔ setup script).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -41,12 +39,17 @@ test('labels do runner no setup script batem exatamente com runs-on do workflow'
     `labels divergentes — workflow: [${wfLabels}] vs setup script: [${scriptLabels}]`);
 });
 
-test('labels essenciais presentes (self-hosted, gpu, ue5.8)', () => {
+test('labels essenciais do job headless presentes sem exigir GPU', () => {
   const setup = readFileSync(path.join(root, SETUP), 'utf8');
+  const wf = readFileSync(path.join(root, WORKFLOW), 'utf8');
   const labels = extractScriptLabels(setup);
-  for (const required of ['self-hosted', 'linux', 'gpu', 'ue5.8', 'x64']) {
+  const jobBlock = wf.split('ue5-headless-compile:')[1] ?? '';
+  const wfLabels = extractWorkflowLabels(jobBlock);
+  for (const required of ['self-hosted', 'linux', 'ue5.8', 'x64']) {
     assert.ok(labels.includes(required), `label essencial ausente: ${required}`);
+    assert.ok(wfLabels.includes(required), `label essencial ausente no workflow: ${required}`);
   }
+  assert.ok(!wfLabels.includes('gpu'), 'build headless não deve exigir runner com GPU');
 });
 
 test('helper de registro via API existe e nunca imprime o token', () => {

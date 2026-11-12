@@ -56,7 +56,7 @@ const cookieValue = (req, name) => {
 export function createAuthoritativeServer({
   port = Number(process.env.PORT || 8787),
   adminToken = process.env.ADMIN_TOKEN || 'change-me',
-  roomCapacity = 16,
+  roomCapacity = Number(process.env.KR_ROOM_CAPACITY || 16),
   auth,
   economy,
   store,
@@ -80,6 +80,18 @@ export function createAuthoritativeServer({
     fetchImpl: ue58?.fetchImpl ?? globalThis.fetch,
     rootDir: ue58?.rootDir ?? ROOT,
   };
+  // Fase 46 — portão de fidelidade: o snapshot F44 (README ao vivo → buildScene
+  // headless → 53 checks) roda AO VIVO no painel. Runner injetável p/ testes;
+  // default importa o módulo DE FORMA LAZY (three.js só entra no processo na
+  // primeira auditoria — boot do servidor e testes de rota ficam leves).
+  // Cache TTL: o snapshot custa ~2 s (5 mundos construídos) — martelo no botão
+  // não reconstrói a cena a cada clique.
+  const FIDELITY_TTL_MS = 30_000;
+  let fidelityCache = null; // { at, report }
+  const runFidelityAudit = ue58?.fidelityRunner ?? (async () => {
+    const mod = await import('../scripts/fidelity-snapshot.mjs');
+    return mod.runFidelitySnapshot();
+  });
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
     ? { cert: fs.readFileSync(process.env.KR_TLS_CERT), key: fs.readFileSync(process.env.KR_TLS_KEY) }
@@ -316,7 +328,7 @@ export function createAuthoritativeServer({
       const roomId = `${roomPrefix}ring3d-${nextRoom++}`;
       const lease = await safeAcquire(roomId); // M3 — posse ANTES da primeira mutação
       room = client.mode === '3d'
-        ? new MatchRoom3D({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled })
+        ? new MatchRoom3D({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: Number.isFinite(Number(process.env.KR_BOT_FILL)) ? Number(process.env.KR_BOT_FILL) : roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled })
         : new MatchRoom({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
       room.fence = lease.fence ?? 0;
       rooms.set(room.id, room);
@@ -422,6 +434,16 @@ export function createAuthoritativeServer({
           dcounter('khaaos_runtime_distributed_publishes_total', 'Eventos publicados no relay', dist.publishes);
           dcounter('khaaos_runtime_distributed_mirror_applied_total', 'Eventos do relay aplicados no espelho', dist.mirrorApplied);
           dcounter('khaaos_runtime_distributed_mirror_gaps_total', 'Gaps de seq detectados no espelho', dist.mirrorGaps);
+          dcounter('khaaos_runtime_distributed_mirror_duplicates_total', 'Eventos duplicados descartados pelo espelho', dist.mirrorDuplicates);
+          dcounter('khaaos_runtime_distributed_mirror_read_errors_total', 'Falhas de leitura do relay no espelho', dist.mirrorReadErrors);
+          lines.push('# HELP khaaos_runtime_redis_pubsub_publish_total Operações de publicação no relay Redis por resultado');
+          lines.push('# TYPE khaaos_runtime_redis_pubsub_publish_total counter');
+          lines.push(`khaaos_runtime_redis_pubsub_publish_total{result="ok"} ${Number(dist.publishSuccesses || 0)}`);
+          lines.push(`khaaos_runtime_redis_pubsub_publish_total{result="error"} ${Number(dist.publishErrors || 0)}`);
+          dcounter('khaaos_runtime_redis_pubsub_mirror_gaps_total', 'Gaps de sequência observados no relay Redis', dist.mirrorGaps);
+          dcounter('khaaos_runtime_redis_pubsub_mirror_duplicates_total', 'Mensagens duplicadas descartadas no relay Redis', dist.mirrorDuplicates);
+          dcounter('khaaos_runtime_redis_pubsub_read_errors_total', 'Falhas de leitura do relay Redis', dist.mirrorReadErrors);
+          gauge('khaaos_runtime_redis_pubsub_up', 'Conexão Redis disponível para ownership e relay', distributedLayer.redisReady?.() ?? 0);
           dcounter('khaaos_runtime_distributed_invites_published_total', 'Convites publicados no índice compartilhado', dist.invitesPublished);
           dcounter('khaaos_runtime_distributed_invite_lookups_total', 'Consultas ao índice de convites', dist.inviteLookups);
           dcounter('khaaos_runtime_distributed_invite_hits_total', 'Consultas resolvidas no índice de convites', dist.inviteHits);
@@ -920,6 +942,36 @@ export function createAuthoritativeServer({
         }
         return;
       }
+      // ---------- Fase 46 — portão de fidelidade Mundos ↔ README ----------
+      // Roda o instrumento F44 AO VIVO (README ao vivo → buildScene headless
+      // dos 5 mundos → checks canônicos). Cache TTL de 30 s — o snapshot
+      // constrói 5 cenas; martelo no botão serve a última auditoria.
+      if (url.pathname === '/admin/ue58/fidelity' && req.method === 'GET') {
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        try {
+          const now = Date.now();
+          if (fidelityCache && now - fidelityCache.at < FIDELITY_TTL_MS) {
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({ ...fidelityCache.report, cached: true, cacheAgeMs: now - fidelityCache.at }));
+            return;
+          }
+          const report = await runFidelityAudit();
+          fidelityCache = { at: now, report };
+          audit.record({
+            actor: admin?.username || 'legacy-token', action: 'ue58.fidelity', resource: 'repo',
+            outcome: report.ok ? 'allow' : 'deny',
+            detail: { pass: report.summary.pass, fail: report.summary.fail, durationMs: report.meta?.durationMs ?? null },
+          });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ ...report, cached: false, cacheAgeMs: 0 }));
+        } catch (error) {
+          audit.record({ actor: admin?.username || 'legacy-token', action: 'ue58.fidelity', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
+          res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_fidelity_failed', detail: String(error?.message ?? error) }));
+        }
+        return;
+      }
       if (url.pathname.startsWith('/admin/')) {
         const admin = guardHttp(req, res, 'admin:metrics');
         if (!admin) return;
@@ -1040,7 +1092,7 @@ export function createAuthoritativeServer({
     ws.on('message', earlyHandler);
 
     if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); await assign(client); }
-    else send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) });
+    else { getRoom(client)?.reviveTransport?.(client.id); send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) }); }
 
     connectionReady = true;
     ws.off('message', earlyHandler);
@@ -1063,7 +1115,7 @@ export function createAuthoritativeServer({
             const room = new MatchRoom3D({
               id: roomId,
               seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
-              region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
+              region: client.region, capacity: roomCapacity, botFill: Number.isFinite(Number(process.env.KR_BOT_FILL)) ? Number(process.env.KR_BOT_FILL) : roomCapacity - 1,
               squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto), onMatchEnd: handleMatchEnd,
               officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled,
             });
@@ -1133,6 +1185,13 @@ export function createAuthoritativeServer({
             room?.start(client.id, message.entry || 'belt');
             return;
           }
+          // Task 53 — salto de porta do trem do ZU (entrada oficial): o servidor
+          // valida janela/a bordo e aplica a pose pura compartilhada (SSOT).
+          if (message.type === 'door_jump') {
+            const room = getRoom(client);
+            if (room?.is3d && room.started) room.doorJump(client.id);
+            return;
+          }
           if (message.type !== 'input') return;
           const room = getRoom(client);
           if (room?.is3d) {
@@ -1176,6 +1235,8 @@ export function createAuthoritativeServer({
     for (const raw of earlyMessages.splice(0)) messageHandler(raw);
     ws.on('message', messageHandler);
     ws.on('close', () => {
+      const room = client.roomId ? rooms.get(client.roomId) : null;
+      room?.cancelZexChannelForDisconnect?.(client.id);
       void durable.setSession(client.resumeToken, { id: client.id, userId: user.sub, roomId: client.roomId, expiresAt: Date.now() + 15000 }).catch?.(() => {});
       clients.delete(client.id);
       observability.recordLog({ level: 'info', event: 'ws.disconnect', trace: wsCtx, fields: { username: client.identity.username, roomId: client.roomId, liveConnections: clients.size } });

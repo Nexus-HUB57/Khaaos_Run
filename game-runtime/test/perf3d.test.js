@@ -211,4 +211,9 @@ test('[perf] postFxPlanFor: SSR exclusivo do high; low não tem composer', () =>
   const hi = postFxPlanFor('high');
   assert.equal(hi.ssr, true);
   assert.ok(hi.bloomStrength > med.bloomStrength);
+  assert.ok(hi.sharpen > med.sharpen && med.sharpen > 0, 'nitidez adaptativa preserva detalhe após DRS');
+  assert.ok(hi.grain < 0.02 && med.grain < hi.grain, 'grão reduzido não mascara o material PBR');
+  assert.ok(hi.ssao.intensity > med.ssao.intensity, 'High recebe AO mais profundo');
+  assert.ok(hi.ssao.resolutionScale > med.ssao.resolutionScale, 'Medium usa AO em resolução reduzida');
+  assert.equal(postFxPlanFor('low'), null, 'Low não cria SSAO');
 });

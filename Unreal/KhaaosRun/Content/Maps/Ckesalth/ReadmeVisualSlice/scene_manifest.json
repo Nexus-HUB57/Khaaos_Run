@@ -1,0 +1,132 @@
+{
+  "$schema": "khaaos.readme-visual-slice/v1",
+  "world_id": "W3/C3",
+  "display_name": "Ckesalth — Deserto das Almas Esquecidas",
+  "canonical_sources": [
+    {
+      "path": "README.md",
+      "section": "W3/C3 — Ckesalth (Deserto das Almas Esquecidas)",
+      "lines": "239–250",
+      "authority": "fonte canônica para identidade, setores, frações e dinâmica narrativa"
+    }
+  ],
+  "status": "visual_reference_only_not_gameplay",
+  "preview_units": {
+    "width": 1000,
+    "height": 1000,
+    "unit": "normalized_preview_units",
+    "playable": false,
+    "description": "Composição esquemática apenas para referência visual; não representa escala, bounds, navegação ou gameplay."
+  },
+  "sectors": [
+    {
+      "id": "resort_abandonado",
+      "name": "Resort Abandonado",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Setor de resort abandonado no deserto árido."
+    },
+    {
+      "id": "vilarejo_beduinos",
+      "name": "Vilarejo dos Beduínos",
+      "fraction": 0.25,
+      "fraction_label": "2/8",
+      "description": "Setor do vilarejo beduíno; inclui a Vila Sombria como referência para o fechamento do anel."
+    },
+    {
+      "id": "refinaria_petroleo",
+      "name": "Refinaria de Petróleo (centro)",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Setor central da refinaria de petróleo."
+    },
+    {
+      "id": "zona_extracao",
+      "name": "Zona de Extração (expedição)",
+      "fraction": null,
+      "fraction_label": null,
+      "description": "Zona de extração da expedição; o README não atribui fração de área."
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "resort_abandonado",
+      "sector_id": "resort_abandonado",
+      "name": "Resort Abandonado",
+      "description": "Marco visual de setor no deserto árido."
+    },
+    {
+      "id": "vilarejo_beduinos",
+      "sector_id": "vilarejo_beduinos",
+      "name": "Vilarejo dos Beduínos",
+      "description": "Marco de assentamento no deserto."
+    },
+    {
+      "id": "vila_sombria",
+      "sector_id": "vilarejo_beduinos",
+      "name": "Vila Sombria",
+      "description": "Local canônico para o fechamento do anel após cinco minutos."
+    },
+    {
+      "id": "refinaria_petroleo",
+      "sector_id": "refinaria_petroleo",
+      "name": "Refinaria de Petróleo",
+      "description": "Marco central associado às lagoas de petróleo em chamas."
+    },
+    {
+      "id": "zona_extracao",
+      "sector_id": "zona_extracao",
+      "name": "Zona de Extração da expedição",
+      "description": "Marco conceitual sem posição ou especificação técnica definida."
+    }
+  ],
+  "hazards": [
+    {
+      "id": "aridez",
+      "name": "Aridez",
+      "description": "Condição ambiental dominante do deserto."
+    },
+    {
+      "id": "lagoas_petroleo_fogo",
+      "name": "Lagoas de petróleo em chamas",
+      "description": "Perigo ambiental visual associado ao petróleo em combustão."
+    },
+    {
+      "id": "fumaca_toxica",
+      "name": "Fumaça tóxica",
+      "description": "Fumaça tóxica presente no ambiente, inclusive sob o fechamento do anel na Vila Sombria."
+    },
+    {
+      "id": "areia_movedica",
+      "name": "Areia movediça",
+      "description": "Perigo do terreno desértico."
+    },
+    {
+      "id": "anel_vila_sombria",
+      "name": "Assassino Silencioso",
+      "description": "A partir de cinco minutos, o anel fecha na Vila Sombria sob fumaça tóxica; descrição narrativa, não regra implementável."
+    }
+  ],
+  "fidelity_exclusions": [
+    {
+      "source": "Montanhas alpinas e neve",
+      "reason": "Não pertencem à identidade canônica de Ckesalth, apesar de referências técnicas divergentes."
+    },
+    {
+      "source": "Pântano vulcânico",
+      "reason": "Não pertence à identidade canônica de Ckesalth, apesar de referências técnicas divergentes."
+    }
+  ],
+  "unresolved_technical_data": [
+    {
+      "topic": "bounds e dimensões do mundo",
+      "status": "não resolvido",
+      "description": "Fontes técnicas divergem; não selecionar valores de gameplay neste manifesto."
+    },
+    {
+      "topic": "POIs, spawns, loot e ZEX",
+      "status": "não resolvido",
+      "description": "Coordenadas e contagens técnicas não foram reconciliadas; a Zona de Extração é nomeada sem fração no README."
+    }
+  ]
+}

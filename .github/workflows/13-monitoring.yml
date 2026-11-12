@@ -156,6 +156,11 @@ jobs:
       TEST_DATABASE_URL: postgres://khaaos:khaaos_ci_pw@localhost:5432/khaaos_ci_test
       KR_STAGING_URL: http://127.0.0.1:8787
       STAGING_SESSION_SECRET: khaaos-staging-ci-session-secret-0123456789abcdef0123456789abcdef
+      # Segredo do nó 2PC (valor efêmero de CI, análogo ao STAGING_SESSION_SECRET
+      # acima): o staging sobe em NODE_ENV=production e a rota 2PC recusa ator
+      # sintético em produção por design — o validador precisa agir como NÓ
+      # CONFIÁVEL (header x-2pc-node-secret) para exercitar prepare→abort.
+      ECONOMY_2PC_NODE_SECRET: khaaos-staging-ci-2pc-node-secret-0123456789abcdef0123456789abcdef
 
     steps:
       - uses: actions/checkout@v4
@@ -188,6 +193,7 @@ jobs:
           REDIS_URL=redis://127.0.0.1:6379 \
           PUBLIC_ORIGIN=https://127.0.0.1 \
           SESSION_SECRET_CURRENT="${STAGING_SESSION_SECRET}" \
+          ECONOMY_2PC_NODE_SECRET="${ECONOMY_2PC_NODE_SECRET}" \
             node scripts/start.mjs > /tmp/staging-server.log 2>&1 &
 
           up=0

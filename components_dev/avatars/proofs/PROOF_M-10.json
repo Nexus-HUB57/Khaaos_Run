@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M010",
+  "operative_id": "M-10",
+  "codename": "HUR-03",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Huran",
+    "name": "Huran",
+    "type": "amphibian",
+    "skeleton": "SK_Gwen",
+    "passive": "Regeneracao Aquatica - +5 HP/s e +3 stamina/s em contato com agua",
+    "base_stats": {
+      "health": 110,
+      "energy": 90,
+      "speed": 1.1
+    },
+    "physical": {
+      "height_cm": 168,
+      "weight_kg": 60
+    },
+    "abbr": "HUR"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 100
+  },
+  "rank": "HURAN",
+  "specialization": "Resgate Aquatico e Controle de Zona",
+  "ethnicity": {
+    "label": "Cabo-Verdiana",
+    "heritage": "Cabo-verdiano (Santo Antao / Fogo)",
+    "region": "Cabo Verde / diaspora atlantica (Mindelo - Boston)",
+    "cultural_fusion": "Cultura pesqueira e morna de Mindelo combinada com a fisiologia anfibia Huran. Nome DJUNTA (mutiro coletivo caboverdiano - djunta mon) + MONIZ (apelido historico das ilhas) - quem salva, salva junto."
+  },
+  "phenotype": {
+    "skin_tone": "Morena escura profunda (#5C3A21) com subtom verde-agua (biofeedback Huran em ambiente umido)",
+    "hair": "Black power curto com fios bioluminescentes verde-agua (#00CED1) que acendem em contato com agua",
+    "eyes": "Castanhos-claros com reflexo aquatico horizontal (tapetum Huran) - visao nitida embaixo d'agua",
+    "facial_structure": "Maxilar largo, barba rente com fios bioluminescentes nas laterais, sorriso calmo de mar aberto",
+    "body_type": "Corpo de nadador de aguas abertas - 175 cm, 72 kg. Ombros largos, torax expandido (pulmao Huran de 4 min de apneia)",
+    "distinctive_silhouette": "Postura de flutuacao - peso sempre distribuido, ps coxos prontos para impulso. Membranas entre os dedos visiveis mesmo com luvas cortadas."
+  },
+  "cultural_markers": {
+    "tattoos": "Tabanka (corao com correntes partidas) no peito esquerdo -Caboverdiano de liberdade; mapa das dez ilhas em ponto fino nas costelas direitas",
+    "scars": "Cicatriz de rede de pesca enrolada no antebraco direito (infncia em Mindelo); marcas de coral nos joelhos",
+    "ornaments": "Colar de contas de concha branca (cabo-verdiano de proteo no mar), brinco de argola unica na orelha direita",
+    "clothing_style": "Wetsuit-casaco hbrido - colete de resgate sobre lycra anfibia Huran, botas de doca cortadas, chapu de pescador dobrado no cinto"
+  },
+  "species_traits": {
+    "visible_modification": "Membranas interdigitais Huran (mos e pes) - semitransparentes verde-agua; brnquias vestigiais (2 fendas no pescoco); patches bioluminescentes nas costelas (#00CED1) que servem de farol subaquatico para o squad",
+    "passive_manifestation": "Regeneracao Aquatica: +5 HP/s e +3 stamina/s em contato com agua (pulse verde-agua visivel); submerso, +10% velocidade e -10% dano recebido por 2s apos entrar na agua",
+    "combat_style_id": "Estilo mar-chega-ops - resgate sob fogo, arrasto tatico de aliados, controle de zona com redemoinhos e detonacao de bolses de ar. Especialista em travessia de esturios e assalto de docas."
+  },
+  "distinguishing_summary": "Unico Cabo-verdiano; membranas verde-agua + brnquias vestigiais; black power com fios #00CED1; tabanka no peito; colar de conchas; especialista em resgate aquatico e arrasto tatico.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "HUR-03",
+  "operative_ref": "OP_HUR_M_01",
+  "avatar_ref": "AVT_HUR_M_01",
+  "legacy_codename": "DJUNTA MONIZ",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

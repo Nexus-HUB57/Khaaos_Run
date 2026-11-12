@@ -1,6 +1,16 @@
 /**
  * KHAAOS RUN — Atomic Ledger
  * ==========================
+ * ⚠️ DEPRECADO NO RUNTIME TS (Task 44 — ver docs/ECONOMY_LEDGER_SSOT.md):
+ * nenhum módulo de server/ ou teste importa este arquivo — é um artefato de
+ * design da fase inicial (F2–F5). O ledger FINANCEIRO vivo do projeto é o
+ * SSOT `economy_ledger_entries` (double-entry PostgreSQL, migrations 0003+,
+ * reconciliado por scripts/economy-reconcile.ts e server/game/economyAudit.ts).
+ * O port C++ (Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/
+ * KhaaosAtomicLedger.cpp) segue VIVO na trilha UE5 — este arquivo TS existe
+ * apenas como referência de contrato e espelho didático do port. NÃO usar em
+ * código novo.
+ *
  * Thread-safe atomic ledger for KRC economy transactions.
  * Provides ACID-like guarantees for financial operations:
  * - Atomic: Each transaction is all-or-nothing

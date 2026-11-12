@@ -2,6 +2,7 @@
 // Nenhum arquivo externo — tudo sintetizado em tempo real.
 // Fase 19 — mixagem: master + barramentos sfx/world/ui (KR_AUDIO_*, audiomix.js).
 import { DEFAULT_AUDIO_MIX, normalizeAudioMix } from './audiomix.js';
+import { footstepProfile, worldAudioProfile } from './worldAudioProfiles.js';
 
 export class GameAudio {
   constructor() {
@@ -17,6 +18,8 @@ export class GameAudio {
     // testável sem AudioContext: kind → { kind, intensity, startedAt }).
     this.survivalLayers = {};
     this.survivalNodes = {};   // kind → nós WebAudio p/ teardown com fade
+    this.worldAmbience = { ...worldAudioProfile('CIGKV'), weather: 'clear', interior: false };
+    this.ambientNodes = null;
   }
   init() {
     if (this.ctx) return;
@@ -68,18 +71,49 @@ export class GameAudio {
     gain.gain.exponentialRampToValueAtTime(0.001, t0 + attack + decay);
   }
 
+  /** Troca a assinatura acústica do mundo sem reinicializar o AudioContext. */
+  setWorldAmbience(worldId = 'CIGKV', { weather = 'clear', interior = false } = {}) {
+    this.worldAmbience = { ...worldAudioProfile(worldId), weather, interior: !!interior };
+    if (this.ctx) {
+      this.#stopAmbient();
+      this.#startAmbient();
+    }
+    return { ...this.worldAmbience };
+  }
+
+  #stopAmbient() {
+    if (!this.ambientNodes) return;
+    for (const node of this.ambientNodes) {
+      try { node.stop?.(); } catch { /* já parado */ }
+      try { node.disconnect?.(); } catch { /* já desconectado */ }
+    }
+    this.ambientNodes = null;
+  }
+
   #startAmbient() {
-    // vento constante + sub-bass tenso
+    // Camada de vento + corpo grave do mundo, calibrados por perfil.
+    const profile = this.worldAmbience;
     const src = this.ctx.createBufferSource();
     src.buffer = this.#noiseBuffer(2); src.loop = true;
     const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = .4;
-    const g = this.ctx.createGain(); g.gain.value = .05;
-    const lfo = this.ctx.createOscillator(); lfo.frequency.value = .13;
-    const lfoG = this.ctx.createGain(); lfoG.gain.value = .025;
+    lp.type = 'lowpass'; lp.frequency.value = profile.filter; lp.Q.value = profile.resonance;
+    const g = this.ctx.createGain(); g.gain.value = profile.interior ? profile.wind * .45 : profile.wind;
+    const lfo = this.ctx.createOscillator(); lfo.frequency.value = .11 + profile.wind * .12;
+    const lfoG = this.ctx.createGain(); lfoG.gain.value = .018 + profile.wind * .025;
     lfo.connect(lfoG); lfoG.connect(g.gain);
     src.connect(lp); lp.connect(g); g.connect(this.#bus('world'));
     src.start(); lfo.start();
+    this.ambientNodes = [src, lfo, lp, g, lfoG];
+
+    // Chuva é uma camada separada: pode ser abafada ao entrar em interiores.
+    if (profile.rain > 0 && this.worldAmbience.weather !== 'clear') {
+      const rain = this.ctx.createBufferSource();
+      rain.buffer = this.#noiseBuffer(2); rain.loop = true;
+      const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2100;
+      const rg = this.ctx.createGain(); rg.gain.value = profile.rain * (this.worldAmbience.interior ? .18 : .55);
+      rain.connect(hp); hp.connect(rg); rg.connect(this.#bus('world')); rain.start();
+      this.ambientNodes.push(rain, hp, rg);
+    }
   }
 
   shot(weapon = 'g19', distance = 0) {
@@ -316,6 +350,30 @@ export class GameAudio {
     this.#env(g, t, .004, .14, .45);
     osc.connect(g); g.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .2);
+  }
+
+  // Fase 42 — PASSO (heel strike do gait.js): burst de ruído filtrado com
+  // rolagem calcanhar→ponta. Disparado PELO cruzamento de fase da passada
+  // (não por timer) → o áudio é cirúrgico em relação ao visual. Alternância
+  // L/R via filtro sutil (calcanhar esquerdo ~780 Hz, direito ~660 Hz).
+  // intensity 0..1 (velocidade do ator), distance em m (remotos: atenuação).
+  step(intensity = .5, distance = 0, surface = this.worldAmbience.surface) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    this._stepSide = !this._stepSide;
+    const att = 1 / (1 + distance * distance * .012);      // falloff suave
+    const cfg = footstepProfile(surface);
+    const peak = Math.max(.015, (cfg.gain * (.45 + .75 * Math.min(1, intensity))) * att);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(cfg.noise);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(cfg.band * (this._stepSide ? 1.05 : .92), t);
+    bp.frequency.exponentialRampToValueAtTime(cfg.low, t + cfg.decay);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .004, cfg.decay, peak);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
+    src.start(t);
   }
 
   // arremesso da granada (whoosh curto)

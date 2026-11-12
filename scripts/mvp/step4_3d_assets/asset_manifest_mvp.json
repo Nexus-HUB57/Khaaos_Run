@@ -21,7 +21,7 @@
       "source_path": "mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae",
       "dest_path": "/Game/Characters/Zheers/",
       "format": "dae",
-      "skeleton": "UE5_Mannequin",
+      "skeleton": "SK_Manny",
       "lod_levels": 4,
       "collision_type": "capsule",
       "target_polycount": 80000,

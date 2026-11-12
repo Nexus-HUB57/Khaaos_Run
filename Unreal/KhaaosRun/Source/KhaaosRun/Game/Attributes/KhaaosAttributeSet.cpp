@@ -20,7 +20,8 @@ float UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
 	float DamageAmount,
 	const FGameplayTag& DamageType,
 	float ProjectileReduction,
-	float ExplosionReduction)
+	float ExplosionReduction,
+	float EnvironmentReduction)
 {
 	if (DamageAmount <= 0.0f)
 	{
@@ -36,6 +37,11 @@ float UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
 	else if (DamageType.IsValid() && DamageType == Tags.Effect_Damage_Explosion)
 	{
 		Reduction = ExplosionReduction;
+	}
+	else if (DamageType.IsValid() && Tags.Effect_Damage_Environment.IsValid() &&
+		DamageType == Tags.Effect_Damage_Environment)
+	{
+		Reduction = EnvironmentReduction;
 	}
 
 	return DamageAmount * (1.0f - FMath::Clamp(Reduction, 0.0f, 1.0f));
@@ -64,7 +70,8 @@ float UKhaaosAttributeSet::ApplyDamageOfType(
 		DamageAmount,
 		DamageType,
 		GetOnithProjectileDamageReduction(),
-		GetOnithExplosionDamageReduction());
+		GetOnithExplosionDamageReduction(),
+		GetZheersEnvironmentalDamageReduction());
 	if (DamageAmount <= 0.0f)
 	{
 		return 0.0f;
@@ -205,9 +212,10 @@ void UKhaaosAttributeSet::InitFromSchemaDefaults()
         Speed            = DefaultSpeed;
         DamageMultiplier = 1.0f;
         InitDefenseRating(0.0f);
-        InitOnithProjectileDamageReduction(0.0f);
-        InitOnithExplosionDamageReduction(0.0f);
-	InitAirSpeedBonus(0.0f);
+		InitOnithProjectileDamageReduction(0.0f);
+		InitOnithExplosionDamageReduction(0.0f);
+		InitZheersEnvironmentalDamageReduction(0.0f);
+		InitAirSpeedBonus(0.0f);
 	InitWaterRegenPerSecond(0.0f);
 	InitHealBonusPercent(0.0f);
 	InitFireRateBonus(0.0f);
@@ -243,6 +251,7 @@ void UKhaaosAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute
 	else if (Attribute == GetEnergyAttribute()) NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxEnergy());
 	else if (Attribute == GetMaxEnergyAttribute()) NewValue = FMath::Max(NewValue, 0.0f);
 	else if (Attribute == GetDefenseRatingAttribute()) NewValue = FMath::Max(NewValue, 0.0f);
+	else if (Attribute == GetZheersEnvironmentalDamageReductionAttribute()) NewValue = FMath::Clamp(NewValue, 0.0f, 1.0f);
 }
 
 void UKhaaosAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
@@ -280,6 +289,10 @@ void UKhaaosAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribut
 	else if (Attribute == GetDefenseRatingAttribute())
 	{
 		OnAttributeChanged.Broadcast(this, TEXT("DefenseRating"), NewValue);
+	}
+	else if (Attribute == GetZheersEnvironmentalDamageReductionAttribute())
+	{
+		OnAttributeChanged.Broadcast(this, TEXT("ZheersEnvironmentalDamageReduction"), NewValue);
 	}
 }
 
@@ -373,6 +386,12 @@ void UKhaaosAttributeSet::OnRep_OnithExplosionDamageReduction(const FGameplayAtt
 	OnAttributeChanged.Broadcast(this, TEXT("OnithExplosionDamageReduction"), GetOnithExplosionDamageReduction());
 }
 
+void UKhaaosAttributeSet::OnRep_ZheersEnvironmentalDamageReduction(const FGameplayAttributeData& OldReduction)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, ZheersEnvironmentalDamageReduction, OldReduction);
+	OnAttributeChanged.Broadcast(this, TEXT("ZheersEnvironmentalDamageReduction"), GetZheersEnvironmentalDamageReduction());
+}
+
 void UKhaaosAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
         Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -383,6 +402,7 @@ void UKhaaosAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, Energy, COND_OwnerOnly, REPNOTIFY_Always);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxEnergy, COND_OwnerOnly, REPNOTIFY_Always);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, DefenseRating, COND_OwnerOnly, REPNOTIFY_Always);
-        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
-        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, ZheersEnvironmentalDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
 }

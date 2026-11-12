@@ -21,6 +21,16 @@ route:
   receiver: 'discord-default'
 
   routes:
+    # ── Runtime SRE: `page` equivale a atendimento imediato; `ticket` é investigação operacional ──
+    - match:
+        severity: page
+      receiver: 'discord-critical'
+      repeat_interval: 15m
+    - match:
+        severity: ticket
+      receiver: 'discord-warning'
+      repeat_interval: 2h
+
     # ── Critical alerts: page Discord + Slack immediately ──────
     - match:
         severity: critical

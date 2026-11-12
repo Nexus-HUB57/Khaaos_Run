@@ -1,5 +1,9 @@
 {
   "world_id": "Ckesalth",
+  "status": "legacy-pre-f42",
+  "canonical_source": "shared/worlds.ts",
+  "canonical_config_revision": "f42-2026-11-02",
+  "legacy_note": "Config de intake visual da geracao pre-F42 (lore WORLDS_DESIGN: Mundo Aquatico/Cumes de Vento/Pantanos Vulcanicos/Forja Khaael). Nao e contrato de gameplay: o canon vigente e shared/worlds.ts (F47, configRevision f42-2026-11-02); o display_name do intake e governado por scripts/build/generate_world_asset_packages.py (CANON_DISPLAY_NAMES). Mantido apenas como material historico de import visual.",
   "display_name": "Ckesalth — Pantanos Vulcanicos",
   "codename": "W3_CKESALTH_SWAMP",
   "max_players": 60,
