@@ -29,6 +29,8 @@ export interface OperativeAvatarRuntime {
   ueAssetId: string | null;
   skeleton: "SK_Manny" | "SK_Gwen";
   avatarPath: string;
+  /** Caminho local derivado do catálogo; ausente para militares/TALON. */
+  realisticAvatarPath?: string;
   canonical: boolean;
   branch: OperativeFaction;
 }

@@ -159,7 +159,7 @@ async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
   return { craftRequests, equipRequests, operativeRequests };
 }
 
-async function mockBattleSocket(page: Page, inMatch: boolean) {
+async function mockBattleSocket(page: Page, inMatch: boolean, lobbyRoom?: Record<string, unknown>) {
   await page.routeWebSocket("**/ws", (socket) => {
     socket.onMessage((rawMessage) => {
       let message: { type?: string; itemId?: number };
@@ -171,6 +171,9 @@ async function mockBattleSocket(page: Page, inMatch: boolean) {
 
       if (message.type === "join" || message.type === "resume") {
         socket.send(JSON.stringify({ type: "welcome", userId: playerId, roomId }));
+        if (lobbyRoom) {
+          socket.send(JSON.stringify({ type: "room_state", room: lobbyRoom }));
+        }
         if (!inMatch) return;
 
         const player = {
@@ -229,6 +232,60 @@ test("perfil salva avatar do catálogo e exibe o mesmo ID selecionado", async ({
   await expect(talon).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("img", { name: "Avatar de TALON" })).toHaveAttribute("src", "/avatars/male/op_male_talon.svg");
   expect(operativeRequests).toEqual(["OP_MALE_TALON"]);
+});
+
+test("lobby carrega retrato realista do operativo e mantém texto de identidade", async ({ page }) => {
+  await mockPlayerApis(page);
+  const operative = {
+    id: "OP_GNG_FEMALE_PIXEL",
+    codename: "PIXEL",
+    fullName: "Pixel",
+    gender: "FEMININO",
+    rank: "ZHEERS",
+    ueAssetId: null,
+    skeleton: "SK_Gwen",
+    avatarPath: "/avatars/female/op_gng_female_pixel.svg",
+    realisticAvatarPath: "/avatars/realistic/op_gng_female_pixel.webp",
+    canonical: true,
+    branch: "GANGUE_URBANA",
+  };
+  const player = {
+    userId: playerId,
+    displayName: "Zheers Teste",
+    selectedOperativeId: operative.id,
+    avatar: operative,
+    posX: 0,
+    posY: 0,
+    health: 100,
+    maxHealth: 100,
+    status: "VIVO",
+    kills: 0,
+    isConnected: true,
+    isReady: false,
+    isHost: true,
+    rating: 1000,
+  };
+  await mockBattleSocket(page, false, {
+    id: roomId,
+    status: "LOBBY",
+    maxPlayers: 16,
+    minPlayersToStart: 2,
+    playerCount: 1,
+    readyCount: 0,
+    players: [player],
+    zone: null,
+    loot: [],
+    hostId: playerId,
+    isPrivate: false,
+    inviteCode: "PIXEL01",
+  });
+
+  await page.goto("/lobby");
+  const portrait = page.getByRole("img", { name: "Avatar PIXEL" });
+  await expect(portrait).toBeVisible();
+  await expect(portrait).toHaveAttribute("src", "/avatars/realistic/op_gng_female_pixel.webp");
+  await expect(page.getByText("PIXEL · ELO 1000")).toBeVisible();
+  await expect.poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
 });
 
 test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", async ({ page }) => {

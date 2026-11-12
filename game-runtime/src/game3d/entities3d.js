@@ -541,7 +541,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
 // (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
 // (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
-export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null, sprintK = null } = {}) {
   let hitEnv = 0;                                            // acopla rosto à dor
   // Fase 26 — Talon: física de mola SIMPLES das tiras da jaqueta (determinística:
   // fase semeada no userData; amplitude cresce com velocidade e no ar).
@@ -656,10 +656,19 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   const aim = -Math.PI / 2 + pitch;
   // braços seguram a arma — swing macro proibido; micro-oscilação do passo
   const armStep = Math.cos(PH) * .045 * speedNorm;
-  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
-  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
-  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + breathe * .012;
-  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6 + breathe * .012;
+  // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA (low-ready): acima do teto de
+  // andar (speedNorm > 1.02) e só com o corpo livre (sem ADS/crouch/knocked).
+  // Andar (≤1) mantém o contrato Fase 10 — braço nunca abandona a pose de tiro.
+  // `sprintK` EXPLÍCITO tem constante de tempo própria (main3d suaviza por ator
+  // — banda instantânea de speedNorm atravessava em ~1 frame na frenagem).
+  const sprintRaw = (sprintK != null)
+    ? Math.max(0, Math.min(1, sprintK))
+    : Math.max(0, Math.min(1, (speedNorm - 1.02) / .18));
+  const sk = (!ads && !crouch && !knocked) ? sprintRaw : 0;
+  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022 + sk * .78;
+  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022 + sk * .5;
+  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + breathe * .012 + sk * .18;
+  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6 + breathe * .012 + sk * .38;
   // F41 — ergonomia de tiro: os OMBROS contra-rolam o tronco (mãos niveladas no
   // plano do horizonte enquanto a passada rola o tórax) e, em ADS, micro-balço
   // de respiração do atirador (2 eixos, frequências dessintonizadas — sem loop).
@@ -695,8 +704,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
     parts.armR.shoulder.rotation.y = shoulderCounter;
     parts.armL.shoulder.rotation.y = shoulderCounter;
   }
-  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
-  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
+  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle + olhar
+  // sobe um pouco no sprint (tronco inclinado compensa) ----
+  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05 - sk * .1;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
   parts.head.rotation.z = -parts.torso.rotation.z * .5;
   // F41 — estabilização VESTIBULAR do olhar: a cabeça contra-move o bounce
@@ -771,6 +781,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
       if (bp < .11) face.set('blink', 1); else face.set('neutral', 0);
     }
   }
+  return { sprintK: sk };                       // arma de 3ª pessoa acompanha o low-ready
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
@@ -1019,6 +1030,25 @@ export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opt
   return model;
 }
 
+// Task 59 (sessão 56) — pose de SPRINT da arma em 3ª pessoa: acompanha o
+// low-ready dos braços (animateOperative retorna { sprintK }); k=0 restaura a
+// postura base. Determinística e idempotente (base gravada em userData).
+export function poseWeaponSprint(weaponRig, k = 0) {
+  const g = weaponRig?.group;
+  if (!g) return;
+  const kk = Math.max(0, Math.min(1, Number.isFinite(k) ? k : 0));
+  const b = (g.userData.sprintBase ??= { py: g.position.y, pz: g.position.z });
+  if (kk === 0) {                              // postura base exata (sem -0/drift)
+    g.rotation.x = 0; g.rotation.y = 0;
+    g.position.y = b.py; g.position.z = b.pz;
+    return;
+  }
+  g.rotation.x = -kk * .48;                    // cano abaixa
+  g.rotation.y = kk * .3;                      // cruzada no peito
+  g.position.y = b.py - kk * .07;
+  g.position.z = b.pz + kk * .06;              // puxada para o corpo
+}
+
 // Rig enxuto de primeira pessoa (Fase 6): mãos ENLUVADAS agarrando a arma,
 // mangas camufladas, peitoral do colete à vista. Materiais por instância —
 // o recolor do seletor de operativo não vaza para os demais personagens.
@@ -1032,6 +1062,13 @@ function fgeo(r, l) {
   const key = `f${r}:${l}`;
   if (!_fgeo.has(key)) _fgeo.set(key, new THREE.CapsuleGeometry(r, l, 2, 6));
   return _fgeo.get(key);
+}
+// Task 59 (sessão 56) — cápsula de braço em 1ª pessoa (cache compartilhado)
+function fpcap(r, l, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(fgeo(r, l), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
 }
 
 // constrói uma mão articulada; side = +1 (direita) | -1 (esquerda).
@@ -1116,21 +1153,30 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
     const arm = new THREE.Group();
     arm.position.set(side * .2, -.26, -.4);
     arm.rotation.set(-.4, side * .14, side * .2);
-    const sleeve = box(.16, .42, .16, camoM, 0, -.18, 0);    // manga
-    const cuff = box(.17, .07, .17, secM, 0, -.34, 0);       // punho
-    const glove = box(.14, .16, .15, gloveM, 0, -.46, -.01); // luva
-    sleeve.userData.tintable = true;
-    arm.add(sleeve, cuff, glove);
+    arm.userData.base = { x: -.4, y: side * .14, z: side * .2 }; // Task 59 — base absoluta p/ pose de sprint (sem drift)
+    // Task 59 — braço ORGÂNICO (fim do braço de CAIXA em 1ª pessoa): ombro
+    // esférico + bíceps/antebraço em cápsula com cotovelo — a MESMA gramática
+    // anatômica do operativo em 3ª pessoa; a mão articulada continua presa no
+    // MESMO pivô (local y -.545) para não deslocar o grip da arma.
+    const shoulder = ball(.075, camoM, 0, -.02, 0, 7, 5);
+    const upper = fpcap(.062, .16, camoM, 0, -.15, 0);
+    const elbow = ball(.06, camoM, 0, -.3, 0, 7, 5);
+    const forearm = fpcap(.055, .18, camoM, 0, -.4, 0);
+    const cuff = fpcap(.058, .04, secM, 0, -.5, 0);
+    upper.userData.tintable = true;      // manga tintable (contrato do recolor)
+    elbow.userData.tintable = true;
     const hand = buildArticulatedHand({ side, skinM, gloveM });
-    arm.add(hand.group);
+    arm.add(shoulder, upper, elbow, forearm, cuff, hand.group);
     rig.add(arm);
     arm.userData.hand = hand;
     return arm;
   };
   const armL = makeArm(-1);
   const armR = makeArm(1);
-  const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
+  // Task 59 — peitoral do colete ARREDONDADO (plate carrier elíptico)
+  const chest = fpcap(.2, .1, vestM, 0, -.54, -.22);
   chest.rotation.x = -.24;
+  chest.scale.set(1.05, 1, .5);
   chest.userData.tintable = true;
   const chestPouch = box(.14, .1, .05, M('#26282d', { rough: .8 }), 0, -.5, -.31);
   rig.add(chest, chestPouch);

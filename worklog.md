@@ -1383,3 +1383,60 @@ Stage Summary:
 - Passada menos artificial em TODOS os níveis: contra-balanço de ombros (detalhado+proxy) e pés articulados à distância; determinismo preservado (mesmo t → mesmo ângulo)
 - Custo sob controle contratado: proxy 1188 tris / 26 meshes (≥3× mais leve que o detalhado), silhueta 184 tris / 3 meshes — os orçamentos de draw call e a calibração F50/F51 do cânon de perto intocados
 - Estado: game-runtime 1137 testes (1124 pass / 0 fail), suíte nova 7/7, e2e visual no preview com espectador provando os 3 níveis do LOD, worklog + evidências artifacts/f34
+
+
+---
+## Task ID: 58
+**Agent:** Main
+**Task:** Continuação de avatares realistas do Lote 4 e início do próximo incremento de experiência
+
+Work Log:
+- LOTE 4: commit `07d8a28` (`feat(avatars): integrate realistic portraits for lot 4`) enviado na `feat/lote4-avatars-realistas`; PR #365 agora Merged em `main` no commit `67aad5f`; arte 16 WebP/1,43 MB + manifesto, perfil/Studio + fallback SVG, fontes PNG ignoradas.
+- CI do push: CI, PR Checks e Integration Tests success; UE5 CD falhou (gate de ambiente/runner, sem relação com o pacote de avatar web). Workflow manual Deploy run `43082003968`: validação/build de Docker passaram, acionamento Render aceito, health gate falhou aguardando `/readyz` com Postgres/Redis.
+- STAGING/RENDER (auditoria 2026-11-11): serviço `khaaos-run-staging` está live em commit `3323254`, Auto Deploy Off, mas build/start são `cd game-runtime && npm ci --omit=dev` / `cd game-runtime && node server/server.js`; `/` e WebPs retornam 404, `/healthz` e `/readyz` pertencem ao game-runtime. O web app requer `npm start`, `/healthz.json` e readiness com Postgres/Redis. PostgreSQL ligado ao staging está `suspended` por billing, com expiração em 2026-11-10; Key Value Redis existe e está available. O Render MCP não expõe PATCH de build/start/rootDir e o Dashboard pede login. Não mascarar health check nem redeployar o runtime errado; trocar para o web app exige configurar/acessar serviço e restaurar/substituir o DB suspenso.
+- LOTE 5 iniciado em branch dependente `feat/lote5-realistic-lobby-roster`: diagnóstico encontrou o lobby ainda usando SVG enquanto o perfil já escolhe WebP. DTO runtime ganhou `realisticAvatarPath?`, render do lobby valida ID pelo catálogo confiável e prefere WebP com fallback SVG; teste oficial cobre 16 irregulares, militares/TALON e ID inválido. Plano em `docs/PLANO_LOTE5_AVATARES_LOBBY.md`.
+- VALIDAÇÃO LOTE 5: após rebase em `origin/main` (`67aad5f`), `npm run check` PASS, `character-studio` + `militia-roster` 11/11 PASS e `npm run build` PASS. A suíte Playwright inteira executou 17/17 PASS em 4 specs; o caso do lobby mostra PIXEL, identidade, e WebP local com `naturalWidth > 0`. Relatório em `docs/AUDITORIA_E2E_LOTE5_PLAYWRIGHT_2026-11-11.md`.
+- ACEITE REMOTO PENDENTE: o staging web real, o SHA publicado e os 16 paths; full Playwright é local com HTTP/WebSocket sintéticos e não substitui smoke do Render. PR #366 aberta a partir de `a70c0cf`.
+
+Stage Summary:
+- Lote 4: PR #365 integrada à main (`67aad5f`); o Render continua no runtime errado e não prova os assets web, além do Postgres staging expirado/suspenso.
+- Lote 5: commit `a70c0cf` enviado, PR #366 aberta; propagação realista ao lobby, E2E dedicado 1/1, TypeScript, 11 contratos, build e auditoria Playwright total 17/17 PASS.
+
+## Task ID: 59
+**Agent:** Main (Z.ai)
+**Task:** "aplicar otimização end to end nos personagens" (pedido direto do usuário) — Fase 58: CORPO EM 1ª PESSOA (fix-raiz da câmera) + braços orgânicos + sprint low-ready + pouso com absorção — reconciliada no merge com F42 gait / F56 avatares GLB / F57 LOD orgânico do main
+
+Work Log:
+- Diagnóstico complementar ao da Fase 57 (sessão paralela atacou o LOD de DISTÂNCIA; esta sessão achou a lacuna que nenhuma fase cobriu): a CÂMERA nunca foi add() à cena — o rig de 1ª pessoa (filho da câmera) NUNCA renderizou; o jogador via só a mira flutuando, zero corpo/arma, desde sempre. + o que havia de corpo em 1ª pessoa era CAIXA (mangas/luvas/peitoral box()) + o sprint mantinha pose de mira travada + pulo sem absorção de pouso.
+- FIX-RAIZ: `scene.add(camera)` em initCamera + PointLight de preenchimento presa à câmera (alcance 3,2 m — só o viewmodel, que o sol da cena deixava silhueta preta) + viewmodel canônico (.15,−.16,−.66) rot (−.07,.1,0) nas 2 montagens (init e troca de arma — antes x=0 com a arma de costas cobrindo a mira).
+- Rig FP orgânico: ombro esférico + bíceps/antebraço em cápsula + cotovelo (fpcap com cache compartilhado), peitoral elíptico; mão articulada no MESMO pivô (−.545) — contratos firstperson-hands preservados (tintable ≥3, mãos ≥11 meshes, 3336 tris ≤ 3400); userData.base por braço p/ pose absoluta de sprint (sem drift).
+- SPRINT ABAIXA A ARMA (low-ready): sprintK com CONSTANTE DE TEMPO PRÓPRIA por ator (up 5,5 / down 7 — a banda instantânea 1,02–1,2 de speedNorm atravessava em ~1 frame sob a exponencial de frenagem = snap); animateOperative aceita sprintK explícito (fallback = banda de speedNorm, contrato Fase 16 intacto) e RETORNA { sprintK }; poseWeaponSprint idempotente leva a arma de 3ª pessoa junto (cano −.48, cruzada .3, puxada ao corpo); ADS/crouch/fire erguem na hora (hint).
+- Câmera viva: bob lateral ELÍPTICO em espaço local (cos(sway·.5)) + DIP DE POUSO (pico de vy na transição ar→chão × .016, teto .12, decay 6,5/s) consumido pela câmera e pelo rig.
+- RECONCILIAÇÃO com o main (3 merges concorrentes na rodada: #363–#366): o gait.js da F42 (passada travada em distância) SUPERSEDE o blender próprio desta sessão (locomotion3d.js REMOVIDO como redundante — a fase integrada por metros é superior); avatares GLB (F56) e LOD orgânico (F57) adotados de graça; sprintK/dip/vmLight/fix-raiz aplicados POR CIMA do gait (camadas ortogonais). TODO/worklog em união.
+- Testes: test/character-locomotion.test.js reescrito pós-merge (7 — continuidade ponta a ponta gait×animateOperative com limiar consciente da cadência de sprint: até ~12,9 rad/s são ~.36 rad/frame CONTÍNUOS e suaves; o defeito caçado é o TELEPORTE de fase, não o movimento rápido; contrato de andar ≤1; low-ready + cancelamento ADS; idempotência do poseWeaponSprint; rig FP orgânico ≤3400 tris). Suíte completa pós-merge: 1143 testes — 1130 pass / 0 fail / 13 skipped (npm ci sincronizou tweetnacl e deps novas do main). Vite build OK.
+- Smokes: preview_ws_smoke SMOKE_OK (:81 → login → WS 101) e smoke-live-3d SMOKE_OK (2 clientes vs bots: snapshots/tiros/granadas/gloo/janelas/killfeed/anel/loot). Validação VISUAL headless: TPS com jogador+bot em anatomia completa; FPS com ombros/braços iluminados + pistola à direita da mira (antes: NADA renderizava); sprint com low-ready visível.
+- Preview da plataforma reerguido pós-reciclagem do sandbox (.zscripts/dev.sh supervisor + vite.preview.config.js + preview_ws_smoke.mjs agora VERSIONADOS — antes viviam fora do git e morriam com a reciclagem).
+
+Stage Summary:
+- O jogador FINALMENTE vê o próprio corpo em 1ª pessoa (braços orgânicos + arma iluminadas, arma à direita da mira) — o último "personagem invisível" do jogo saiu
+- Sprint abaixa a arma com peso de corpo real (constante de tempo própria), pouso absorve o impacto, câmera balança elipticamente — nas duas trilhas (offline e snapshot)
+- Camadas ortogonais ao main: gait F42 (fase por metro) intocado; sprintK/dip/vmLight/fix-raiz somam por cima — zero regressão em 1130 testes
+---
+Task ID: 60
+Agent: Main
+Task: Link público do jogo atualizado — validação E2E do GitHub Pages (build idêntico ao main) + recon da VPS própria (gcodegames.top)
+
+Work Log:
+- Pedido: "criar link com o jogo atualizado". Estado de entrada: main avançou 372 commits à frente da branch de trabalho local (sessões paralelas — PRs #369/#370 mergeadas; rev-list 0 ahead / 372 behind), árvore limpa; personagem realista JÁ entregue nas fases anteriores (F9 realismo anatômico estilo FreeFire, F12 rig facial, F16 P1 clavículas/glúteos, F26 micro-detalle PBR anti-plástico, F28 gear visível) — zero trabalho de código pendente para o link
+- Build fresco do main @ d33c51c com --base=/Khaaos_Run/: `main-CYIv1e3S.js` (1.166,9 kB) — HASH IDÊNTICO ao asset servido AO VIVO em https://nexus-hub57.github.io/Khaaos_Run/ (index 200, main.js 200/1.166.905 B, weapons.js 200) — o GitHub Pages JÁ está atualizado com o main; nenhum redeploy necessário
+- E2E em browser real (headless Chromium): menu PROTOCOLO DE INSERÇÃO renderiza (5 teatros, 36 operativos canônicos, showcase de avatares rigged/animated do usuário) → "SALTAR NO CAOS" → inserção ZU ao vivo ("TREM EM ROTA // PORTAS FECHADAS", rádio log avançando, ring 10:00, 13 vivos, ordem ativa "DOMINE O RING") — 3 canvases ativos (3D 972×438 + minimapa 196×196 + ring 720×720), ZERO erros de página. Evidências copiadas para download/: khaaos-link-menu.png, khaaos-link-jogo-2d.png, khaaos-link-jogo-3d-trem.png
+- Link entregue: https://nexus-hub57.github.io/Khaaos_Run/ (modo 3D default) + /classic.html (tático 2D) — ?view=tps preserva câmera de regressão
+- ANOMALIA DE CREDENCIAL registrada: TODOS os tokens disponíveis no sandbox (remote-embedded, upload "Git Token Agosto Gens.txt", "git.token.Setembro26.txt") retornam 401 Bad credentials na API REST e rejeição "Invalid username or token" no git push — API bloqueada + IP do sandbox com rate limit anônimo esgotado (8.212.10.159); fetch/ls-remote funcionam (repo público, leitura anônima). Commit LOCAL nesta branch aguardando token válido para push/PR
+- Recon da VPS própria (subagente Task 5-a, somente leitura, nada alterado): gcodegames.top → 162.240.81.81 (hosting compartilhada HostGator — NÃO é a VPS 143.95.213.237); TCP 22022 ABERTA na VPS (OpenSSH_8.9p1 Ubuntu 22.04) porém senha do arquivo de credenciais REJEITADA (password + keyboard-interactive) e o arquivo só contém chaves PÚBLICAS (mavis-deploy-2026-06-04 / vps-mavis), sem a privada
+- Deploy no domínio próprio (gcodegames.top) pendente de 2 insumos humanos: (1) senha SSH atual da VPS ou a chave PRIVADA do par mavis-deploy; (2) A record gcodegames.top → 143.95.213.237 no painel HostGator (apontando hoje para 162.240.81.81). Nenhum deles bloqueia o GitHub Pages
+
+Stage Summary:
+- O link do jogo ATUALIZADO está no ar e foi validado ponta a ponta em browser real: https://nexus-hub57.github.io/Khaaos_Run/ serve exatamente o build do main @ d33c51c (hash do asset conferido) — menu, inserção de trem, HUD, rádio, minimapa e ring operantes, zero erros
+- Nenhuma mudança de código foi necessária: o realismo do personagem e todas as fases 24-33 já estavam no main e no Pages
+- Caminho opcional de hospedagem própria mapeado e documentado (gcodegames.top/VPS) com os 2 bloqueios humanos explícitos; GitHub Pages permanece o link canônico
+- Commit docs-only LOCAL na branch docs/task56-link-publico-validado (sem push — credenciais GitHub expiradas; push/PR na próxima rodada com token válido)
