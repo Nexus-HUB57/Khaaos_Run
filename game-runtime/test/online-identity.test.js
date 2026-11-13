@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MatchRoom3D, OPERATIVE_IDS, ABILITY_TICK_RATE } from '../server/room3d.js';
 import { validateInput3D } from '../server/antiCheat.js';
-import { DEFAULT_INPUT, PULSE_INTERVAL, WEAPONS3D } from '../src/game3d/sim3d.js';
+import { DEFAULT_INPUT, WEAPONS3D } from '../src/game3d/sim3d.js';
 import { trafficPlacements } from '../src/game3d/detail3d.js';
 import { buildWorldLayout } from '../src/game3d/layout3d.js';
 import { nightnessFor, nightSceneState, mixHex, lerp, NIGHT, MAX_NIGHT_PULSE } from '../src/game3d/skyPhase.js';
@@ -485,8 +485,9 @@ test('fase8 snapshot: pulso do ring disponível p/ o cliente dirigir a noite', (
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const snap = room.snapshot('p1');
   assert.ok(snap.ring && 'pulse' in snap.ring);
-  assert.equal(snap.ring.pulse, 0);
-  room.pulseTimer = PULSE_INTERVAL;
+  // Task 65 — baseline determinístico: fase 0 canônica = pulso 1 (idempotente
+  // mesmo se o grace já liberou o combate nesta roda da suíte)
+  room.zoneElapsed = 0.001;
   room.tick(DT);
-  assert.equal(room.snapshot('p1').ring.pulse, 1);
+  assert.equal(room.snapshot('p1').ring.pulse, 1); // Task 65 — pulso = nº da fase canônica (1-based)
 });

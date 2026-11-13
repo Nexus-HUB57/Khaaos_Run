@@ -9,9 +9,13 @@
 import { SeededRng } from '../src/shared/rng.js';
 import { rollLoot } from '../src/shared/weapons.js';
 import { resolveScenario } from '../src/game3d/scenarios.js';
+// Task 65 — zona no CÂNON de cada mundo (Fase 61): 5 fases × 120 s, raio
+// projetado da fração oficial e DPS OFICIAL por fase — paridade 1:1 com a
+// sim offline (sim3d) e com o SSOT shared/worlds.ts (safeZone.js).
+import { scheduleFor, phaseStateAt, centerDrift } from '../src/game3d/safeZone.js';
 import { ROOM_STATES } from './room.js';
 import {
-  WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
+  WORLD, PLAYER_R, MATCH_TIME, WEAPONS3D, AMMO_CAP,
   FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT, DOOR, WINDOW,
   doorHpFor, doorMeleeMultFor,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
@@ -132,6 +136,13 @@ export class MatchRoom3D {
     this.rng = new SeededRng(`${this.seed}:room3d`);
     this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
+    // Fase 61/Task 65 — CÂNON DO MUNDO: 5 fases × 120 s com nome, raio projetado
+    // da fração oficial e DPS OFICIAL por fase (scheduleFor/phaseStateAt) —
+    // mesmo contrato da sim offline (sim3d.step).
+    this.zone = scheduleFor(this.scenario.id);
+    this.zoneElapsed = 0;
+    this.ring.phaseName = this.zone[0]?.name ?? null;
+    this.ring.dps = this.zone[0]?.dps ?? 1;
     this.humans = new Map();   // id (client-id) -> actor
     this.players = this.humans; // alias de compatibilidade com o matchmaking/reconexão 2D
     this.bots = [];
@@ -145,7 +156,7 @@ export class MatchRoom3D {
     this.events = new Map();   // humanId -> [{tick, type, ...}]
     this.tickCount = 0; // contador público no snapshot (método tick(dt) avança a sala)
     this.time = MATCH_TIME;
-    this.pulseTimer = 0;
+    // Task 65 — pulseTimer aposentado pelo schedule canônico (zoneElapsed)
     // Task 53 — protocolo do trem: epoch de início da rota, trava de combate
     // (chegada + 15 s) e rota pura compartilhada com o cliente (mesma pose).
     this.trainStartedAtEpoch = null;
@@ -218,7 +229,8 @@ export class MatchRoom3D {
         headshot: !!payload.head, knock: !!payload.knock,
       });
     } else if (type === 'pulse') {
-      this.spectatorLogEvent('RING_PHASE', { phase: payload.pulse, isShrinking: true });
+      // Task 65 — espelho leva o NOME CANÔNICO da fase (HUD/espectador "PULSO N · fase")
+      this.spectatorLogEvent('RING_PHASE', { phase: payload.pulse, phaseName: payload.phaseName ?? null, dps: payload.dps ?? null, isShrinking: true });
     }
     // Fase 18 — sobrevivências do mundo na TRANSMISSÃO: o espectador vê o
     // tsunami/lava/anomalia com os MESMOS FX (SurvivalFX), áudio e banner.
@@ -613,23 +625,25 @@ export class MatchRoom3D {
     if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
     if (this.trainStartedAtEpoch) this.#stepTrainProtocol();
 
-    // --- zona segura (mesmas constantes da sim offline) ---
-    if (!this.#combatLocked()) this.pulseTimer += dt;
-    if (this.pulseTimer >= this.pulseInterval && this.ring.radius > 42) {
-      this.pulseTimer = 0;
-      this.ring.pulse++;
-      this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
-      // Fase 42 — paridade 1:1 com a sim: o anel FECHA sobre o setor canônico do
-      // mundo (scenarios.ringFinal — README "Dinâmica" de cada Ring).
-      const fin = this.scenario.ringFinal;
-      if (fin) {
-        const k = Math.min(1, this.ring.pulse / 4);
-        this.ring.x = fin.x * k;
-        this.ring.z = fin.z * k;
+    // --- zona segura (Fase 61/Task 65 — CÂNON DO MUNDO: 5 fases × 120 s com
+    // nome, raio projetado da fração oficial e DPS OFICIAL; encolhimento
+    // CONTÍNUO por smoothstep dentro da fase e centro derivando ao setor
+    // canônico ringFinal — paridade 1:1 com a sim offline (sim3d.step);
+    // Opção B MPZEX: fases 3× mais longas em salas cap-2 sem bots) ---
+    if (!this.#combatLocked()) this.zoneElapsed += dt;
+    const zone = phaseStateAt(this.zone, this.zoneElapsed / this.zonePhaseScale);
+    if (zone) {
+      if (zone.index !== this.ring.pulse - 1) {
+        this.ring.pulse = zone.index + 1;
+        const drift = centerDrift(this.scenario, zone.index);
+        if (drift) { this.ring.x = drift.x; this.ring.z = drift.z; }
+        this.#emitAll('pulse', { pulse: this.ring.pulse, target: zone.radiusTo, phaseName: zone.name, dps: zone.dps, finalName: this.scenario.ringFinal?.name ?? null });
       }
-      this.#emitAll('pulse', { pulse: this.ring.pulse, target: this.ring.target, finalName: fin?.name ?? null });
+      this.ring.radius = zone.radius;      // diminui sem saltos (smoothstep)
+      this.ring.target = zone.radiusTo;
+      this.ring.phaseName = zone.name;
+      this.ring.dps = zone.dps;
     }
-    if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     for (const actor of this.#actors()) {
       // Task 53 — passageiro A BORDO do trem dos Rings é protegido do ring (o
       // "Cinto" da entrada ZU): a física está suspensa a bordo e o ator não
@@ -637,7 +651,9 @@ export class MatchRoom3D {
       // armadilha, não mecânica. Proteção vale até o desembarque (doorJump/
       // trainArrived limpa trainOnboard). Paridade 1:1 com sim3d.
       if (actor.alive && !actor.trainOnboard && dist2d(actor.x, actor.z, this.ring.x, this.ring.z) > this.ring.radius) {
-        this.#damage(actor, (4 + this.ring.pulse * 1.4) * dt, null, 'ring');
+        // Fase 61/Task 65 — DPS OFICIAL da fase canônica do mundo (1→40; sem
+        // multiplicador legado — paridade 1:1 com sim3d).
+        this.#damage(actor, (this.ring.dps || 1) * dt, null, 'ring');
       }
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
@@ -859,10 +875,12 @@ export class MatchRoom3D {
     } else if (ability.effect === 'temporaryArmor') {
       a.temporaryArmor = params.armor;
     } else if (ability.effect === 'ringRead' || ability.effect === 'ringForecast') {
-      details.nextPulseSeconds = Math.max(0, PULSE_INTERVAL - this.pulseTimer);
-      details.targetRadius = this.ring.radius > 42
-        ? Math.max(42, 168 - (this.ring.pulse + 1) * 30)
-        : this.ring.radius;
+      // Fase 61/Task 65 — leitura no CÂNON: segundos até a PRÓXIMA FASE oficial
+      // + raio-alvo dela (paridade 1:1 com sim3d).
+      const zNow = phaseStateAt(this.zone, this.zoneElapsed / this.zonePhaseScale);
+      const next = this.zone[Math.min(this.zone.length - 1, (zNow?.index ?? 0) + 1)];
+      details.nextPulseSeconds = next ? Math.max(0, next.startAt - this.zoneElapsed / this.zonePhaseScale) : 0;
+      details.targetRadius = zNow ? (this.ring.radius > (next?.radius ?? 42) ? (next?.radius ?? this.ring.radius) : this.ring.radius) : this.ring.radius;
     } else if (ability.effect === 'terminalScan') {
       const terminal = this.terminals.filter((item) => item.active)
         .sort((x, y) => dist2d(a.x, a.z, x.x, x.z) - dist2d(a.x, a.z, y.x, y.z))[0];
@@ -2126,10 +2144,15 @@ export class MatchRoom3D {
       })),
       ringState: {
         currentPhase: this.ring.pulse,
+        phaseName: this.ring.phaseName ?? null,
+        dps: this.ring.dps ?? null,
         currentRadius: Math.round(this.ring.radius),
         ringCenter: [this.ring.x, 0, this.ring.z],
         isShrinking: this.ring.radius > this.ring.target,
-        nextPhaseIn: Math.max(0, Math.round(PULSE_INTERVAL - this.pulseTimer)),
+        // Fase 61/Task 65 — segundos até a PRÓXIMA FASE canônica do mundo
+        nextPhaseIn: Math.round(Math.max(0,
+          (this.zone[Math.min(this.zone.length - 1, (phaseStateAt(this.zone, this.zoneElapsed / this.zonePhaseScale)?.index ?? 0) + 1)]?.startAt ?? 0)
+          - this.zoneElapsed / this.zonePhaseScale)),
       },
       // Fase 25 — estado das FOLHAS na TRANSMISSÃO (id/open/destroyed/hp;
       // a posição é estática — o cliente busca o vão no layout pela seed)

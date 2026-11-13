@@ -244,16 +244,16 @@ test('room3d: chegada desembarca todos e o pulso do Ring só corre após o unloc
   room.tick(1 / 20);
   assert.equal(room.trainArrived, true);
   assert.ok([...room.humans.values(), ...room.bots].every((a) => !a.trainOnboard));
-  // pulso: com o relógio dentro do grace, pulseTimer não avança
+  // pulso: com o relógio dentro do grace, zoneElapsed (cânon F61/Task 65) não avança
   room.trainStartedAtEpoch = Date.now() - 20000; // ainda grace (até 31 s)
-  const pulse0 = room.pulseTimer;
+  const zone0 = room.zoneElapsed;
   for (let i = 0; i < 40; i++) room.tick(1 / 20); // 2 s
-  assert.equal(room.pulseTimer, pulse0);
-  // desbloqueio: relógio do protocolo em 32 s — pulseTimer volta a correr
+  assert.equal(room.zoneElapsed, zone0);
+  // desbloqueio: relógio do protocolo em 32 s — zoneElapsed volta a correr
   // (combatLockedUntil é deslocado junto — a sala de produção evolui os DOIS
   // a partir do epoch do start; no teste simulamos o mesmo instante)
   room.combatLockedUntil = Date.now() - 100;
   room.tick(1 / 20);
-  assert.ok(room.pulseTimer > 0);
+  assert.ok(room.zoneElapsed > 0);
   assert.equal(room.combatUnlockedAnnounced, true);
 });
