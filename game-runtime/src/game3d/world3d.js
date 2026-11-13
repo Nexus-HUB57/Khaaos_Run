@@ -159,7 +159,7 @@ function createSky(scenario) {
   return new THREE.Mesh(geo, mat);
 }
 
-// ---------- parede do anel (zona segura) ----------
+// ---------- parede do anel (zona segura) — Fase 61: VISUAL DO CENÁRIO ----------
 // FIX visual (regressão "mundo vermelho"): o ShaderMaterial da parede NÃO
 // participa do FogExp2 da cena — no Ring de 800 m a parede ficava visível a
 // 800 m como uma cortina vermelha nítida dominando o céu durante a QUEDA
@@ -167,14 +167,65 @@ function createSky(scenario) {
 // 1-exp(-(d·density)²)): a parede some na névoa quando distante e volta a
 // aparecer quando o Ring encolhe. uniforms de fog são sincronizados a cada
 // frame no updateRing (acompanham applyNightness).
-export function createRingWall() {
+//
+// Task 64 — SAFE ZONE TEMÁTICA POR CENÁRIO (fim do "círculo de linhas
+// amarelas" genérico; supersede o estilo F61 mantido abaixo como metadado):
+// a parede materializa o HAZARD CANÔNICO de cada mundo
+// (README "Ontologia dos Mundos" / WORLDS_CANONICAL_SUMMARY):
+//   CIGKV     — PULSO KHAAOS  : campo de energia ciano (mesma assinatura dos
+//               domos de contenção #7fd8e8) com bandas de varredura
+//   Barburhen — CHUVA ÁCIDA   : cortina de azedume VERDE com veios caindo
+//               (W1 "Água da Morte")
+//   Priadus   — NÉVOA DE ESPOROS: murmúrio verde-escuro orgânico à deriva
+//               (W2 "Emboscada Verde")
+//   Ckesalth  — FUMAÇA TÓXICA : parede escura densa turvando (W3 "Assassino
+//               Silencioso")
+//   Arukheea  — TSUNAMI       : lâmina d'água TEAL com cristas subindo e
+//               espuma na borda superior (W4 "Tsunami")
+export const RING_WALL_THEMES = Object.freeze({
+  CIGKV: Object.freeze({ mode: 'energy', a: '#7fd8e8', b: '#0f3a4a', glow: '#aef2ff', fall: .35, bands: 3, density: .55 }),
+  Barburhen: Object.freeze({ mode: 'rain', a: '#79c93c', b: '#1e3c10', glow: '#b6ff5e', fall: 2.2, bands: 9, density: .6 }),
+  Priadus: Object.freeze({ mode: 'fog', a: '#5a7a20', b: '#141f0c', glow: '#87b04a', fall: .12, bands: 2, density: .72 }),
+  Ckesalth: Object.freeze({ mode: 'smoke', a: '#4a443a', b: '#100d09', glow: '#8a7a58', fall: -.55, bands: 4, density: .8 }),
+  Arukheea: Object.freeze({ mode: 'wave', a: '#2a7d8c', b: '#07222c', glow: '#9fe8f2', fall: .9, bands: 5, density: .65 }),
+});
+
+export function ringWallTheme(scenarioId) {
+  return RING_WALL_THEMES[scenarioId] ?? RING_WALL_THEMES.CIGKV;
+}
+
+// Fase 61 — paleta/estilo por mundo (metadado de leitura; o shader roda no
+// tema canônico do Task 64). Mantido para compatibilidade de consumo.
+export const RING_WALL_STYLES = Object.freeze({
+  CIGKV: Object.freeze({ color: '#66e0ff', color2: '#8b5cf6', opacity: .8, grid: 1, streak: 0, crest: 0, bands: .12, flow: .22 }),
+  Barburhen: Object.freeze({ color: '#8aff3d', color2: '#3f6212', opacity: .8, grid: .25, streak: 1, crest: 0, bands: .2, flow: 1.15 }),
+  Priadus: Object.freeze({ color: '#4d7c2a', color2: '#1a2e12', opacity: .85, grid: 0, streak: 0, crest: 0, bands: .5, flow: .1 }),
+  Ckesalth: Object.freeze({ color: '#4a4238', color2: '#b45309', opacity: .9, grid: 0, streak: 0, crest: 0, bands: .62, flow: .14 }),
+  Arukheea: Object.freeze({ color: '#2a9d9f', color2: '#a5f3fc', opacity: .75, grid: 0, streak: 0, crest: 1, bands: .28, flow: .3 }),
+});
+export function ringWallStyle(scenarioId) {
+  const key = String(scenarioId ?? 'CIGKV');
+  return RING_WALL_STYLES[key] ?? RING_WALL_STYLES.CIGKV;
+}
+
+export function createRingWall(scenarioId = 'CIGKV') {
+  const theme = ringWallTheme(scenarioId);
+  const st = ringWallStyle(scenarioId); // metadado F61 exposto em userData
   const group = new THREE.Group();
-  const mk = (radius, opacity, color) => {
+  const mk = (radius, opacity, colorKey) => {
     const geo = new THREE.CylinderGeometry(radius, radius, 34, 96, 1, true);
     const mat = new THREE.ShaderMaterial({
       transparent: true, side: THREE.DoubleSide, depthWrite: false,
       uniforms: {
-        time: { value: 0 }, color: { value: new THREE.Color(color) }, opacity: { value: opacity },
+        time: { value: 0 },
+        colorA: { value: new THREE.Color(theme.a) },
+        colorB: { value: new THREE.Color(theme.b) },
+        glow: { value: new THREE.Color(theme.glow) },
+        fall: { value: theme.fall },
+        bands: { value: theme.bands },
+        mode: { value: { energy: 0, rain: 1, fog: 2, smoke: 3, wave: 4 }[theme.mode] ?? 0 },
+        density: { value: theme.density * (colorKey === 'glow' ? .55 : 1) },
+        opacity: { value: opacity },
         fogColor: { value: new THREE.Color('#57382f') }, fogDensity: { value: 0.0035 },
       },
       vertexShader: `
@@ -184,26 +235,62 @@ export function createRingWall() {
           vDepth = -mvPosition.z;
           gl_Position = projectionMatrix * mvPosition; }`,
       fragmentShader: `
-        uniform float time; uniform vec3 color; uniform float opacity;
+        uniform float time; uniform float fall; uniform float bands; uniform int mode;
+        uniform vec3 colorA; uniform vec3 colorB; uniform vec3 glow;
+        uniform float density; uniform float opacity;
         uniform vec3 fogColor; uniform float fogDensity;
         varying vec2 vUv; varying vec3 vPos; varying float vDepth;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         void main() {
-          float grid = step(.975, fract(vUv.x * 70.0)) + step(.96, fract(vUv.y * 18.0 - time * .18));
           float edgeTop = smoothstep(1.0, .82, vUv.y);
-          float edgeBottom = smoothstep(0.0, .10, vUv.y);
-          float a = (0.05 + grid * .16) * edgeTop * edgeBottom;
-          float wave = smoothstep(.4, 1., fract(vUv.y * 2.2 - time * .1)) * .05;
+          float edgeBottom = smoothstep(0.0, .14, vUv.y);
+          float edge = edgeTop * edgeBottom;
+          float body = 0.0;   // padrão do hazard corrente
+          float crest = 0.0;  // brilho de borda (espuma/onda/varredura)
+          if (mode == 1) {
+            // CHUVA ÁCIDA: veios verdes caindo rápido em colunas esparsas
+            float col = floor(vUv.x * 220.0);
+            float sp = hash(vec2(col, 7.0));
+            float streak = smoothstep(.35, .95, fract(vUv.y * 2.2 - time * fall - sp));
+            body = streak * step(.45, sp) * .5;
+            body += smoothstep(.75, 1., fract(vUv.y * 5.0 - time * fall * 1.7 + sp * 3.)) * .18;
+          } else if (mode == 2) {
+            // NÉVOA DE ESPOROS: manchas orgânicas à deriva (duas camadas dessintonizadas)
+            float m1 = sin(vUv.x * 18.0 + time * fall * 2.0) * sin(vUv.y * 9.0 - time * .5);
+            float m2 = sin(vUv.x * 31.0 - time * fall * 3.1) * sin(vUv.y * 14.0 + time * .7);
+            body = smoothstep(.1, .9, .5 + .5 * m1) * .5 + smoothstep(.3, .95, .5 + .5 * m2) * .3;
+          } else if (mode == 3) {
+            // FUMAÇA TÓXICA: rolagem densa e abafada (camadas em contracorrente)
+            float s1 = smoothstep(.2, .8, .5 + .5 * sin(vUv.y * 7.0 - time * fall * 1.4 + sin(vUv.x * 12.0) * .8));
+            float s2 = smoothstep(.3, .9, .5 + .5 * sin(vUv.x * 9.0 + time * fall + sin(vUv.y * 5.0) * 1.1));
+            body = max(s1, s2) * .75;
+          } else if (mode == 4) {
+            // TSUNAMI: bandas d'água subindo + crista branca na borda superior
+            float w = fract(vUv.y * bands * .35 + time * fall * .25 + sin(vUv.x * 14.0 + time * .8) * .06);
+            body = smoothstep(.25, .9, w) * .55;
+            crest = smoothstep(.02, .0, abs(vUv.y - (.86 + sin(vUv.x * 24.0 + time * 1.6) * .015))) * (0.6 + .4 * sin(vUv.x * 40.0 - time * 3.0));
+          } else {
+            // PULSO KHAAOS: campo de energia com varredura vertical e grade sutil
+            float scan = smoothstep(.04, .0, abs(fract(vUv.y * 2.0 - time * fall) - .5) - .02);
+            float grid = step(.975, fract(vUv.x * 70.0)) + step(.96, fract(vUv.y * 18.0 - time * .18));
+            body = scan * .5 + grid * .12;
+          }
+          float a = (0.16 + body * density * 1.25) * edge * opacity + crest * .8 * edge;
           float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vDepth * vDepth);
-          vec3 col = mix(color, fogColor, clamp(fogFactor, 0.0, 1.0));
-          gl_FragColor = vec4(col, (a + wave) * opacity * (1.0 - clamp(fogFactor, 0.0, 1.0)));
+          vec3 col = mix(mix(colorB, colorA, body), fogColor, clamp(fogFactor, 0.0, 1.0));
+          col += glow * crest * (1.0 - fogFactor);
+          gl_FragColor = vec4(col, a * (1.0 - clamp(fogFactor, 0.0, 1.0)));
         }`,
     });
     return new THREE.Mesh(geo, mat);
   };
-  const inner = mk(1, .7, '#c8ff3d');
-  const outer = mk(1.004, .3, '#ff6b2c');
+  const inner = mk(1, .7, 'inner');
+  const outer = mk(1.004, .3, 'glow');
   group.add(inner, outer);
   group.userData.uniforms = [inner.material.uniforms, outer.material.uniforms];
+  group.userData.ringWallTheme = theme;
+  group.userData.style = st; // F61 — metadado de estilo (leitura/debug)
+  group.userData.scenarioId = String(scenarioId);
   return group;
 }
 
