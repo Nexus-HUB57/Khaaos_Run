@@ -51,22 +51,58 @@ export class HUD {
     // joystick touch
     const stick = $('#joyBase'), knob = $('#joyKnob');
     if (stick && knob) {
-      const rect = () => stick.getBoundingClientRect();
       this.joy = { active: false, dx: 0, dy: 0, id: null };
       const start = (e) => {
         this.joy.active = true; this.joy.id = e.pointerId;
-        stick.setPointerCapture(e.pointerId);
+        this._stickRect = null; // Task 61 — re-medir a cada toque (rotação de tela/barra do navegador)
+        try { stick.setPointerCapture(e.pointerId); } catch { /* ponteiro sintético/encerrado: segue sem captura */ }
         this.#joyMove(e);
       };
       stick.addEventListener('pointerdown', start);
       stick.addEventListener('pointermove', (e) => { if (this.joy.active && e.pointerId === this.joy.id) this.#joyMove(e); });
       const end = (e) => {
         if (e.pointerId !== this.joy.id) return;
-        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0;
+        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0; this.joy.id = null;
         knob.style.transform = 'translate(-50%,-50%)';
       };
       stick.addEventListener('pointerup', end);
       stick.addEventListener('pointercancel', end);
+      // Task 61 — joystick "grudado" (app em segundo plano/aba perdida) solta
+      // sozinho: blur/visibilitychange liberam SEM depender de pointermove
+      // (segurar o dedo parado é movimento legítimo — nada de timeout aqui).
+      // globalThis/?. — o ambiente de teste (mock DOM puro Node) não tem window.
+      const releaseAll = () => {
+        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0; this.joy.id = null;
+        knob.style.transform = 'translate(-50%,-50%)';
+        this.look && (this.look.active = false, this.look.id = null);
+      };
+      globalThis.addEventListener?.('blur', releaseAll);
+      document.addEventListener?.('visibilitychange', () => { if (document.hidden) releaseAll(); });
+    }
+    // Task 61 — look/aim touch (pad direito): arrastar gira a câmera (yaw + pitch),
+    // a MESMA convenção/clamp do mousemove (main3d.initInput). Multi-touch seguro:
+    // pointerId próprio, independente do joystick (Free Fire style).
+    const pad = $('#lookPad');
+    if (pad) {
+      this.look = { active: false, id: null, lx: 0, ly: 0 };
+      pad.addEventListener('pointerdown', (e) => {
+        if (this.look.active) return; // um dedo só no olhar
+        this.look.active = true; this.look.id = e.pointerId;
+        this.look.lx = e.clientX; this.look.ly = e.clientY;
+        try { pad.setPointerCapture(e.pointerId); } catch { /* idem joystick */ }
+      });
+      pad.addEventListener('pointermove', (e) => {
+        if (!this.look.active || e.pointerId !== this.look.id) return;
+        const dx = e.clientX - this.look.lx, dy = e.clientY - this.look.ly;
+        this.look.lx = e.clientX; this.look.ly = e.clientY;
+        if (dx || dy) this.onLook?.(dx, dy);
+      });
+      const endLook = (e) => {
+        if (e.pointerId !== this.look.id) return;
+        this.look.active = false; this.look.id = null;
+      };
+      pad.addEventListener('pointerup', endLook);
+      pad.addEventListener('pointercancel', endLook);
     }
   }
   #joyMove(e) {

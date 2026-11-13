@@ -144,6 +144,14 @@ export class Game3D {
     });
     this.hud.audio = this.audio;
     this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
+    // Task 61 — look/aim touch: o pad direito entrega Δpixels; aqui vira yaw/pitch
+    // com a MESMA convenção, sensibilidade e clamp do mousemove (initInput) —
+    // incluindo a razão de ADS (~0.52×) e a sensibilidade do painel KR_GFX.
+    this.hud.onLook = (dxPx, dyPx) => {
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
+      this.input.yaw -= dxPx * sens;
+      this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch - dyPx * sens));
+    };
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
