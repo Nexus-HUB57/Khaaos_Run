@@ -15,14 +15,17 @@
 
 import { WebSocket, WebSocketServer } from "ws";
 import type { Server } from "http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { z } from "zod";
+import { inArray } from "drizzle-orm";
 import { storage } from "../storage";
+import { db, pool } from "../db";
 import { metrics } from "./metrics";
 import {
   ZONE_PHASES,
   PlayerStatus,
   LOOT_PRESETS,
+  users,
   type ZoneStatus,
   type PlayerStats,
 } from "@shared/schema";
@@ -43,11 +46,10 @@ import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
-import {
-  getOperativeAvatarOption,
-  getOperativeAvatarRuntime,
-  type OperativeAvatarRuntime,
-} from "@shared/operative-avatar-catalog";
+import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
+import { PermanentCampaignOutboxError, type CampaignRoomProvisionRequest } from "./campaignOutboxWorker";
+import { ciePostgresRepository } from "./cieRepository.postgres";
+import { resolveCampaignRing, type CampaignRingResolution, type RingFinishReason } from "./campaignProgression";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +89,13 @@ export interface RoomPlayer {
   isReady: boolean;
   isHost: boolean;
   rating: number;
+  campaignMetrics?: {
+    accountXp: number;
+    battlesPlayed: number;
+    lifetimeKills: number;
+    lifetimeDeaths: number;
+    randomTieBreak: number;
+  };
 }
 
 export interface RoomLoot {
@@ -131,10 +140,25 @@ export interface BattleRoom {
   inviteCode: string | null;
   countdownHandle: NodeJS.Timeout | null;
   minPlayersToStart: number;
+  campaign?: {
+    ringId: string;
+    campaignId: string;
+    day: number;
+    startedAt: number | null;
+    evaluationCutoffAt: number | null;
+    finishReasonPending: RingFinishReason | null;
+    finishPromise: Promise<void> | null;
+    startAttempts: number;
+  };
 }
 
 /** Adapter so SpatialGrid can key by userId/id */
 type SpatialEntityAdapter = { id: string | number };
+
+// Coalesce duplicate outbox deliveries inside one Node process. Redis remains
+// the cross-process owner lock; this map prevents duplicate local DB/stat work.
+const campaignRoomProvisionals = new Map<string, Promise<string>>();
+const CAMPAIGN_RING_EVALUATION_MS = 10 * 60 * 1000;
 
 export type ClientMessage =
   | { type: "join"; roomId?: string; displayName?: string; worldId?: WorldId }
@@ -260,6 +284,7 @@ class RoomManager {
   private socketAuthenticatedAtMs = new WeakMap<WebSocket, number>();
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
+  private ciePresenceRenewedAt = new Map<string, number>();
   /** M1: janela móvel de emissões de convite por host (quota anti-spam). */
   private inviteIssueLog = new Map<string, number[]>();
 
@@ -376,7 +401,30 @@ class RoomManager {
   private unregisterSocket(userId: string, ws: WebSocket): void {
     const sockets = this.socketsByUser.get(userId);
     sockets?.delete(ws);
-    if (sockets && sockets.size === 0) this.socketsByUser.delete(userId);
+    if (sockets && sockets.size === 0) {
+      this.socketsByUser.delete(userId);
+      this.ciePresenceRenewedAt.delete(userId);
+    }
+  }
+
+  /** Only a server-challenged pong on an authenticated socket proves presence. */
+  private renewCiePresence(userId: string, nowMs: number): void {
+    if (process.env.CIE_SCHEDULER_ENABLED !== "true") return;
+    const lastRenewedAt = this.ciePresenceRenewedAt.get(userId) ?? 0;
+    if (nowMs - lastRenewedAt < 10_000) return;
+    this.ciePresenceRenewedAt.set(userId, nowMs);
+    void import("./cieRepository.postgres").then(({ ciePostgresRepository }) =>
+      ciePostgresRepository.renewActiveCampaignPresence({
+        playerId: userId,
+        now: new Date(nowMs),
+        ttlMs: 30_000,
+      }),
+    ).catch((error) => {
+      if (this.ciePresenceRenewedAt.get(userId) === nowMs) this.ciePresenceRenewedAt.delete(userId);
+      console.warn("[CIE Presence] heartbeat persistence failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   attach(httpServer: Server) {
@@ -475,6 +523,7 @@ class RoomManager {
         const cutoff = receivedAt - 5 * 60_000;
         const freshSamples = samples.filter((sample) => Date.parse(sample.observedAt) >= cutoff).slice(-1000);
         this.networkLatencySamples.set(worldId, freshSamples);
+        this.renewCiePresence(userId, receivedAt);
       });
 
       ws.on("message", async (raw) => {
@@ -766,6 +815,18 @@ class RoomManager {
       return;
     }
 
+    const currentRoomId = this.userToRoom.get(userId);
+    const currentRoom = currentRoomId ? this.rooms.get(currentRoomId) : undefined;
+    if (currentRoom?.campaign && currentRoom.status !== "FINISHED") {
+      if (currentRoomId === roomId) this.resumeRoom(userId, ws, roomId);
+      else this.send(ws, {
+        type: "error",
+        code: "CAMPAIGN_ROSTER_LOCKED",
+        message: "A inscrição da campanha é irrevogável; o avatar permanece no Ring.",
+      });
+      return;
+    }
+
     // Leave matchmaking queue if present
     this.matchmaking.dequeue(userId);
     this.matchmaking.rebindWs(userId, ws);
@@ -867,11 +928,33 @@ class RoomManager {
     }
   }
 
+  private isCampaignExitBlocked(userId: string, ws?: WebSocket): boolean {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    if (!room?.campaign || room.status === "FINISHED") return false;
+    if (ws) this.send(ws, {
+      type: "error",
+      code: "CAMPAIGN_ROSTER_LOCKED",
+      message: "A inscrição da campanha é irrevogável; o avatar permanece no Ring.",
+    });
+    return true;
+  }
+
   leaveRoom(userId: string) {
     const roomId = this.userToRoom.get(userId);
     if (!roomId) return;
     const room = this.rooms.get(roomId);
     if (!room) return;
+
+    if (room.campaign && room.status !== "FINISHED") {
+      const player = room.players.get(userId);
+      if (player?.ws) this.send(player.ws, {
+        type: "error",
+        code: "CAMPAIGN_ROSTER_LOCKED",
+        message: "A inscrição da campanha é irrevogável; o avatar permanece no Ring.",
+      });
+      return;
+    }
 
     const wasHost = room.hostId === userId;
     room.players.delete(userId);
@@ -1018,10 +1101,43 @@ class RoomManager {
     // A participant may have left while the database reads were in flight.
     if (room.status !== "COUNTDOWN" || this.rooms.get(room.id) !== room) return;
 
+    const startedAt = Date.now();
+    if (room.campaign) {
+      try {
+        await this.markCampaignRingStarted(room, startedAt);
+        room.campaign.startAttempts = 0;
+      } catch (error) {
+        room.campaign.startAttempts += 1;
+        console.error(`[RoomManager] Campaign Ring start failed for ${room.id}:`, error);
+        if (room.campaign.startAttempts < 5 && room.status === "COUNTDOWN" && this.rooms.get(room.id) === room) {
+          const retryMs = Math.min(8_000, 500 * (2 ** (room.campaign.startAttempts - 1)));
+          room.countdownSeconds = 0;
+          room.countdownHandle = setTimeout(() => {
+            room.countdownHandle = null;
+            void this.beginMatch(room);
+          }, retryMs);
+          room.countdownHandle.unref?.();
+          this.broadcast(room, { type: "error", message: `Início do Ring pendente; nova tentativa em ${Math.ceil(retryMs / 1000)}s.` });
+        } else if (room.status === "COUNTDOWN" && this.rooms.get(room.id) === room) {
+          this.cancelCountdown(room);
+          for (const player of room.players.values()) {
+            if (player.ws) this.send(player.ws, { type: "error", message: "Não foi possível confirmar o início do Ring. A sala permanece em espera." });
+          }
+        }
+        return;
+      }
+    }
+    if (room.status !== "COUNTDOWN" || this.rooms.get(room.id) !== room) return;
+
     room.status = "IN_PROGRESS";
-    room.startedAt = Date.now();
+    room.startedAt = startedAt;
+    if (room.campaign) {
+      room.campaign.startedAt = startedAt;
+      room.campaign.evaluationCutoffAt = startedAt + CAMPAIGN_RING_EVALUATION_MS;
+      room.campaign.finishReasonPending = null;
+    }
     room.currentPhase = 1;
-    room.phaseStartedAt = Date.now();
+    room.phaseStartedAt = startedAt;
     room.isShrinking = false;
 
     // Procedural match content (seeded by room id — reproducible)
@@ -1075,13 +1191,101 @@ class RoomManager {
     room.tickHandle = setInterval(() => this.tick(room), 1000);
   }
 
+  private async markCampaignRingStarted(room: BattleRoom, startedAt: number): Promise<void> {
+    const campaign = room.campaign;
+    if (!campaign) return;
+    if (room.players.size !== 100) throw new Error("CAMPAIGN_RING_REQUIRES_EXACTLY_100_PLAYERS");
+    const playerIds = [...room.players.keys()];
+    if (new Set(playerIds).size !== 100) throw new Error("CAMPAIGN_RING_DUPLICATE_PLAYER");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const ringResult = await client.query<{
+        campaign_id: string;
+        campaign_day: number;
+        room_id: string | null;
+        status: string;
+      }>(`
+        SELECT campaign_id, campaign_day, room_id, status
+        FROM campaign_rings
+        WHERE ring_id = $1
+        FOR UPDATE
+      `, [campaign.ringId]);
+      const ring = ringResult.rows[0];
+      if (!ring || ring.campaign_id !== campaign.campaignId || ring.campaign_day !== campaign.day
+        || ring.room_id !== room.id) throw new Error("CAMPAIGN_RING_CONTEXT_MISMATCH");
+
+      const playerState = await client.query<{
+        player_id: string;
+        status: string;
+        current_day: number;
+        attempts_used_today: number;
+        active_match_id: string | null;
+      }>(`
+        SELECT cp.player_id, cp.status, cp.current_day, cp.attempts_used_today, cp.active_match_id
+        FROM campaign_ring_players AS rp
+        JOIN campaign_players AS cp
+          ON cp.campaign_id = rp.campaign_id AND cp.player_id = rp.player_id
+        WHERE rp.ring_id = $1 AND rp.campaign_id = $2 AND rp.campaign_day = $3
+        ORDER BY cp.player_id
+        FOR UPDATE OF cp
+      `, [campaign.ringId, campaign.campaignId, campaign.day]);
+      if (playerState.rows.length !== 100
+        || playerState.rows.some((player) => !playerIds.includes(player.player_id))) {
+        throw new Error("CAMPAIGN_RING_ROSTER_CHANGED_BEFORE_START");
+      }
+
+      if (ring.status === "IN_PROGRESS") {
+        const alreadyStarted = playerState.rows.every((player) => player.status === "IN_RING"
+          && player.current_day === campaign.day && player.attempts_used_today === 1 && player.active_match_id === room.id);
+        if (!alreadyStarted) throw new Error("CAMPAIGN_RING_START_STATE_CONFLICT");
+        await client.query("COMMIT");
+        return;
+      }
+      if (ring.status !== "READY" || playerState.rows.some((player) => player.status !== "READY"
+        || player.current_day !== campaign.day || player.attempts_used_today !== 0 || player.active_match_id !== null)) {
+        throw new Error("CAMPAIGN_RING_NOT_READY_TO_START");
+      }
+
+      const playersUpdated = await client.query(`
+        UPDATE campaign_players
+        SET status = 'IN_RING', attempts_used_today = 1, active_match_id = $4, updated_at = $5
+        WHERE campaign_id = $1 AND current_day = $2 AND status = 'READY' AND attempts_used_today = 0
+          AND player_id = ANY($3::text[])
+        RETURNING player_id
+      `, [campaign.campaignId, campaign.day, playerIds, room.id, new Date(startedAt)]);
+      if (playersUpdated.rowCount !== 100) throw new Error("CAMPAIGN_RING_PLAYER_START_UPDATE_INCOMPLETE");
+
+      const ringUpdated = await client.query(`
+        UPDATE campaign_rings
+        SET status = 'IN_PROGRESS', started_at = $2, updated_at = now()
+        WHERE ring_id = $1 AND status = 'READY'
+        RETURNING ring_id
+      `, [campaign.ringId, new Date(startedAt)]);
+      if (ringUpdated.rowCount !== 1) throw new Error("CAMPAIGN_RING_START_UPDATE_CONFLICT");
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // ─── Authoritative Tick ──────────────────────────────────────────────────
 
-  private tick(room: BattleRoom) {
+  private tick(room: BattleRoom, now = Date.now()) {
     if (room.status !== "IN_PROGRESS") return;
 
-    const now = Date.now();
     this.advancePlayerMovement(room, now);
+    if (room.campaign?.evaluationCutoffAt !== null && room.campaign?.evaluationCutoffAt !== undefined
+      && now >= room.campaign.evaluationCutoffAt) {
+      const aliveCount = [...room.players.values()].filter((player) => player.status === "VIVO" && player.health > 0).length;
+      room.campaign.finishReasonPending = aliveCount <= 1 ? "LAST_SURVIVOR" : "TIME_LIMIT";
+      this.checkVictory(room);
+      return;
+    }
     const phaseConfig = ZONE_PHASES[room.currentPhase - 1] || ZONE_PHASES[ZONE_PHASES.length - 1];
     const elapsedSeconds = (now - room.phaseStartedAt) / 1000;
 
@@ -1206,89 +1410,278 @@ class RoomManager {
   private checkVictory(room: BattleRoom) {
     if (room.status !== "IN_PROGRESS") return;
     const alive = [...room.players.values()].filter((p) => p.status === "VIVO");
-    if (alive.length <= 1) {
-      room.status = "FINISHED";
-      room.finishedAt = Date.now();
-      room.winnerId = alive[0]?.userId ?? null;
+    const finishReason = room.campaign?.finishReasonPending ?? (alive.length <= 1 ? "LAST_SURVIVOR" : null);
+    if (alive.length > 1 && !finishReason) return;
 
-      if (room.tickHandle) {
-        clearInterval(room.tickHandle);
-        room.tickHandle = null;
+    const finishedAt = Date.now();
+    const campaignResolution = room.campaign
+      ? this.buildCampaignRingResolution(room, finishReason ?? "LAST_SURVIVOR")
+      : null;
+    room.status = "FINISHED";
+    room.finishedAt = finishedAt;
+    room.winnerId = campaignResolution
+      ? campaignResolution.championId ?? (finishReason === "LAST_SURVIVOR" ? alive[0]?.userId ?? null : null)
+      : alive[0]?.userId ?? null;
+    if (room.campaign && campaignResolution) {
+      const advanced = new Set(campaignResolution.day === 7
+        ? campaignResolution.championId ? [campaignResolution.championId] : []
+        : campaignResolution.advancingPlayerIds);
+      for (const result of campaignResolution.results) {
+        const player = room.players.get(result.playerId);
+        if (!player) continue;
+        if (advanced.has(result.playerId)) player.status = "ESPECTADOR";
+        else {
+          player.status = "ELIMINADO";
+          player.health = 0;
+        }
       }
+    }
 
-      // Build placement list: winner first, then by kills, then by survival
-      const all = [...room.players.values()];
-      const winner = alive[0] ?? null;
-      const others = all
-        .filter((p) => p.userId !== winner?.userId)
-        .sort((a, b) => b.kills - a.kills || (b.joinedMatchAt - a.joinedMatchAt));
+    if (room.tickHandle) {
+      clearInterval(room.tickHandle);
+      room.tickHandle = null;
+    }
+    if (room.countdownHandle) {
+      clearInterval(room.countdownHandle);
+      room.countdownHandle = null;
+    }
 
-      const ordered = winner ? [winner, ...others] : others;
-      const participants: MatchParticipant[] = ordered.map((p, idx) => ({
-        userId: p.userId,
-        kills: p.kills,
-        damageDealt: p.damageDealt,
-        survivedMs: (room.finishedAt ?? Date.now()) - p.joinedMatchAt,
-        placement: idx + 1,
-        isWinner: p.userId === room.winnerId,
-      }));
+    const all = [...room.players.values()];
+    const campaignRankById = new Map(campaignResolution?.results.map((result) => [result.playerId, result.survivorRank]) ?? []);
+    const ordered = campaignResolution
+      ? all.sort((a, b) => {
+        const rankA = campaignRankById.get(a.userId) ?? Number.POSITIVE_INFINITY;
+        const rankB = campaignRankById.get(b.userId) ?? Number.POSITIVE_INFINITY;
+        return rankA - rankB || b.kills - a.kills || b.joinedMatchAt - a.joinedMatchAt;
+      })
+      : all.filter((player) => player.userId !== room.winnerId)
+        .sort((a, b) => b.kills - a.kills || b.joinedMatchAt - a.joinedMatchAt);
+    if (!campaignResolution && room.winnerId) {
+      const winnerIndex = ordered.findIndex((player) => player.userId === room.winnerId);
+      if (winnerIndex >= 0) ordered.unshift(...ordered.splice(winnerIndex, 1));
+    }
+    const participants: MatchParticipant[] = ordered.map((player, index) => ({
+      userId: player.userId,
+      kills: player.kills,
+      damageDealt: player.damageDealt,
+      survivedMs: finishedAt - player.joinedMatchAt,
+      placement: index + 1,
+      isWinner: player.userId === room.winnerId,
+    }));
 
-      // Persist ranking asynchronously then broadcast enriched results
-      applyMatchRankings(room.id, participants)
-        .then((results) => {
-          const rankings = results.map((r) => ({
-            userId: r.userId,
-            kills: r.kills,
-            placement: r.placement,
-            xpGained: r.xpGained,
-            ratingAfter: r.ratingAfter,
-            rankAfter: r.rankAfter,
-            promoted: r.promoted,
-          }));
-          this.broadcast(room, {
-            type: "match_finished",
-            winnerId: room.winnerId,
-            rankings,
-          });
-          this.broadcastRoomState(room);
-        })
-        .catch((err) => {
-          console.error("[Ranking] failed", err);
-          this.broadcast(room, {
-            type: "match_finished",
-            winnerId: room.winnerId,
-            rankings: ordered.map((p, i) => ({
-              userId: p.userId,
-              kills: p.kills,
-              placement: i + 1,
-            })),
-          });
-          this.broadcastRoomState(room);
+    const campaignPersistence = campaignResolution && room.campaign
+      ? this.persistCampaignRingResolutionWithRetry(room, campaignResolution, finishedAt)
+      : Promise.resolve();
+    const finishPromise = Promise.all([applyMatchRankings(room.id, participants), campaignPersistence])
+      .then(([results]) => {
+        const rankings = results.map((result) => ({
+          userId: result.userId,
+          kills: result.kills,
+          placement: result.placement,
+          xpGained: result.xpGained,
+          ratingAfter: result.ratingAfter,
+          rankAfter: result.rankAfter,
+          promoted: result.promoted,
+        }));
+        this.broadcast(room, { type: "match_finished", winnerId: room.winnerId, rankings });
+        this.broadcastRoomState(room);
+      })
+      .catch((error) => {
+        console.error(campaignResolution ? "[Campaign/Ranking] finish persistence failed" : "[Ranking] failed", error);
+        this.broadcast(room, {
+          type: "match_finished",
+          winnerId: room.winnerId,
+          rankings: ordered.map((player, index) => ({ userId: player.userId, kills: player.kills, placement: index + 1 })),
         });
+        this.broadcastRoomState(room);
+      });
+    if (room.campaign) room.campaign.finishPromise = finishPromise;
 
-      // Fase 16 — payouts KRC do fim de partida (2PC + Idempotency-Key
-      // determinística payout.<roomId>.<userId>): PREPARE reserva na treasury,
-      // COMMIT credita a wallet; crash entre fases é concluído pelo recovery.
-      // Falha de settlement NUNCA propaga para o fluxo da partida.
-      const payouts = computeMatchPayouts(participants.map((p) => ({
-        userId: p.userId,
-        kills: p.kills,
-        placement: p.placement,
-        totalPlayers: participants.length,
-      })));
-      if (payouts.length > 0) {
-        settleMatchPayouts(room.id, payouts)
-          .then((summary) => {
-            console.log("[Payouts] settlement concluído", {
-              roomId: summary.roomId,
-              totalKrcCommitted: summary.totalKrcCommitted,
-              players: summary.settled.length,
-            });
-          })
-          .catch((err) => {
-            console.error("[Payouts] settlement falhou (recovery cobrirá)", err);
-          });
+    // Fase 16 — payouts KRC do fim de partida (2PC + idempotency por room/player).
+    const payouts = computeMatchPayouts(participants.map((participant) => ({
+      userId: participant.userId,
+      kills: participant.kills,
+      placement: participant.placement,
+      totalPlayers: participants.length,
+    })));
+    let payoutPromise: Promise<void> = Promise.resolve();
+    if (payouts.length > 0) {
+      payoutPromise = settleMatchPayouts(room.id, payouts)
+        .then((summary) => console.log("[Payouts] settlement concluído", {
+          roomId: summary.roomId,
+          totalKrcCommitted: summary.totalKrcCommitted,
+          players: summary.settled.length,
+        }))
+        .catch((error) => { console.error("[Payouts] settlement falhou (recovery cobrirá)", error); });
+    }
+    if (room.campaign) room.campaign.finishPromise = Promise.all([finishPromise, payoutPromise]).then(() => undefined);
+  }
+
+  private buildCampaignRingResolution(room: BattleRoom, finishReason: RingFinishReason): CampaignRingResolution {
+    const campaign = room.campaign;
+    if (!campaign || room.players.size !== 100) throw new Error("CAMPAIGN_RING_REQUIRES_100_PARTICIPANTS");
+    const metric = (value: number | undefined) => Number.isSafeInteger(value) && (value ?? -1) >= 0 ? value! : 0;
+    return resolveCampaignRing({
+      matchId: room.id,
+      day: campaign.day,
+      finishReason,
+      participants: [...room.players.values()].map((player) => {
+        const aliveAtEvaluation = player.status === "VIVO" && player.health > 0;
+        const snapshot = player.campaignMetrics;
+        return {
+          playerId: player.userId,
+          aliveAtEvaluation,
+          currentHealth: aliveAtEvaluation ? Math.max(1, Math.floor(player.health)) : 0,
+          accountXp: metric(snapshot?.accountXp),
+          battlesPlayed: metric(snapshot?.battlesPlayed) + 1,
+          lifetimeKills: metric(snapshot?.lifetimeKills) + metric(player.kills),
+          lifetimeDeaths: metric(snapshot?.lifetimeDeaths) + (aliveAtEvaluation ? 0 : 1),
+          randomTieBreak: metric(snapshot?.randomTieBreak),
+        };
+      }),
+    });
+  }
+
+  private async persistCampaignRingResolutionWithRetry(
+    room: BattleRoom,
+    resolution: CampaignRingResolution,
+    finishedAt: number,
+  ): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await this.persistCampaignRingResolution(room, resolution, finishedAt);
+        if (room.campaign && room.campaign.day <= 6) {
+          await ciePostgresRepository.setRegularRingsResolved(room.campaign.campaignId, room.campaign.day, true);
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+        console.error(`[RoomManager] Campaign Ring result persistence attempt ${attempt + 1}/5 failed`, error);
+        if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, Math.min(4_000, 250 * (2 ** attempt))));
       }
+    }
+    throw lastError instanceof Error ? lastError : new Error("CAMPAIGN_RING_RESULT_PERSISTENCE_FAILED");
+  }
+
+  private async persistCampaignRingResolution(
+    room: BattleRoom,
+    resolution: CampaignRingResolution,
+    finishedAt: number,
+  ): Promise<void> {
+    const campaign = room.campaign;
+    if (!campaign) throw new Error("CAMPAIGN_CONTEXT_REQUIRED");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const ringResult = await client.query<{ campaign_id: string; campaign_day: number; room_id: string | null; status: string }>(`
+        SELECT campaign_id, campaign_day, room_id, status
+        FROM campaign_rings
+        WHERE ring_id = $1
+        FOR UPDATE
+      `, [campaign.ringId]);
+      const ring = ringResult.rows[0];
+      if (!ring || ring.campaign_id !== campaign.campaignId || ring.campaign_day !== campaign.day || ring.room_id !== room.id) {
+        throw new Error("CAMPAIGN_RING_RESULT_CONTEXT_MISMATCH");
+      }
+      if (ring.status === "FINISHED") {
+        await client.query("COMMIT");
+      } else {
+        if (ring.status !== "IN_PROGRESS") throw new Error("CAMPAIGN_RING_NOT_IN_PROGRESS_AT_FINISH");
+        const roster = await client.query<{ player_id: string }>(`
+          SELECT player_id FROM campaign_ring_players
+          WHERE ring_id = $1 AND campaign_id = $2 AND campaign_day = $3
+          ORDER BY player_id FOR UPDATE
+        `, [campaign.ringId, campaign.campaignId, campaign.day]);
+        const expectedPlayerIds = resolution.results.map((result) => result.playerId).sort();
+        if (roster.rows.length !== 100 || roster.rows.some((row, index) => row.player_id !== expectedPlayerIds[index])) {
+          throw new Error("CAMPAIGN_RING_ROSTER_CHANGED_DURING_MATCH");
+        }
+
+        const metricsPayload = resolution.results.map((result) => ({
+          player_id: result.playerId,
+          placement: result.survivorRank,
+          alive_at_finish: result.currentHealth > 0,
+          final_health: result.currentHealth,
+          account_xp: result.accountXp,
+          battles_played: result.battlesPlayed,
+          lifetime_kills: result.lifetimeKills,
+          lifetime_deaths: result.lifetimeDeaths,
+        }));
+        const ringPlayersUpdated = await client.query(`
+          UPDATE campaign_ring_players AS rp
+          SET placement = result.placement,
+              alive_at_finish = result.alive_at_finish,
+              final_health = result.final_health,
+              account_xp = result.account_xp,
+              battles_played = result.battles_played,
+              lifetime_kills = result.lifetime_kills,
+              lifetime_deaths = result.lifetime_deaths
+          FROM jsonb_to_recordset($4::jsonb) AS result(
+            player_id text, placement integer, alive_at_finish boolean, final_health integer,
+            account_xp numeric, battles_played integer, lifetime_kills integer, lifetime_deaths integer
+          )
+          WHERE rp.ring_id = $1 AND rp.campaign_id = $2 AND rp.campaign_day = $3
+            AND rp.player_id = result.player_id
+          RETURNING rp.player_id
+        `, [campaign.ringId, campaign.campaignId, campaign.day, JSON.stringify(metricsPayload)]);
+        if (ringPlayersUpdated.rowCount !== 100) throw new Error("CAMPAIGN_RING_METRICS_UPDATE_INCOMPLETE");
+
+        const progressionPayload = resolution.results.map((result) => ({
+          player_id: result.playerId,
+          next_status: result.outcome === "QUALIFIED" ? "READY" : result.outcome === "CHAMPION" ? "COMPLETED" : "ELIMINATED",
+          next_day: result.outcome === "QUALIFIED" ? campaign.day + 1 : campaign.day,
+          attempts_used_today: result.outcome === "QUALIFIED" ? 0 : 1,
+        }));
+        const campaignPlayersUpdated = await client.query(`
+          UPDATE campaign_players AS cp
+          SET status = result.next_status,
+              current_day = result.next_day,
+              attempts_used_today = result.attempts_used_today,
+              active_match_id = NULL,
+              updated_at = $3
+          FROM jsonb_to_recordset($4::jsonb) AS result(
+            player_id text, next_status varchar(16), next_day integer, attempts_used_today integer
+          )
+          WHERE cp.campaign_id = $1 AND cp.player_id = result.player_id
+            AND cp.current_day = $2 AND cp.status = 'IN_RING' AND cp.active_match_id = $5
+          RETURNING cp.player_id
+        `, [campaign.campaignId, campaign.day, new Date(finishedAt), JSON.stringify(progressionPayload), room.id]);
+        if (campaignPlayersUpdated.rowCount !== 100) throw new Error("CAMPAIGN_PLAYER_PROGRESSION_UPDATE_INCOMPLETE");
+
+        const cieProgressionPayload = resolution.results.map((result) => ({
+          player_id: result.playerId,
+          // CIE's SURVIVOR role means qualified/READY for the next regular day;
+          // being physically alive outside the top-10 is not campaign survival.
+          next_state: result.outcome === "QUALIFIED" ? "SURVIVOR" : result.outcome === "CHAMPION" ? "COMPLETED" : "ELIMINATED",
+          next_day: result.outcome === "QUALIFIED" ? campaign.day + 1 : campaign.day,
+        }));
+        const ciePlayersUpdated = await client.query(`
+          INSERT INTO cie_campaign_players (campaign_id, player_id, state, current_day, updated_at)
+          SELECT $1, result.player_id, result.next_state, result.next_day, $3
+          FROM jsonb_to_recordset($2::jsonb) AS result(player_id text, next_state varchar(16), next_day integer)
+          ON CONFLICT (campaign_id, player_id) DO UPDATE
+          SET state = EXCLUDED.state,
+              current_day = EXCLUDED.current_day,
+              updated_at = EXCLUDED.updated_at
+          RETURNING player_id
+        `, [campaign.campaignId, JSON.stringify(cieProgressionPayload), new Date(finishedAt)]);
+        if (ciePlayersUpdated.rowCount !== 100) throw new Error("CIE_CAMPAIGN_PLAYER_SYNC_INCOMPLETE");
+
+        const ringUpdated = await client.query(`
+          UPDATE campaign_rings
+          SET status = 'FINISHED', finish_reason = $2, finished_at = $3, updated_at = $3
+          WHERE ring_id = $1 AND status = 'IN_PROGRESS'
+          RETURNING ring_id
+        `, [campaign.ringId, resolution.finishReason, new Date(finishedAt)]);
+        if (ringUpdated.rowCount !== 1) throw new Error("CAMPAIGN_RING_FINISH_UPDATE_CONFLICT");
+        await client.query("COMMIT");
+      }
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -1873,6 +2266,7 @@ class RoomManager {
     maxPlayers?: number,
     worldId: WorldId = "CIGKV",
   ) {
+    if (this.isCampaignExitBlocked(userId, ws)) return;
     if (this.userToRoom.has(userId)) this.leaveRoom(userId);
     this.matchmaking.dequeue(userId);
 
@@ -2073,6 +2467,7 @@ class RoomManager {
     mode: QueueMode,
     worldId: WorldId = "CIGKV",
   ) {
+    if (this.isCampaignExitBlocked(userId, ws)) return;
     // Cannot queue while already in an active match
     const existingRoom = this.userToRoom.get(userId);
     if (existingRoom) {
@@ -2091,6 +2486,291 @@ class RoomManager {
   }
 
   /**
+   * Create the authoritative in-memory room requested by the campaign outbox.
+   * The stable database room_id and a row lock serialize retries; Redis room
+   * ownership fences replicas. The roster is re-read from PostgreSQL and the
+   * JSON payload is treated only as an integrity assertion, never as authority.
+   * This prepares a 100-seat campaign lobby; campaign-specific start/timer
+   * rules remain owned by the campaign match-flow integration.
+   */
+  async ensureCampaignRoom(input: CampaignRoomProvisionRequest): Promise<string> {
+    if (!input.ringId.trim() || !input.intakeId.trim() || !input.campaignId.trim()
+      || !Number.isInteger(input.day) || input.day < 1 || input.day > 7
+      || !input.idempotencyKey.trim() || !Array.isArray(input.playerIds) || input.playerIds.length !== 100
+      || new Set(input.playerIds).size !== 100) {
+      throw new PermanentCampaignOutboxError("INVALID_CAMPAIGN_ROOM_PROVISION_REQUEST");
+    }
+
+    const existingProvision = campaignRoomProvisionals.get(input.ringId);
+    if (existingProvision) return existingProvision;
+    const provision = this.provisionCampaignRoom(input);
+    campaignRoomProvisionals.set(input.ringId, provision);
+    try {
+      return await provision;
+    } finally {
+      if (campaignRoomProvisionals.get(input.ringId) === provision) campaignRoomProvisionals.delete(input.ringId);
+    }
+  }
+
+  private async provisionCampaignRoom(input: CampaignRoomProvisionRequest): Promise<string> {
+    const client = await pool.connect();
+    let roomId: string;
+    let rosterIds: string[];
+    let rosterTieBreakByPlayer: Map<string, number>;
+    let ringStatus: string;
+    try {
+      await client.query("BEGIN");
+      const ringResult = await client.query<{
+        ring_id: string;
+        campaign_id: string;
+        campaign_day: number;
+        intake_id: string;
+        status: string;
+        room_id: string | null;
+      }>(`
+        SELECT ring_id, campaign_id, campaign_day, intake_id, status, room_id
+        FROM campaign_rings
+        WHERE ring_id = $1 AND campaign_id = $2 AND campaign_day = $3 AND intake_id = $4
+        FOR UPDATE
+      `, [input.ringId, input.campaignId, input.day, input.intakeId]);
+      const ring = ringResult.rows[0];
+      if (!ring) throw new PermanentCampaignOutboxError("CAMPAIGN_RING_NOT_FOUND");
+      if (ring.status !== "READY" && ring.status !== "IN_PROGRESS") {
+        throw new PermanentCampaignOutboxError(`CAMPAIGN_RING_NOT_PROVISIONABLE:${ring.status}`);
+      }
+      ringStatus = ring.status;
+
+      const rosterResult = await client.query<{ player_id: string; random_tie_break: string | number | null }>(`
+        SELECT player_id, random_tie_break
+        FROM campaign_ring_players
+        WHERE ring_id = $1 AND campaign_id = $2 AND campaign_day = $3
+        ORDER BY player_id
+        FOR UPDATE
+      `, [input.ringId, input.campaignId, input.day]);
+      rosterIds = rosterResult.rows.map(({ player_id }) => player_id);
+      const requestedIds = [...input.playerIds].sort();
+      if (rosterIds.length !== 100 || requestedIds.some((playerId, index) => playerId !== rosterIds[index])) {
+        throw new PermanentCampaignOutboxError("CAMPAIGN_ROOM_ROSTER_MISMATCH");
+      }
+
+      const ticketCandidates = rosterResult.rows.map((row) => ({
+        player_id: row.player_id,
+        random_tie_break: row.random_tie_break ?? randomInt(0, 0x1_0000_0000),
+      }));
+      const ticketsUpdated = await client.query<{ player_id: string; random_tie_break: string | number }>(`
+        UPDATE campaign_ring_players AS rp
+        SET random_tie_break = COALESCE(rp.random_tie_break, candidates.random_tie_break)
+        FROM jsonb_to_recordset($4::jsonb) AS candidates(player_id text, random_tie_break bigint)
+        WHERE rp.ring_id = $1 AND rp.campaign_id = $2 AND rp.campaign_day = $3
+          AND rp.player_id = candidates.player_id
+        RETURNING rp.player_id, rp.random_tie_break
+      `, [input.ringId, input.campaignId, input.day, JSON.stringify(ticketCandidates)]);
+      if (ticketsUpdated.rowCount !== 100) throw new Error("CAMPAIGN_RING_TIE_BREAK_PERSISTENCE_INCOMPLETE");
+      rosterTieBreakByPlayer = new Map(ticketsUpdated.rows.map((row) => {
+        const ticket = Number(row.random_tie_break);
+        if (!Number.isSafeInteger(ticket) || ticket < 0 || ticket >= 0x1_0000_0000) {
+          throw new PermanentCampaignOutboxError("INVALID_CAMPAIGN_RING_TIE_BREAK");
+        }
+        return [row.player_id, ticket];
+      }));
+
+      roomId = ring.room_id ?? `campaign-${ring.ring_id}`;
+      if (roomId.length > 128) throw new PermanentCampaignOutboxError("CAMPAIGN_ROOM_ID_TOO_LONG");
+      if (!ring.room_id) {
+        await client.query(`
+          UPDATE campaign_rings
+          SET room_id = $2, updated_at = now()
+          WHERE ring_id = $1 AND room_id IS NULL
+        `, [input.ringId, roomId]);
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const existingLocal = this.rooms.get(roomId);
+    if (existingLocal) {
+      this.assertCampaignRoomMatches(existingLocal, input, rosterIds);
+      if (existingLocal.status === "LOBBY") this.beginCountdown(existingLocal);
+      return roomId;
+    }
+
+    if (ringStatus === "IN_PROGRESS") {
+      const activeRemote = await this.mesh.getRemoteRoom(roomId).catch(() => null);
+      if (activeRemote && activeRemote.maxPlayers === 100 && activeRemote.playerCount === 100) return roomId;
+      throw new PermanentCampaignOutboxError("CAMPAIGN_ROOM_ACTIVE_STATE_RESTORE_REQUIRED");
+    }
+
+    const ownerToken = await distributedState.setRoomOwner(roomId);
+    if (!ownerToken) {
+      const remote = await this.mesh.getRemoteRoom(roomId).catch(() => null);
+      if (remote && remote.maxPlayers === 100 && remote.playerCount === 100) return roomId;
+      throw new Error("CAMPAIGN_ROOM_OWNED_BY_ANOTHER_NODE");
+    }
+
+    try {
+      const [statsRows, profileRows] = await Promise.all([
+        Promise.all(rosterIds.map(async (userId) => [userId, await storage.getPlayerStats(userId)] as const)),
+        db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(inArray(users.id, rosterIds)),
+      ]);
+      const statsByUser = new Map(statsRows);
+      const displayNameByUser = new Map(profileRows.map((profile) => [
+        profile.id,
+        [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim(),
+      ]));
+      const now = Date.now();
+      const room: BattleRoom = {
+        id: roomId,
+        worldId: "CIGKV",
+        status: "LOBBY",
+        maxPlayers: 100,
+        players: new Map(),
+        currentPhase: 1,
+        phaseStartedAt: now,
+        isShrinking: false,
+        centerX: 50,
+        centerY: 50,
+        loot: [],
+        playerGrid: new SpatialGrid(15),
+        lootGrid: new SpatialGrid(12),
+        createdAt: now,
+        startedAt: null,
+        finishedAt: null,
+        winnerId: null,
+        tickHandle: null,
+        countdownSeconds: 10,
+        hostId: null,
+        isPrivate: false,
+        inviteCode: null,
+        countdownHandle: null,
+        minPlayersToStart: 100,
+        campaign: {
+          ringId: input.ringId,
+          campaignId: input.campaignId,
+          day: input.day,
+          startedAt: null,
+          evaluationCutoffAt: null,
+          finishReasonPending: null,
+          finishPromise: null,
+          startAttempts: 0,
+        },
+      };
+
+      const conflictingPlayers = rosterIds.filter((userId) => {
+        const previousRoomId = this.userToRoom.get(userId);
+        const previousRoom = previousRoomId ? this.rooms.get(previousRoomId) : undefined;
+        return previousRoomId !== roomId && previousRoom
+          && (previousRoom.status === "IN_PROGRESS" || previousRoom.status === "COUNTDOWN");
+      });
+      if (conflictingPlayers.length) {
+        throw new Error(`CAMPAIGN_PLAYER_ALREADY_IN_ACTIVE_ROOM:${conflictingPlayers.slice(0, 5).join(",")}`);
+      }
+
+      const preparedPlayers = rosterIds.map((userId, index): RoomPlayer => {
+        const stats = statsByUser.get(userId);
+        if (!stats) throw new Error("CAMPAIGN_PLAYER_STATS_NOT_FOUND");
+        const socket = [...(this.socketsByUser.get(userId) ?? [])]
+          .find((candidate) => candidate.readyState === WebSocket.OPEN) ?? null;
+        const posX = 5 + (index % 10) * 10;
+        const posY = 5 + Math.floor(index / 10) * 10;
+        const displayName = displayNameByUser.get(userId) || userId.slice(0, 8);
+        const player: RoomPlayer = {
+          userId,
+          displayName,
+          selectedOperativeId: getOperativeAvatarOption(stats.selectedOperativeId).id,
+          ws: socket,
+          posX,
+          posY,
+          targetPosX: posX,
+          targetPosY: posY,
+          lastMovementAt: now,
+          speedMultiplier: 1,
+          speedBoostUntil: 0,
+          carryCapacity: 50,
+          carriedWeight: 0,
+          health: stats.health,
+          maxHealth: stats.maxHealth,
+          status: "VIVO",
+          kills: 0,
+          isConnected: Boolean(socket),
+          lastSeenAt: now,
+          equippedDamage: 15,
+          equippedRange: 8,
+          packbackItemIds: [],
+          packbackItems: [],
+          lastPackBackUseAt: 0,
+          lastAttackAt: 0,
+          posHistory: new PositionHistory(1000),
+          damageDealt: 0,
+          joinedMatchAt: now,
+          isReady: true,
+          isHost: false,
+          rating: stats.rating ?? 1000,
+          campaignMetrics: {
+            accountXp: stats.xp ?? 0,
+            battlesPlayed: stats.matchesPlayed ?? 0,
+            lifetimeKills: stats.kills ?? 0,
+            lifetimeDeaths: stats.deaths ?? 0,
+            randomTieBreak: rosterTieBreakByPlayer.get(userId)!,
+          },
+        };
+        return player;
+      });
+
+      this.rooms.set(roomId, room);
+      for (const player of preparedPlayers) {
+        const previousRoomId = this.userToRoom.get(player.userId);
+        if (previousRoomId && previousRoomId !== roomId) {
+          const previousRoom = this.rooms.get(previousRoomId);
+          if (previousRoom) this.leaveRoom(player.userId);
+          else this.userToRoom.delete(player.userId);
+        }
+        this.matchmaking.dequeue(player.userId);
+        room.players.set(player.userId, player);
+        room.playerGrid.insert({ ...player, id: player.userId });
+        this.userToRoom.set(player.userId, roomId);
+      }
+      await distributedState.publishControl({
+        type: "campaign_room_created",
+        roomId,
+        ringId: input.ringId,
+        campaignId: input.campaignId,
+        day: input.day,
+        playerIds: rosterIds,
+      });
+      await this.mesh.mirrorRoom(this.toMeshRecord(room));
+      for (const player of room.players.values()) {
+        if (player.ws) this.send(player.ws, { type: "welcome", userId: player.userId, roomId });
+      }
+      this.broadcastRoomState(room);
+      this.beginCountdown(room);
+      return roomId;
+    } catch (error) {
+      const partialRoom = this.rooms.get(roomId);
+      if (partialRoom?.campaign?.ringId === input.ringId) this.rollbackRoomCreation(partialRoom, "campaign_provision_failed");
+      else await distributedState.releaseRoomOwner(roomId, ownerToken).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private assertCampaignRoomMatches(
+    room: BattleRoom,
+    input: CampaignRoomProvisionRequest,
+    rosterIds: string[],
+  ): void {
+    if (room.campaign?.ringId !== input.ringId || room.campaign.campaignId !== input.campaignId
+      || room.campaign.day !== input.day || room.maxPlayers !== 100 || room.players.size !== 100
+      || rosterIds.some((userId) => !room.players.has(userId))) {
+      throw new PermanentCampaignOutboxError("CAMPAIGN_ROOM_IDEMPOTENCY_CONFLICT");
+    }
+  }
+
+  /**
    * Called by MatchmakingService when a skill-matched group is ready.
    * Creates a dedicated lobby and seats all players.
    */
@@ -2098,6 +2778,8 @@ class RoomManager {
     players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[],
     worldId: WorldId = "CIGKV",
   ): Promise<string> {
+    const campaignLockedPlayers = players.filter((player) => this.isCampaignExitBlocked(player.userId, player.ws ?? undefined));
+    if (campaignLockedPlayers.length > 0) throw new Error("MATCHMAKING_PLAYER_CAMPAIGN_ROSTER_LOCKED");
     const id = this.secureId("mm");
     const room: BattleRoom = {
       id,

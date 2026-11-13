@@ -3,7 +3,9 @@
 **Versão:** 0.1 — 1º de novembro de 2026<br>
 **Base:** GDD-03A v0.2 e Emenda GDD-03A-01<br>
 **Status:** formalização das regras novas fornecidas pelo criador do Khaaos Run; parâmetros não definidos estão explicitamente marcados como pendentes.<br>
-**Código relacionado:** `server/game/campaignProgression.ts` e `tests/official/campaign-progression.test.ts`.
+**Código relacionado:** `server/game/campaignProgression.ts`, `server/game/specialIncursion.ts` e suas suítes de teste.
+
+> As regras técnicas propostas para CIE e retorno de eliminados foram detalhadas na [Emenda GDD-03A-03](GDD_03A_EMENDA_03_CIE_E_REGRESSO.md); os eventos permanecem desligados até os parâmetros de balanceamento serem aprovados e integrados.
 
 > Esta emenda substitui, para novas implementações, o corte top-20% e a vaga única para menos de cinco sobreviventes descritos na Emenda 01. A Emenda 01 permanece como histórico e não é o regulamento atual da campanha.
 
@@ -49,9 +51,9 @@ O Dia 7 não tem fase seguinte. **Hipótese técnica provisória:** se o timer e
 
 A janela regular de inscrição é de **12 horas a partir do início de cada dia da campanha, em UTC**. Cada dia técnico é um intervalo consecutivo de 24 horas contado de `campaign.startsAt`; a janela de inscrição fecha ao completar 12 horas. A campanha tem sete dias.
 
-Após essa janela podem ocorrer **Campanhas de Incursões Especiais (CIE)**. Elas são eventos eventuais/surpresa, exclusivos para jogadores online, e podem aceitar também jogadores eliminados na campanha regular. Uma CIE pode oferecer uma oportunidade de retorno ao jogo de acordo com resultado ou itens obtidos; esta emenda não define os limiares, a tabela de recompensas ou a elegibilidade de retorno.
+Após essa janela podem ocorrer **Campanhas de Incursões Especiais (CIE)**. O limite de composição confirmado é de até 10 jogadores eliminados e as demais vagas reservadas a sobreviventes; a regra técnica proposta de 90 sobreviventes + até 10 eliminados, os gatilhos e o retorno são detalhados na [Emenda GDD-03A-03](GDD_03A_EMENDA_03_CIE_E_REGRESSO.md).
 
-**Não executar ressurreição automática nem pagamentos/recompensas financeiras por CIE até aprovar as condições.** A referência a “U$1 milhão” é mantida como proposta narrativa/competitiva; este módulo não implementa prêmio em moeda real, saque, depósito, criptoativo ou pagamento.
+**Não executar ressurreição automática nem pagamentos/recompensas financeiras por CIE antes da implementação e aprovação dos gates descritos na Emenda 03.** A referência a “U$1 milhão” é mantida como proposta narrativa/competitiva; este módulo não implementa prêmio em moeda real, saque, depósito, criptoativo ou pagamento.
 
 ## 4. Proteção de Ring
 
@@ -72,7 +74,7 @@ O protótipo de domínio usa acúmulo: `novo_vencimento = max(agora, vencimento_
 
 ## 6. Status da implementação no repositório
 
-O módulo puro já implementa e testa: capacidade de 100; janela de 3 minutos; espera por pool suficiente; seleção que exclui proteção ativa e pode ser reproduzida pelo mesmo seed; avanço automático de até dez sobreviventes; ranking por HP/XP/batalhas/KD; cálculo da janela UTC de 12 horas; helper de proteção de 12/24/36/72h; aplicação idempotente da progressão. A regra de 10 minutos existe como parâmetro/contrato de domínio, mas o cronômetro real ainda não está conectado. A suíte focada tem **21 testes aprovados**, e o typecheck TypeScript passou.
+O módulo puro da campanha implementa e testa: capacidade de 100; janela de 3 minutos; espera por pool suficiente; seleção que exclui proteção ativa e pode ser reproduzida pelo mesmo seed; avanço automático de até dez sobreviventes; ranking por HP/XP/batalhas/KD; cálculo da janela UTC de 12 horas; helper de proteção de 12/24/36/72h; aplicação idempotente da progressão. A CIE tem módulo puro separado com gatilhos, roster 90/até10 e critérios propostos de retorno, cobertos por 11 testes. A regra de 10 minutos existe como parâmetro/contrato de domínio, mas nenhum cronômetro real está conectado. As 21 provas da campanha e 11 da CIE passaram, assim como o typecheck TypeScript.
 
 Ainda **não está conectado ao matchmaking, ao timer real, às tabelas duráveis, ao inventário/Forja, ao avatar offline, às notificações ou ao cliente Unreal**. Portanto, as regras não estão ativas no jogo nem em produção. A formação atual do runtime de combate tem teto de 50 jogadores; será necessária capacidade de Ring isolada em 100, sem alterar casual inadvertidamente.
 
@@ -86,5 +88,5 @@ Ainda **não está conectado ao matchmaking, ao timer real, às tabelas durávei
 - Inbox persistente e/ou push móvel autorizado.
 - Aprovação da política de pool insuficiente, do último desempate e do campeão no Dia 7 com vários sobreviventes.
 - Definir se o último critério usa relação K/D, kills absolutos ou uma ordenação separada por kills e mortes; definir também se as métricas de ranking são vitalícias ou da campanha.
-- Especificação de CIE: gatilhos, janela, vagas, objetivos, prêmios, itens e critérios exatos para retorno de eliminados.
+- Aprovar e integrar as propostas de gatilho, composição 90/até10, critério de retorno e risco aos sobreviventes ativos registradas na Emenda 03.
 - Validação e build no Unreal Engine alvo; esta Sandbox não compila o Editor Unreal.
