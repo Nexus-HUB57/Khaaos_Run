@@ -144,6 +144,14 @@ export class Game3D {
     });
     this.hud.audio = this.audio;
     this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
+    // Task 61 — look/aim touch: o pad direito entrega Δpixels; aqui vira yaw/pitch
+    // com a MESMA convenção, sensibilidade e clamp do mousemove (initInput) —
+    // incluindo a razão de ADS (~0.52×) e a sensibilidade do painel KR_GFX.
+    this.hud.onLook = (dxPx, dyPx) => {
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
+      this.input.yaw -= dxPx * sens;
+      this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch - dyPx * sens));
+    };
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
@@ -1695,7 +1703,12 @@ export class Game3D {
       this.sun.target.position.set(p.x, 0, p.z);
       return;
     }
-    const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
+    // Task 66 — fim do recuo de câmera no sprint: o enquadramento fica
+    // ESTÁVEL em movimento (dist e FOV constantes andando/correndo). O
+    // pullback 4.4→5.0 + zoom-out 62→68 liam como a câmera "fugindo" do
+    // avatar a cada arrancada — a sensação de velocidade agora vem do
+    // low-ready (Task 59) e do FOV de slide, não de recorte de câmera.
+    const targetDist = p.ads ? 2.2 : 4.4;
     rig.curDist += (targetDist - rig.curDist) * Math.min(1, dt * 8);
     // altura do olhar: agachado ~1.15m / deslizando ~0.92m (Fase 5 + movimento avançado)
     const eyeH = p.sliding ? 0.92 : (p.crouching ? 1.15 : 1.62);
@@ -1742,7 +1755,8 @@ export class Game3D {
     }
     // FOV dinâmico
     const zoomTps = p.attachStats?.adsZoom ?? 1;  // Fase 30 — Mira 4x aproxima
-    const targetFov = p.ads ? 42 * zoomTps : (p.sprinting ? 68 : 62);
+    // Task 66 — FOV fixo em locomoção TPS (sprint não faz zoom-out)
+    const targetFov = p.ads ? 42 * zoomTps : 62;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
     this.camera.updateProjectionMatrix();
     // sol acompanha (sombras)
