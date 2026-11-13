@@ -80,12 +80,12 @@ test('F42 — o centro do anel deriva em passos determinísticos até o setor ca
   sim.start('belt');
   disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(sim.ring.x, 0); assert.equal(sim.ring.z, 0);
-  // 4 pulsos: 25% → 50% → 75% → 100% (PULSE_INTERVAL 45 s)
+  // Fase 61 — cânon: 5 fases de 120 s; deriva k = fase/4 (fase 0 = 0%)
   for (let i = 1; i <= 4; i++) {
-    sim.pulseTimer = 45;
+    sim.zoneElapsed = i * 120;
     sim.step(DEFAULT_INPUT, TICK);
-    assert.ok(Math.abs(sim.ring.x - 95 * (i / 4)) < 1e-9, `pulso ${i}: x=${sim.ring.x}`);
-    assert.ok(Math.abs(sim.ring.z - -95 * (i / 4)) < 1e-9, `pulso ${i}: z=${sim.ring.z}`);
+    assert.ok(Math.abs(sim.ring.x - 95 * (i / 4)) < 1e-9, `fase ${i}: x=${sim.ring.x}`);
+    assert.ok(Math.abs(sim.ring.z - -95 * (i / 4)) < 1e-9, `fase ${i}: z=${sim.ring.z}`);
   }
   const pulseEvents = sim.events.filter((e) => e.type === 'pulse');
   assert.equal(pulseEvents.at(-1).finalName, 'Prisão do Sol da Noite');
@@ -93,7 +93,7 @@ test('F42 — o centro do anel deriva em passos determinísticos até o setor ca
   const cigkv = new KhaaosSim3D({ seed: 'RING-DRIFT-CIGKV', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   cigkv.start('belt');
   disembarcarSim(cigkv); // Task 53 — protocolo do trem cumprido antes do teste
-  for (let i = 0; i < 4; i++) { cigkv.pulseTimer = 45; cigkv.step(DEFAULT_INPUT, TICK); }
+  for (let i = 1; i <= 4; i++) { cigkv.zoneElapsed = i * 120; cigkv.step(DEFAULT_INPUT, TICK); }
   assert.equal(cigkv.ring.x, 0); assert.equal(cigkv.ring.z, 0);
   assert.equal(cigkv.events.filter((e) => e.type === 'pulse').every((e) => e.finalName == null), true);
 });

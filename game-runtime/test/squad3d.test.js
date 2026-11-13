@@ -15,16 +15,19 @@ const STEP = 1 / 30;
 const idle = (over = {}) => ({ ...DEFAULT_INPUT, ...over });
 
 // força um nocaute determinístico: anel pequeno + vida mínima
-function knockPlayer(sim, { x = 20, z = 0 } = {}) {
+function knockPlayer(sim, { x = 100, z = 0 } = {}) {
   const p = sim.player;
   p.armor = 0;
   p.life = 0.001;
-  sim.ring.radius = 10;
-  sim.ring.target = 10;
-  sim.ring.pulse = 60; // dano do ring mata em 1 tick com vida ~0
+  // Fase 61 — o raio do anel é comandado pelo schedule canônico (safeZone.js).
+  // Para forçar dano de zona legítimo: salta para a fase de COLAPSO (fase 4,
+  // raio <= 70 m) e posiciona o ator fora do raio; depois volta à fase 0 para
+  // o resto do teste ficar DENTRO do anel de 170 m (sem dano residual).
+  sim.zoneElapsed = 480;
   p.x = x;
   p.z = z;
   sim.step(idle(), STEP);
+  sim.zoneElapsed = 0;
   sim.consumeEvents();
   return p;
 }
@@ -126,9 +129,10 @@ test('fase7 sim: sem squad o dano letal inicia a janela de recuperação de sete
   disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   p.armor = 0; p.life = 0.001;
-  s.ring.radius = 10; s.ring.target = 10; s.ring.pulse = 60;
-  p.x = 20; p.z = 0;
+  s.zoneElapsed = 480; // fase 4 (colapso): anel legítimo fora do ator a 100 m
+  p.x = 100; p.z = 0;
   s.step(idle(), STEP);
+  s.zoneElapsed = 0;
   assert.equal(p.knocked, true, 'modo solo também entra em DBNO');
   assert.equal(p.alive, true, 'a run não termina antes do prazo');
   assert.ok(p.knockT > 0 && p.knockT <= 7);
@@ -252,9 +256,11 @@ test('fase7 sim: dano adicional em caído não antecipa o prazo de sete segundos
   assert.equal(p.knocked, true);
   const remainingBefore = p.knockT;
   // Dano letal repetido não confirma a eliminação nem reinicia o timer.
-  s.ring.radius = 10; s.ring.pulse = 60;
-  p.x = 20; p.z = 0;
+  // Fase 61 — dano de zona legítimo via colapso (fase 4), depois fase 0 de novo.
+  s.zoneElapsed = 480;
+  p.x = 100; p.z = 0;
   s.step(idle(), STEP);
+  s.zoneElapsed = 0;
   assert.equal(p.alive, true, 'o jogador segue recuperável dentro da janela');
   assert.equal(p.knocked, true);
   assert.ok(p.knockT < remainingBefore, 'o deadline continua decrescendo');

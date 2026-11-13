@@ -412,7 +412,9 @@ export class HUD {
     $('#aliveValue').textContent = String(alive).padStart(2, '0');
     const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     $('#matchClock').textContent = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-    $('#pulseValue').textContent = `PULSO ${String(s.ring.pulse).padStart(2, '0')}`;
+    // Fase 61 — HUD mostra a FASE OFICIAL do mundo (cânon safeZone.js) além do número
+    const phaseLabel = s.ring?.phaseName ? `PULSO ${String(s.ring.pulse).padStart(2, '0')} · ${s.ring.phaseName}` : `PULSO ${String(s.ring.pulse).padStart(2, '0')}`;
+    $('#pulseValue').textContent = phaseLabel;
     $('#krcValue').textContent = String(p.krc).padStart(4, '0');
     $('#xpValue').textContent = String(p.xp).padStart(4, '0');
     $('#killsValue').textContent = String(p.kills).padStart(2, '0');
