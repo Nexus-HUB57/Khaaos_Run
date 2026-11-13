@@ -257,8 +257,8 @@ test('T64 · aterrissagem: air>0 → 0 dispara absorção (quadril desce, joelho
   const hipY1 = e.bones.hips.position.y;
   const knee1 = e.bones.leftleg.rotation.x;
   assert.ok(hipY1 < hipY0, `quadril absorve (${hipY0.toFixed(3)} → ${hipY1.toFixed(3)})`);
-  assert.ok(knee1 > 0, `joelhos dobram (x=${knee1.toFixed(3)})`);
-  assert.ok(knee1 <= HUMANOID_LAND.knee + 1e-9);
+  assert.ok(knee1 < 0, `joelhos dobram (Task 65: sinal canônico −Z, pé → +Z; x=${knee1.toFixed(3)})`);
+  assert.ok(Math.abs(knee1) <= HUMANOID_LAND.knee + 1e-9);
   // decai até zero: após HUMANOID_LAND.seconds a pose volta ao neutro
   const steps = Math.ceil(HUMANOID_LAND.seconds / .016) + 2;
   for (let i = 0; i < steps; i++) animateHumanoid(e, { t: .016 * (i + 2), speedNorm: .5, air: 0 });

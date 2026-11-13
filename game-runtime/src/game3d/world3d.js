@@ -13,6 +13,7 @@ import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlaceme
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
+import { buildFauna } from './fauna3d.js'; // Task 65 — fauna canônica por mundo (dedo-duro/jacarés/tubarões)
 import { buildInteriors, buildShellHost } from './interiors3d.js'; // Fase 23 — interiores reais
 import { buildTerrain, terrainHeightAt } from './terrain3d.js'; // Fase 23 — relevo do terreno
 import { buildLightShafts } from './lightshafts3d.js'; // Fase 24 — raios de luz pelas janelas
@@ -1048,6 +1049,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       return band;
     },
   });
+  // Task 65 — fauna canônica por mundo: ratos/gaivotas/gafanhotos/mosquitos
+  // (dedo-duro do README), jacarés (Priadus), tubarões + esqueletos de baleia
+  // (Arukheea). ZERO colliders — fauna é ambiente; animators em
+  // scene.userData.fauna (main3d tick 1×/frame + setAgitation pela zona).
+  buildFauna(scene, layout, scenario, q);
   // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte

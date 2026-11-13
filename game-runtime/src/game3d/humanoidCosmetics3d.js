@@ -21,6 +21,7 @@
 // em qualquer condição inesperada (mesmo contrato humanoid3d/hero3d).
 import * as THREE from 'three';
 import { AVATAR_TARGET_HEIGHT } from './avatars3d.js';
+import { placeOnBone } from './humanoid3d.js'; // Task 65 — ancoragem em espaço do CORPO
 
 // ------------------------------------------------------------- tabela ----
 // 1:1 com shared/character-studio.ts (extraído verbatim do catálogo) + TALON
@@ -171,6 +172,19 @@ function mesh(geo, mat, name) {
   return m;
 }
 
+// Task 65 — ANCORAGEM EM ESPAÇO DO CORPO (pivô: −Z frente, +Y cima, metros do
+// rig 1.8). Os offsets bone-local do F60 assumiam eixos canônicos Mixamo que os
+// rigs Tripo NÃO têm (medido: coluna ~90°, braços ~175°) — capacete nascia no
+// ombro, colete nas costas. Cada peça carrega { bone, pos, rel } em userData e
+// o attach() converte via bind-frame (placeOnBone). `rel: true` = offset do
+// bind do bone (segue o drift do esqueleto: head em x +0.078); absolute =
+// coordenada do corpo (ombros degenerados no bind dos rigs Tripo). Sem bind
+// (corpos fake de teste) o attach mantém o offset local autoral (fallback).
+function anchor(m, bone, pos, rel = true) {
+  m.userData.cosmeticAnchor = { bone, pos, rel };
+  return m;
+}
+
 /**
  * Constrói o pacote de cosméticos da identidade: { group, attach(body) }.
  * Cada peça é filha do BONE correspondente do rig real (head/spine1/spine2/
@@ -192,6 +206,8 @@ export function buildHumanoidCosmetics(look) {
       h.position.set(0, .055, 0);
       const visor = mesh(GEO.visor, trimMat, 'hg_visor');
       visor.position.set(0, -.02, -.075);
+      anchor(h, 'head', [0, .085, 0]);
+      anchor(visor, 'head', [0, .045, -.10]);
       headParts.push(h, visor);
       break;
     }
@@ -200,12 +216,15 @@ export function buildHumanoidCosmetics(look) {
       c.position.set(0, .055, 0);
       const brim = mesh(new THREE.BoxGeometry(.16, .012, .09), darkMat, 'hg_brim');
       brim.position.set(0, .045, -.09);
+      anchor(c, 'head', [0, .095, 0]);
+      anchor(brim, 'head', [0, .075, -.105]);
       headParts.push(c, brim);
       break;
     }
     case 'band': {
       const b = mesh(GEO.band, uniformMat, 'hg_band');
       b.position.set(0, .075, 0);   // cilindro em torno do eixo Y da cabeça
+      anchor(b, 'head', [0, .095, 0]);
       headParts.push(b);
       break;
     }
@@ -213,12 +232,14 @@ export function buildHumanoidCosmetics(look) {
       const h = mesh(GEO.hood, darkMat, 'hg_hood');
       h.position.set(0, .04, .015);
       h.rotation.x = -.25;
+      anchor(h, 'head', [0, .07, .015]);
       headParts.push(h);
       break;
     }
     case 'mask': {
       const m = mesh(GEO.mask, uniformMat, 'hg_mask');
       m.position.set(0, -.045, -.055);
+      anchor(m, 'head', [0, -.03, -.075]);
       headParts.push(m);
       break;
     }
@@ -231,6 +252,9 @@ export function buildHumanoidCosmetics(look) {
       const cupR = cupL.clone();
       cupR.name = 'hg_cupR';
       cupR.position.x = -.085;
+      anchor(band2, 'head', [0, .095, 0]);
+      anchor(cupL, 'head', [.115, .03, 0]);
+      anchor(cupR, 'head', [-.115, .03, 0]);
       headParts.push(band2, cupL, cupR);
       break;
     }
@@ -239,12 +263,14 @@ export function buildHumanoidCosmetics(look) {
       const v = mesh(GEO.visor, look.headgear === 'monocle' ? trimMat : darkMat, 'hg_goggles');
       v.position.set(look.headgear === 'monocle' ? .04 : 0, .015, -.07);
       if (look.headgear === 'monocle') v.scale.set(.45, 1, 1);
+      anchor(v, 'head', look.headgear === 'monocle' ? [.05, .045, -.09] : [0, .045, -.09]);
       headParts.push(v);
       break;
     }
     case 'collar': {
       const c = mesh(GEO.collar, darkMat, 'hg_collar');
       c.position.set(0, .02, 0);
+      anchor(c, 'head', [0, -.02, 0]);
       headParts.push(c);
       break;
     }
@@ -257,10 +283,12 @@ export function buildHumanoidCosmetics(look) {
     const plate = mesh(GEO.plate, darkMat, 'vest_plate');
     plate.position.set(0, .05, -.005);
     plate.scale.set(1, 1, .55 + .12 * Math.min(4, look.vest));
+    anchor(plate, 'spine2', [0, .06, -.02]);
     vestParts.push(plate);
   }
   const trim = mesh(GEO.trim, trimMat, 'faction_trim');
   trim.position.set(0, .12, -.075);
+  anchor(trim, 'spine2', [0, .13, -.075]);
   vestParts.push(trim);
 
   // --- mochila (bone spine1, costas = +z local do torso mixamo) ---
@@ -268,16 +296,19 @@ export function buildHumanoidCosmetics(look) {
   if (look.pack) {
     const pack = mesh(GEO.pack, uniformMat, 'pack_body');
     pack.position.set(0, .04, .085);
+    anchor(pack, 'spine1', [0, .04, .09]);
     packParts.push(pack);
   }
 
-  // --- ombreiras: UMA peça por ombro (espaço local do próprio bone) ---
+  // --- ombreiras: UMA peça por ombro (espaço do corpo: esquerda = −x) ---
   const shoulderParts = [];
   if (look.pauldrons) {
     const padL = mesh(GEO.pauldron, darkMat, 'pauldron_L');
     padL.position.set(.03, .015, 0);
     const padR = mesh(GEO.pauldron, darkMat, 'pauldron_R');
     padR.position.set(-.03, .015, 0);
+    anchor(padL, 'leftshoulder', [-.21, 1.47, 0], false); // ombros degenerados no bind Tripo → absoluto
+    anchor(padR, 'rightshoulder', [.21, 1.47, 0], false);
     shoulderParts.push(padL, padR);
   }
 
@@ -287,7 +318,12 @@ export function buildHumanoidCosmetics(look) {
     vestParts,
     packParts,
     shoulderParts,
-    /** Anexa as peças aos bones do corpo real (idempotente por grupo). */
+    /**
+     * Anexa as peças aos bones do corpo real (idempotente por grupo).
+     * Task 65 — cada peça é posicionada em SEMÂNTICA DO CORPO (âncora em
+     * userData via bind-frame); sem bind (teste fake) cai no offset local
+     * autoral. NUNCA lança.
+     */
     attach(body) {
       if (!body?.bones || !body?.root) return false;
       if (body.root.userData.cosmeticGroup) { // re-dress: tira as peças ANTIGAS dos bones
@@ -298,16 +334,15 @@ export function buildHumanoidCosmetics(look) {
       group.userData.cosmeticLook = look.id;
       group.userData.avatarCosmetic = true;
       group.userData.cosmeticParts = [...headParts, ...vestParts, ...packParts, ...shoulderParts];
-      const put = (parts, boneName) => {
-        const bone = body.bones[boneName];
-        if (!bone) return;
-        for (const m of parts) bone.add(m);
-      };
-      put(headParts, 'head');
-      put(vestParts, 'spine2');
-      put(packParts, 'spine1');
-      put(shoulderParts.filter((m) => m.name === 'pauldron_L'), 'leftshoulder');
-      put(shoulderParts.filter((m) => m.name === 'pauldron_R'), 'rightshoulder');
+      for (const m of group.userData.cosmeticParts) {
+        const a = m.userData?.cosmeticAnchor;
+        const bone = a ? body.bones[a.bone] : null;
+        if (!bone) continue;
+        bone.add(m);
+        if (a) placeOnBone(body, a.bone, m, { pos: a.pos, rel: a.rel ?? true }); // fallback: offset local autoral
+        m.visible = true;
+        m.userData.avatarCosmetic = true;   // exclusão de ocultação
+      }
       // grupo fantoches as peças só para inspeção/testes (peças vivem nos bones)
       group.visible = false;
       body.root.add(group);

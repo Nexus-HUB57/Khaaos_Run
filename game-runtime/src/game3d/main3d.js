@@ -144,6 +144,14 @@ export class Game3D {
     });
     this.hud.audio = this.audio;
     this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
+    // Task 61 — look/aim touch: o pad direito entrega Δpixels; aqui vira yaw/pitch
+    // com a MESMA convenção, sensibilidade e clamp do mousemove (initInput) —
+    // incluindo a razão de ADS (~0.52×) e a sensibilidade do painel KR_GFX.
+    this.hud.onLook = (dxPx, dyPx) => {
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
+      this.input.yaw -= dxPx * sens;
+      this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch - dyPx * sens));
+    };
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
@@ -1325,6 +1333,7 @@ export class Game3D {
     // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
     this._dip ??= { v: 0, wasGround: !!p.onGround, fallV: 0 };
     const groundedNow = !!p.onGround;
+    const wasGroundBefore = this._dip.wasGround; // Task 65 — borda ar→chão ANTES da mutação (onLand nunca disparava: wasGround já tinha sido sobrescrito)
     if (groundedNow && !this._dip.wasGround) this._dip.v = Math.min(.12, Math.max(0, -(this._dip.fallV ?? 0)) * .016);
     this._dip.wasGround = groundedNow;
     this._dip.fallV = groundedNow ? 0 : (p.vy ?? 0);
@@ -1387,7 +1396,9 @@ export class Game3D {
       this._playerPrevYaw = p.yaw;
       // Fase 60 — camada humana: lean pela aceleração real, cabeça segue a
       // câmera (yaw relativo ao corpo), low-ready armado e squash de pouso.
-      const hsn = p.moving ? (p.sprinting ? 1.2 : .8) : 0;
+      // Task 65 — speedNorm CONTÍNUO pela passada (gait.js, F42) — o binário
+      // .8/1.2 fazia o blend idle↔walk↔run pular em degraus.
+      const hsn = Math.max(p.moving ? .12 : 0, this._gait.speed);
       this._hsn ??= 0;
       const hAccel = Math.max(-1, Math.min(1, (hsn - this._hsn) / Math.max(1e-3, dt * 6)));
       this._hsn = hsn;
@@ -1403,12 +1414,13 @@ export class Game3D {
         pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
         knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0, leanVel: yawVel,
         accel: hAccel, yaw: headYaw, armed: !!(p.alive && this.playerWeapon),
-        sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !this._dip.wasGround,
+        sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !wasGroundBefore,
+        dt, // Task 65 — dt REAL do frame (idle respira na velocidade renderizada)
       });
       if (this.playerWeapon && p.alive && !p.knocked && !airborne) {
         weldWeaponToHand(this.humanoidPlayer, this.playerWeapon);
         poseLeftHandSupport(this.humanoidPlayer, this.playerWeapon); // Task 64 — empunhadura de 2 mãos
-        poseWeaponReady(this.humanoidPlayer, { speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0, ads: p.ads }); // Task 64 — arma erguida (low-ready/ADS)
+        poseWeaponReady(this.humanoidPlayer, { speedNorm: hsn, ads: p.ads }); // Task 64 — arma erguida (low-ready/ADS)
       }
     }
     // bots
@@ -1534,7 +1546,7 @@ export class Game3D {
           entry._hSn ??= 0; // Fase 60 — lean do bot pela aceleração real da passada
           const bAccel = Math.max(-1, Math.min(1, (gsn - entry._hSn) / Math.max(1e-3, dt * 6)));
           entry._hSn = gsn;
-          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null });
+          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null, dt });
           const bwr = entry.op.group.userData?.weaponRig;
           if (bwr && !b.knocked && !b.dropPhase) {
             weldWeaponToHand(entry.humanoid, bwr);
@@ -1593,6 +1605,11 @@ export class Game3D {
         u.fogDensity.value = this.scene.fog.density ?? 0.0035;
       }
     }
+    // Task 65 — dedo-duro: fauna reage à PRESSÃO DO RING (1 − raio/170):
+    // conforme a zona fecha, ratos correm mais, enxames crescem e jacarés/
+    // tubarões patrulham mais rápido (visual; dano continua na sim/servidor).
+    this.scene.userData.fauna?.setAgitation?.(
+      Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170)));
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
@@ -1686,7 +1703,12 @@ export class Game3D {
       this.sun.target.position.set(p.x, 0, p.z);
       return;
     }
-    const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
+    // Task 66 — fim do recuo de câmera no sprint: o enquadramento fica
+    // ESTÁVEL em movimento (dist e FOV constantes andando/correndo). O
+    // pullback 4.4→5.0 + zoom-out 62→68 liam como a câmera "fugindo" do
+    // avatar a cada arrancada — a sensação de velocidade agora vem do
+    // low-ready (Task 59) e do FOV de slide, não de recorte de câmera.
+    const targetDist = p.ads ? 2.2 : 4.4;
     rig.curDist += (targetDist - rig.curDist) * Math.min(1, dt * 8);
     // altura do olhar: agachado ~1.15m / deslizando ~0.92m (Fase 5 + movimento avançado)
     const eyeH = p.sliding ? 0.92 : (p.crouching ? 1.15 : 1.62);
@@ -1733,7 +1755,8 @@ export class Game3D {
     }
     // FOV dinâmico
     const zoomTps = p.attachStats?.adsZoom ?? 1;  // Fase 30 — Mira 4x aproxima
-    const targetFov = p.ads ? 42 * zoomTps : (p.sprinting ? 68 : 62);
+    // Task 66 — FOV fixo em locomoção TPS (sprint não faz zoom-out)
+    const targetFov = p.ads ? 42 * zoomTps : 62;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
     this.camera.updateProjectionMatrix();
     // sol acompanha (sombras)
@@ -2394,6 +2417,11 @@ export class Game3D {
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Task 65 — fauna canônica: patrulha dos jacarés/tubarões, bandas de
+    // gaivotas, corrida dos ratos e enxames do dedo-duro (mesma cadência dos
+    // animators do dressing/worldmarks)
+    const faunaAnim = this.scene.userData.fauna?.animators;
+    if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
