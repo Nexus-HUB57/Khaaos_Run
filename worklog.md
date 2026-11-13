@@ -1558,3 +1558,10 @@ Stage Summary:
 - Arsenal legível em contraluz: fim do material quase-preto que sumia contra o colete — peças escuras com base #1d2126 + rim-light fake frio nas 4 famílias de arma
 - Fim da DIVERGÊNCIA servidor↔sim: a zona segura online agora corre o CÂNON de cada mundo (5 fases × 120 s, nomes/raios/DPS oficiais, encolhimento contínuo, deriva ao setor canônico) — o cliente online vê o mesmo PULSO N · fase e as mesmas regras de dano do offline; MPZEX Opção B preservada (fases 3× em salas cap-2 sem bots)
 - 1240 testes / 0 fail (21 novos), oficiais 584+39 / 0 fail, tsc OK, build OK
+
+Stage Summary (Task 65 — DEPLOY PRODUÇÃO):
+- PR #391 mesclado no main (539c91d) após CI verde (Gate + Game Runtime Tests ✓, 1234/0 fail); follow-up da equipe #392 em sequência no main
+- dist de produção buildado do main corrigido (vite ✓) → /opt/khaaos-prod-candidate-20261113T184733Z/dist (41 MB, main-C1mnOO91.js)
+- vhost gcodegames-real-ssl.conf atualizado (backup .bak-f65-20261113T184733Z; rollback: candidate 183229Z) + nginx -t OK + reload OK
+- VERIFICAÇÃO NO AR: gcodegames.top HTTP 200 servindo main-C1mnOO91.js; marcadores da Task 65 presentes no bundle (humanoid_body_ ✓, cosmeticAnchor ✓, gear nos bones ✓); GLBs dos avatares 200 (animated 4.8 MB)
+- E2E de plataforma: os avatares GLB em gcodegames.top jogam sincronizados — corpo de frente para a mira/movimento, gear/cosméticos/arma assentados (fim do avatar desconfigurado)
