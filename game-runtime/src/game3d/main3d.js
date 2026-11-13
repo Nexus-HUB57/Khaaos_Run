@@ -13,7 +13,7 @@ import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
-import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, headYawClamp } from './humanoid3d.js'; // Fase 57 — corpo humano realista em jogo
+import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
 import { resolveIdentityLook, poolBodyForIdentity, identityForBot, dressHumanoid } from './humanoidCosmetics3d.js'; // Fase 60 — identidade humana dos 33 avatares
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
@@ -351,7 +351,9 @@ export class Game3D {
     // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
     const lpExposure = scene.userData?.lighting?.exposure;
     if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
-    this.ringWall = createRingWall(this.scenario.id); // Fase 61 — parede no visual do mundo
+    // Task 64 — a parede do anel MATERIALIZA o hazard canônico do cenário
+    // (energia CIGKV, chuva ácida W1, esporos W2, fumaça W3, tsunami W4).
+    this.ringWall = createRingWall(this.scenario.id);
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {
       // Fase 18 — partículas de combate no pool compartilhado da cena
@@ -410,7 +412,7 @@ export class Game3D {
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
-        this.#attachHumanoidForBot(this.botOps.get(b.id), b.id); // Fase 57 — corpo humano real nos bots
+        this.#attachHumanoidForBot(this.botOps.get(b.id), b.op || b.id); // Fase 57 + Task 64 — corpo real com IDENTIDADE: mesmo operativo → mesmo avatar
       });
     }
     // loot
@@ -721,6 +723,7 @@ export class Game3D {
     const look = resolveIdentityLook(identityId);
     this.humanoidPlayerSex = look.sex;
     dressHumanoid(body, look);
+    syncHumanoidGear(body, this.playerOp.parts); // Task 64 — capacete/colete/mochila nos bones reais
     this.humanoidPlayer = body;
   }
 
@@ -739,6 +742,7 @@ export class Game3D {
     attachHumanoidToOperative({ group: entry.op.detailGroup, parts: entry.op.detailParts }, body);
     dressHumanoid(body, look);
     entry.humanoidSex = look.sex;
+    syncHumanoidGear(body, entry.op.detailParts ?? entry.op.parts); // Task 64 — gear nos bones do remoto
     entry.humanoid = body;
   }
 
@@ -1134,6 +1138,10 @@ export class Game3D {
       if (cache === sig) continue;
       parts.userData.gearSig = sig;
       applyOperativeGear(parts, a.gear);
+      // Task 64 — pickup/troca de nível DURANTE a partida: o gear renasce nos
+      // anchors procedurais; o corpo GLB (se presente) re-adota na hora.
+      if (a.id === 'player') { if (this.humanoidPlayer) syncHumanoidGear(this.humanoidPlayer, parts); }
+      else { const h = this.botOps.get(a.id)?.humanoid; if (h) syncHumanoidGear(h, parts); }
     }
   }
 
@@ -1371,6 +1379,12 @@ export class Game3D {
     // SOLDADA na mão direita do rig real. Em 1ª pessoa o grupo dorme (o rig FP
     // assume) — a visibilidade já é herdada de playerOp.group.visible.
     if (this.humanoidPlayer) {
+      // Task 64 — lean de curva: vel angular do yaw (EWMA interna no rig),
+      // clampada no animateHumanoid (mouse rápido nunca derruba o corpo).
+      const yawVel = Number.isFinite(this._playerPrevYaw) && dt > 0
+        ? Math.atan2(Math.sin(p.yaw - this._playerPrevYaw), Math.cos(p.yaw - this._playerPrevYaw)) / dt
+        : 0;
+      this._playerPrevYaw = p.yaw;
       // Fase 60 — camada humana: lean pela aceleração real, cabeça segue a
       // câmera (yaw relativo ao corpo), low-ready armado e squash de pouso.
       const hsn = p.moving ? (p.sprinting ? 1.2 : .8) : 0;
@@ -1387,12 +1401,14 @@ export class Game3D {
       animateHumanoid(this.humanoidPlayer, {
         t: this.animT, phase: this._gait.phase, speedNorm: hsn,
         pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
-        knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0,
+        knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0, leanVel: yawVel,
         accel: hAccel, yaw: headYaw, armed: !!(p.alive && this.playerWeapon),
         sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !this._dip.wasGround,
       });
       if (this.playerWeapon && p.alive && !p.knocked && !airborne) {
         weldWeaponToHand(this.humanoidPlayer, this.playerWeapon);
+        poseLeftHandSupport(this.humanoidPlayer, this.playerWeapon); // Task 64 — empunhadura de 2 mãos
+        poseWeaponReady(this.humanoidPlayer, { speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0, ads: p.ads }); // Task 64 — arma erguida (low-ready/ADS)
       }
     }
     // bots
@@ -1427,7 +1443,7 @@ export class Game3D {
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
-        this.#attachHumanoidForBot(entry, b.officer ? `OCE_${b.id}` : b.id); // Fase 57 — corpo humano nos remotos
+        this.#attachHumanoidForBot(entry, b.op || (b.officer ? `OCE_${b.id}` : b.id)); // Fase 57 + Task 64 — identidade do operativo (oficial mantém fallback OCE_)
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
         entry.name.material.map.dispose();
@@ -1510,12 +1526,21 @@ export class Game3D {
         // Fase 57 — corpo humano REAL do ator remoto: locomoção fase-travada
         // (mesma fase do gait.js), rastejo/queda/agachamento + arma na mão.
         if (entry.humanoid && entry.op.level === 'full') {
+          // Task 64 — lean dos remotos: yaw do snapshot vira vel angular (wrap-safe)
+          const bYawVel = Number.isFinite(entry.prevYaw) && dt > 0
+            ? Math.atan2(Math.sin(b.yaw - entry.prevYaw), Math.cos(b.yaw - entry.prevYaw)) / dt
+            : 0;
+          entry.prevYaw = b.yaw;
           entry._hSn ??= 0; // Fase 60 — lean do bot pela aceleração real da passada
           const bAccel = Math.max(-1, Math.min(1, (gsn - entry._hSn) / Math.max(1e-3, dt * 6)));
           entry._hSn = gsn;
-          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null });
+          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null });
           const bwr = entry.op.group.userData?.weaponRig;
-          if (bwr && !b.knocked && !b.dropPhase) weldWeaponToHand(entry.humanoid, bwr);
+          if (bwr && !b.knocked && !b.dropPhase) {
+            weldWeaponToHand(entry.humanoid, bwr);
+            poseLeftHandSupport(entry.humanoid, bwr); // Task 64 — 2 mãos também nos remotos
+            poseWeaponReady(entry.humanoid, { speedNorm: gsn, ads: !!b.ads }); // Task 64 — arma erguida
+          }
         }
         // Task 62 — arma acompanha o low-ready dentro do animateOperative
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
