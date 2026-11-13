@@ -125,18 +125,9 @@ export class MatchRoom3D {
     this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
-    // Doutrina MPZEX §4 — Opção B (anel lento em partidas de teste): salas com
-    // capacidade 2 sem botFill (perfil exato das salas do despacho MP-ZEX em
-    // staging) têm as FASES do Ring 3× mais longas. No cânon F61/Task 65 cada
-    // fase já dura 120 s (fase 0 sem encolhimento, dps 1) — a escala 3× preserva
-    // a doutrina (fase = 360 s) sem tocar no schedule canônico.
-    this.zonePhaseScale = (capacity === 2 && this.botFill === 0) ? 3 : 1;
-    this.scenario = resolveScenario(scenarioId);
-    this.worldXp = (base) => Math.round(base * (this.scenario.xpMultiplier ?? 1));
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
-    const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
-    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
-    this.zuIngress = { ...zuIngress, synchronized: true, startedAt: null };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_vehicle_entry_v1';
+    this.zuVehicleEntry = { protocol: 'ZU_VEHICLE_ENTRY_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
     this.isPrivate = !!isPrivate;
     this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
@@ -516,44 +507,27 @@ export class MatchRoom3D {
       });
     }
     // Zu de entrada: os atores já nascem nos spawns de solo autoritativos.
-    // O evento sincroniza a apresentação do portal; não há fase aérea de gameplay.
+    // O evento sincroniza a apresentação do veículo; não há fase aérea de gameplay.
     if (this.airdrop) {
       let idx = 0;
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
     } else {
-      this.zuIngress.startedAt = Date.now();
-      // Task 53 — protocolo OFICIAL do trem (mode 'train'): TODOS a bordo;
-      // combate travado até CHEGADA + 15 s (grace global do ZU).
-      if (this.zuIngress.mode === 'train') {
-        this.trainStartedAtEpoch = Date.now();
-        this.combatLockedUntil = combatUnlockEpoch(this.trainStartedAtEpoch);
-        this.trainRoutePts = trainRoute(this.world.playerSpawn, seedHashOf(this.seed));
-        for (const h of this.humans.values()) h.trainOnboard = true;
-        for (const b of this.bots) b.trainOnboard = true;
-      }
+      this.zuVehicleEntry.startedAt = Date.now();
       this.#emitAll('zuIngress', {
-        protocol: this.zuIngress.eventProtocol,
-        entryProtocol: this.entryProtocol,
-        mode: this.zuIngress.mode,
-        startedAt: this.zuIngress.startedAt,
-        durationMs: this.zuIngress.durationMs,
+        protocol: this.zuVehicleEntry.protocol,
+        vehicle: 'train',
+        startedAt: this.zuVehicleEntry.startedAt,
+        durationMs: this.zuVehicleEntry.durationMs,
         world: this.scenario.id,
         spawnCount: this.humans.size + this.bots.length,
-        // Task 53 — timeline oficial do trem (SSOT src/shared/zuTrain.js)
-        ...(this.zuIngress.mode === 'train' ? {
-          doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
-          arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
-          graceS: ZU_TRAIN.GRACE_S,
-          combatLockedUntil: this.combatLockedUntil,
-        } : {}),
       });
     }
     // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
     // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
     // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
     // join decidem tocar ou pular pelo elapsed).
-    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS, ...(this.combatLockedUntil ? { doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS, arrivalAtMs: ZU_TRAIN.ARRIVAL_MS, graceS: ZU_TRAIN.GRACE_S, combatLockedUntil: this.combatLockedUntil } : {}) };
+    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
     for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, entryProtocol: this.entryProtocol, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();

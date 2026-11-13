@@ -2,7 +2,7 @@
 //
 // Dois modos, mesma classe:
 //   • mode 'pass' (default — compatível com Fase 11/12/16): o trem cruza a zona
-//     e desembarca o esquadrão na infiltração aérea. APENAS visual + câmera;
+//     e entrega o esquadrão no spawn autoritativo. APENAS visual + câmera;
 //     nenhum input é bloqueado; timeline determinística e sincronizável via
 //     startAt (anúncio autoritativo do servidor). Contrato público intocado.
 //   • mode 'derail' (Fase 26, offline): cinemática interativa — cabine 1ª pessoa,

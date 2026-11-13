@@ -71,7 +71,7 @@
 | **Launch Readiness** | 🟡 Checklist versionado | Rate limiting, DDoS e checklist implementados; PASS operacional ainda precisa ser demonstrado |
 | **Build UE5 (compilação)** | 🟡 Preflight operacional; build real pendente de engine | Preflight UE5.8 em toda PR (verde); caminhos prontos: container `ghcr.io/epicgames/unreal-engine` (gate no secret `UE_CONTAINER_PAT`) ou runner self-hosted (`scripts/build/bootstrap_ue58_runner.sh`) |
 | **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | `scripts/build/generate_world_asset_packages.py` gera intake determinístico para os cinco mundos; `.uasset`/`.umap` finais exigem import/cook no UE Editor |
-| **Entrada dos Mundos (Zu)** | 🟡 Protocolo autoritativo implementado | `ZU_PORTAL_V1` mantém o jogador em spawn de solo, sincroniza a apresentação por relógio do servidor e elimina `Deploy → Parachute` do fluxo UE5; airdrop de suprimentos permanece separado do ingresso |
+| **Entrada dos Mundos (Zu)** | 🟡 Protocolo autoritativo implementado | `ZU_VEHICLE_ENTRY_V1` sincroniza o veículo e a variante de ingresso canônicos por relógio do servidor, elimina `Deploy → Parachute` do fluxo UE5 e mantém airdrop de suprimentos separado do ingresso |
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
 | **Avatares & Operativos (33)** | ✅ Catálogo + retratos realistas | 16 militares + Lote 4 (8 milicianos e 8 membros de gangues, 8 masculinos e 8 femininos) + TALON; 16 retratos WebP realistas servidos no perfil/lobby, com SVG canônico como fallback; roster e filtro de facção cobertos por E2E |
@@ -573,7 +573,7 @@ Todo Ring possui **três variantes de Zu** (entrada cinematográfica). O jogador
 | **W3/C3** | Tempestade de areia → cinto | Explosão no túnel → saltar | Caminhão-tanque em chamas → máscara |
 | **W4/C4** | Trilho desmorona → cinto | Colisão com tanque → saltar no mar | Bombas de gás por drones → máscara |
 
-Em todos os casos, a decisão ocorre durante a apresentação do portal Zu, sem lançamento aéreo do jogador:
+Em todos os casos, a decisão ocorre durante a cinemática do veículo Zu, sem lançamento aéreo do jogador:
 
 - Decisão correta → 0 dano + possível atordoamento/visão embaçada (5–7 s);
 - Decisão incorreta → até −30 % de vitalidade;
@@ -581,7 +581,7 @@ Em todos os casos, a decisão ocorre durante a apresentação do portal Zu, sem 
 
 ### Contrato de execução
 
-O runtime offline (`KhaaosSim3D`) e o servidor online (`MatchRoom3D`) usam `zu_portal_v1` por padrão. O evento `zuIngress` carrega `protocol: "ZU_PORTAL_V1"`, `startedAt` e `durationMs: 2200`; os atores já estão em seus spawns autoritativos no solo. A opção `airdrop: true` foi preservada apenas para fixtures legados explícitos e não participa do caminho normal de partida. No UE5, a máquina de estados usa `Lobby → ZuIngress → Looting`, e o `GameMode` não instancia mais o sistema de deploy/parachute do jogador.
+O runtime offline (`KhaaosSim3D`) e o servidor online (`MatchRoom3D`) usam `zu_vehicle_entry_v1` por padrão. O evento `zuIngress` carrega `protocol: "ZU_VEHICLE_ENTRY_V1"`, `vehicle`, `startedAt` e `durationMs: 2200`; no runtime atual, o trem do Zu é o veículo sincronizado e o ator é entregue no spawn autoritativo após a cinemática. A opção `airdrop: true` foi preservada apenas para fixtures legados explícitos e não participa do caminho normal de partida. No UE5, a máquina de estados usa `Lobby → ZuIngress → Looting`, e o `GameMode` não instancia mais o sistema de deploy/parachute do jogador.
 
 ---
 

@@ -41,14 +41,14 @@ void UKhaaosMatchFlowStateMachine::InitializeDefaultTransitions()
         Transitions.Add(T);
     }
 
-    // ZuIngress → Looting: portal entry is complete
+    // ZuIngress → Looting: a entrada veicular foi concluída
     {
         FKhaaosMatchFlowTransition T;
         T.FromState     = EKhaaosMatchFlowState::ZuIngress;
         T.ToState       = EKhaaosMatchFlowState::Looting;
         T.Condition     = FName("ZuIngressComplete");
         T.MinPlayers    = 1;
-        T.MaxTimeSeconds = 180.0f; // 3 min max portal entry time
+        T.MaxTimeSeconds = 180.0f; // máximo de 3 min para a entrada veicular
         Transitions.Add(T);
     }
 
@@ -110,7 +110,7 @@ void UKhaaosMatchFlowStateMachine::InitializeDefaultTransitions()
     {
         FKhaaosMatchFlowStateConfig C;
         C.DisplayName = TEXT("ZuIngress");
-        C.DurationSeconds = 2.2f; // Relogio sincronizado do portal
+        C.DurationSeconds = 2.2f; // Relógio sincronizado do veículo
         C.bAutoAdvanceOnTimeout = true;
         StateConfigs.Add(EKhaaosMatchFlowState::ZuIngress, C);
     }
