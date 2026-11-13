@@ -20,7 +20,8 @@ const page = await browser.newPage({ viewport: { width: 1024, height: 576 } });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 200)));
 
 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-await page.waitForTimeout(3000);
+await page.waitForSelector('#beltBtn', { state: 'visible', timeout: 30000 });
+await page.waitForTimeout(1500);
 await page.locator('#beltBtn').click();
 await page.waitForTimeout(2500);
 await page.evaluate(() => {
