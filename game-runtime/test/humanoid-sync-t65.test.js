@@ -262,10 +262,10 @@ test('T65 · syncHumanoidGear: re-ancora no bone e RESTAURA visibilidade da sub�
   assert.equal(op.gear.parent, headBone, 'gear vive NO BONE');
   assert.equal(op.meshA.visible, true, 'subárvore religada');
   assert.equal(op.meshB.visible, true, 'subárvore religada (2)');
-  // posição mundial do capacete = âncora ABSOLUTA do corpo (topo do crânio)
+  // posição mundial do capacete = bind do bone + offset relativo (Task 65: [0,.10,0])
   pivot.updateMatrixWorld(true);
   const wp = op.gear.getWorldPosition(new THREE.Vector3());
-  const expected = new THREE.Vector3(0, 1.575, 0);
+  const expected = new THREE.Vector3(0, 1.59, 0);
   assert.ok(wp.distanceTo(expected) < 1e-5, `capacete no topo do crânio (Δ ${wp.distanceTo(expected).toFixed(7)} m)`);
 });
 
