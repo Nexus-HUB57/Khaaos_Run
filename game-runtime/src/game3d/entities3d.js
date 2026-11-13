@@ -890,7 +890,11 @@ function addSockets(g, table = {}) {
 export function createWeaponModel(id, skin = null, opts = {}) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
-  const gun2 = M('#15171a', { rough: .48, metal: .72 });
+  // Task 65 (P0) — LEGIBILIDADE DO ARSENAL: o material das peças escuras era
+  // #15171a (quase-preto) e "sumia" contra colete escuro em contraluz (dívida
+  // do Task 64). Peças sobem para #1d2126 + emissivo frio sutil (rim-light
+  // fake) — a arma continua aço escuro, mas LÊ em qualquer luz.
+  const gun2 = M('#1d2126', { rough: .5, metal: .72, extra: { emissive: '#0e141d', emissiveIntensity: .34 } });
   const accent = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .9, roughness: .4 });
   const rar = skin ? RARITIES[skin] : null;
   const skinColor = rar?.color ?? null;
