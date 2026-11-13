@@ -220,7 +220,7 @@ test('estado especial CORTA a locomoção no frame e volta suave pela EWMA', () 
   animateHumanoid(body, { t: 2, speedNorm: .5, phase: 2, knocked: true });
   const sum = body.w.idle + body.w.walk + body.w.run;
   assert.ok(sum < 1e-6, `locomoção CORTADA no knocked (soma ${sum.toFixed(4)})`);
-  assert.equal(body.root.rotation.x, -1.15, 'pose de rastejo aplicada no mesmo frame');
+  assert.equal(body.root.rotation.x, 1.15, 'pose de rastejo aplicada no mesmo frame (Task 65: +1.15 deita de COSTAS com o corpo na convenção −Z)');
   animateHumanoid(body, { t: 3, speedNorm: .5, phase: 3 });
   // a NORMALIZAÇÃO dos pesos garante cobertura 100% do corpo por clips (sem
   // sangramento da T-pose do rest) — a saída do estado é um snap aceitável
@@ -235,7 +235,7 @@ test('crouch abaixa o quadril · knocked deita · air espalha os braços', () =>
   assert.ok(body.bones.hips.position.y < hipsY0, 'quadril desce no agachamento');
   const body2 = fakeBody();
   animateHumanoid(body2, { t: 2, speedNorm: .3, phase: 1, knocked: true });
-  assert.equal(body2.root.rotation.x, -1.15, 'corpo deitado no rastejo DBNO');
+  assert.equal(body2.root.rotation.x, 1.15, 'corpo deitado no rastejo DBNO (Task 65: sinal canônico −Z)');
   assert.ok(body2.bones.rightarm.rotation.x > .8, 'braço direito arrasta');
   const body3 = fakeBody();
   animateHumanoid(body3, { t: 3, speedNorm: .3, phase: 1, air: 5 });
