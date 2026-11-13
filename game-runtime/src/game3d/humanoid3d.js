@@ -202,8 +202,7 @@ export async function createHumanoidBody({ avatarId } = {}) {
   if (!spec || spec.tier === 'static') return null;
   const asset = await loadAvatarGlb(avatarId);
   if (!asset?.root) return null;
-  const bones = boneMap(asset.root);
-  if (!bones?.hips) return null;               // rig inesperado → procedural
+  if (!boneMap(asset.root)?.hips) return null; // rig inesperado → procedural
   const root = skeletonClone(asset.root); // clone skinned correto (bones próprios)
   root.name = `humanoid_${avatarId}`;
   stripMixamorigPrefix(root);                  // binding dos clips por NOME (see acima)
@@ -213,6 +212,14 @@ export async function createHumanoidBody({ avatarId } = {}) {
     if (n.isMesh || n.isSkinnedMesh) { n.castShadow = true; n.receiveShadow = true; }
     if (n.isObject3D) n.userData.avatarAsset = avatarId; // exclusão das rotinas de ocultação
   });
+  // Task 64 — BONES DO CLONE (correção estrutural): boneMap(asset.root)
+  // devolvia os nós do ASSET EM CACHE — desanexados da cena. Poses de mira/
+  // agachamento, solda da arma (weldWeaponToHand) e gear (syncHumanoidGear)
+  // mutavam nós INVISÍVEIS enquanto o clone animado seguia em jogo: arma
+  // "flutuando", gear sumido, mira sem resposta do corpo. O boneMap agora
+  // atravessa o CLONE que realmente entra na cena.
+  const bones = boneMap(root);
+  if (!bones?.hips) return null;               // clone sem rig → procedural
   const clips = await clipsForAvatar(avatarId);
   const mixer = new THREE.AnimationMixer(root);
   const mk = (clip) => {
@@ -256,6 +263,10 @@ export function attachHumanoidToOperative(op, body) {
   if (op.parts?.shadow) op.parts.shadow.traverse((o) => keep.add(o));
   op.group.traverse((o) => {
     if (o === body.root || keep.has(o) || o.userData?.avatarAsset) return;
+    // Task 64 — GEAR NÃO DORME: capacete/colete/mochila (grupos `gear_*` do
+    // F28) são re-ancorados nos bones do corpo real por syncHumanoidGear —
+    // esconder aqui apagaria o equipamento do jogador/bot com corpo GLB.
+    if (typeof o.name === 'string' && o.name.startsWith('gear_')) return;
     if (o.isMesh || o.isSkinnedMesh) o.visible = false; // só a MALHA dorme (pivôs face etc. ok)
   });
   op.group.add(body.root);
@@ -343,6 +354,7 @@ function blendWeights(entry, target) {
 export function animateHumanoid(entry, {
   t = 0, speedNorm = 0, phase = null, pitch = 0,
   dead = false, ads = false, crouch = false, knocked = false, air = 0,
+  leanVel = 0,
 } = {}) {
   if (!entry?.mixer) return entry;
   if (dead) {
@@ -386,6 +398,34 @@ export function animateHumanoid(entry, {
   }
   entry.mixer.update(special ? 0 : Math.max(0, 1 / 60));
   entry.root.rotation.x = 0;               // limpa pose do frame anterior
+  entry.root.rotation.z = 0;
+  // ---- Task 64 — extras humanos: ABSORÇÃO de aterrissagem + LEAN de curva ----
+  // dt derivado de t (determinístico); extras vivem no entry (lazy).
+  const b = entry.bones;
+  if (!entry.extras) entry.extras = newHumanoidExtras();
+  const ex = entry.extras;
+  const dtF = Number.isFinite(t) && Number.isFinite(ex.prevT) ? Math.max(0, Math.min(.1, t - ex.prevT)) : 0;
+  ex.prevT = t;
+  if (!special) {
+    if (ex.prevAir > 0 && air <= 0) ex.landT = HUMANOID_LAND.seconds; // pousou
+    if (ex.landT > 0) {
+      ex.landT = Math.max(0, ex.landT - dtF);
+      const k = ex.landT / HUMANOID_LAND.seconds;    // 1 no impacto → 0
+      if (b.hips?.position) b.hips.position.y -= HUMANOID_LAND.hipDrop * k;
+      if (b.leftleg) b.leftleg.rotation.x += HUMANOID_LAND.knee * k;
+      if (b.rightleg) b.rightleg.rotation.x += HUMANOID_LAND.knee * k;
+      if (b.spine2) b.spine2.rotation.x += HUMANOID_LAND.spine * k;
+    }
+    // banking para dentro da curva (leanVel = rad/s do yaw, EWMA do chamador);
+    // só com velocidade — parado o corpo permanece ereto.
+    const leanTarget = Math.max(-2, Math.min(2, leanVel || 0)) * .5 * HUMANOID_LEAN.maxZ;
+    ex.leanZ += (leanTarget - ex.leanZ) * Math.min(1, HUMANOID_LEAN.gain * Math.max(1, dtF * 60));
+    entry.root.rotation.z = Math.max(-HUMANOID_LEAN.maxZ, Math.min(HUMANOID_LEAN.maxZ, ex.leanZ))
+      * (speedNorm > .1 ? 1 : .25);
+  } else {
+    ex.leanZ = 0;
+  }
+  ex.prevAir = air;
   if (knocked) { poseKnocked(entry, t); return entry; }
   if (air > 0) { poseAir(entry, t); return entry; }
   poseAim(entry, pitch, ads);
@@ -426,6 +466,184 @@ export const HUMANOID_GRIP = Object.freeze({
   pos: Object.freeze([0, -.03, -.01]),
   rot: Object.freeze([-Math.PI / 2, 0, .12]),
 });
+
+// ----------------------------------------------------------------------------------
+// Task 64 — GEAR (capacete/colete/mochila) NO CORPO REAL
+// ----------------------------------------------------------------------------------
+// O gear F28 ancora nos grupos PROCEDURAIS (parts.head/parts.torso), que o
+// attachHumanoidToOperative ESCONDE — com o corpo GLB padrão, capacete,
+// colete e mochila sumiam do jogador e dos bots. O sync abaixo RE-ANCORA os
+// grupos `gear_*` nos BONES do rig real (mesh acompanha a animação) com
+// calibração única por peça. Idempotente e barato: só move quando o pai mudou.
+const HUMANOID_GEAR_FIT = Object.freeze({
+  helmet: Object.freeze({ bone: 'head', pos: Object.freeze([0, .055, .012]), rot: Object.freeze([0, 0, 0]), scale: .96 }),
+  vest:   Object.freeze({ bone: 'spine2', pos: Object.freeze([0, .04, .012]), rot: Object.freeze([0, 0, 0]), scale: 1.04 }),
+  pack:   Object.freeze({ bone: 'spine1', pos: Object.freeze([0, .02, .055]), rot: Object.freeze([0, 0, 0]), scale: 1.02 }),
+});
+export const HUMANOID_GEAR_TAGS = Object.freeze({
+  helmet: 'gear_helmet', vest: 'gear_vest', pack: 'gear_pack',
+});
+
+// Re-ancora (uma vez por mudança de pai) o gear procedural nos bones do GLB.
+// Retorna o número de peças movidas — 0 quando nada a fazer (barato por frame).
+// Upgrade de nível (applyOperativeGear recria o grupo no anchor procedural):
+// a versão ANTIGA que já estava no bone é REMOVIDA aqui — sem isto o bone
+// acumularia capacete/colete/mochila duplicados ao longo da partida.
+export function syncHumanoidGear(body, opParts) {
+  if (!body?.bones || !opParts) return 0;
+  let moved = 0;
+  for (const [kind, tag] of Object.entries(HUMANOID_GEAR_TAGS)) {
+    const fit = HUMANOID_GEAR_FIT[kind];
+    const bone = body.bones[fit.bone];
+    if (!bone) continue;
+    // grupo NOVO vem sempre do anchor procedural (applyOperativeGear cria lá)
+    const group = opParts.head?.getObjectByName(tag)
+      ?? opParts.torso?.getObjectByName(tag);
+    if (!group) continue;                    // nada novo — o que está no bone segue
+    // TODOS os husks antigos no bone saem (upgrades acumulam cópias órfãs
+    // com o MESMO tag — getObjectByName acharia só a primeira)
+    for (const child of [...bone.children]) {
+      if (child !== group && child.name === tag) bone.remove(child);
+    }
+    if (group.parent === bone) continue;
+    group.parent?.remove(group);
+    bone.add(group);
+    group.position.set(fit.pos[0], fit.pos[1], fit.pos[2]);
+    group.rotation.set(fit.rot[0], fit.rot[1], fit.rot[2]);
+    group.scale.setScalar(fit.scale);
+    group.visible = true; // attach escondeu as malhas procedurais — gear volta
+    group.traverse((o) => { o.userData.humanoidGear = true; }); // exclusão de ocultação
+    group.userData.gearKind = kind;
+    moved++;
+  }
+  return moved;
+}
+
+// ----------------------------------------------------------------------------------
+// Task 64 — EMPUNHADURA DE DUAS MÃOS (suporte da mão esquerda no foregrip)
+// ----------------------------------------------------------------------------------
+// weldWeaponToHand solda a arma na mão DIREITA; o clip deixa a esquerda
+// balançando livre — postura de tiro de uma mão só. O solver abaixo orienta o
+// braço ESQUERDO ao ponto de apoio (magwell) da arma: IK fake clamped (o rig
+// procedural usa a mesma técnica desde o Task 62), determinístico, aplicado
+// APÓS o mixer (aditivo sobre o clip, como poseAim).
+export const LEFT_HAND_SUPPORT = Object.freeze({
+  reach: .56,      // envergadura útil ombro→punho (rig 1.8 m)
+  maxBend: 1.25,   // flexão máxima do cotovelo (rad)
+  gain: .85,       // fração da correção angular aplicada (suaviza o snap)
+  maxSwing: 1.35,  // teto de rotação do úmero (rad) — nunca vira helicóptero
+});
+
+// Quaternion mundial acumulado de um nó (getWorldQuaternion exige cadeia
+// atualizada — aqui o chamador garante updateWorldMatrix antes).
+function _worldQuat(node, out) {
+  return node ? node.getWorldQuaternion(out ?? new THREE.Quaternion()) : (out ?? new THREE.Quaternion());
+}
+
+/**
+ * Orienta o braço esquerdo ao foregrip da arma soldada (empunhadura de 2 mãos).
+ * Retorna true quando a pose foi aplicada. Sem arma/rig/bones → false (no-op).
+ * A direção é clampada ao alcance do braço e à rotação máxima do ombro —
+ * a mão NUNCA flutua longe do corpo; quando o alvo está fora de alcance o
+ * cotovelo dobra no máximo e a mão aponta NA DIREÇÃO do apoio.
+ */
+export function poseLeftHandSupport(entry, weaponRig = entry?.weaponRig) {
+  try {
+    const b = entry?.bones;
+    const g = weaponRig?.group;
+    if (!b?.leftarm || !b.leftforearm || !g?.parent) return false;
+    const magW = weaponRig.model?.magW ?? weaponRig.magW;
+    const gripW = weaponRig.model?.gripW ?? weaponRig.gripW;
+    if (!magW || !gripW) return false;
+    // ponto de apoio em MUNDO: pos da arma + (magwell − grip) girado pela arma
+    g.updateWorldMatrix(true, false);
+    const wq = _worldQuat(g);
+    const wp = g.getWorldPosition(new THREE.Vector3());
+    const target = wp.add(magW.clone().sub(gripW).applyQuaternion(wq));
+    const applied = _aimArmAt(entry, 'left', target);
+    if (!applied) return false;
+    // cotovelo: dobra proporcional à distância restante (mais perto = mais dobra)
+    const arm = b.leftarm;
+    arm.updateWorldMatrix(true, false);
+    const dist = target.distanceTo(arm.getWorldPosition(new THREE.Vector3()));
+    const bendK = Math.max(0, Math.min(1, 1 - dist / LEFT_HAND_SUPPORT.reach));
+    b.leftforearm.rotation.x += LEFT_HAND_SUPPORT.maxBend * bendK * .55;
+    return true;
+  } catch { return false; }
+}
+
+// Task 64 — solver de braço compartilhado (2 mãos + postura de prontidão):
+// corrige a DIREÇÃO do úmero NO ESPAÇO DO PAI do bone. A correção é
+// PREMULTIPLICADA (q_parent_child' = corr · q_local) — multiplicar à direita
+// aplicaria a rotação no espaço LOCAL do bone (eixos do Mixamo girados), e a
+// mão nunca chegava ao apoio. Clamp angular no teto do ombro, gain suave.
+function _aimArmAt(entry, side, worldTarget) {
+  const b = entry.bones;
+  const arm = side === 'left' ? b.leftarm : b.rightarm;
+  if (!arm?.parent) return false;
+  arm.updateWorldMatrix(true, false);
+  const shoulderPos = arm.getWorldPosition(new THREE.Vector3());
+  const dir = worldTarget.clone().sub(shoulderPos);
+  const dist = dir.length();
+  if (!(dist > 1e-4)) return false;
+  dir.multiplyScalar(1 / dist);
+  const restDir = arm.position.clone().normalize();      // eixo do braço em repouso
+  const parentQ = _worldQuat(arm.parent);
+  const dirLocal = dir.applyQuaternion(parentQ.clone().invert());
+  const corr = new THREE.Quaternion().setFromUnitVectors(restDir, dirLocal);
+  const ang = 2 * Math.acos(Math.max(-1, Math.min(1, corr.w)));
+  const clamped = ang > LEFT_HAND_SUPPORT.maxSwing
+    ? new THREE.Quaternion().slerp(corr, LEFT_HAND_SUPPORT.maxSwing / ang)
+    : corr;
+  arm.quaternion.premultiply(new THREE.Quaternion().slerp(clamped, LEFT_HAND_SUPPORT.gain));
+  return true;
+}
+
+/**
+ * Task 64 — POSTURA DE PRONTIDÃO do braço direito: o clip deixa a arma no
+ * quadril (braço pendurado); um operativo em campo carrega a arma erguida
+ * (low-ready), subindo à linha de vista em ADS e abaixando no sprint.
+ * Alvo em espaço do ROOT do corpo (modelo olha −z), transformado a mundo —
+ * mesmo solver do suporte esquerdo (_aimArmAt).
+ */
+export function poseWeaponReady(entry, { speedNorm = 0, ads = false } = {}) {
+  try {
+    const b = entry?.bones;
+    if (!b?.rightarm || !b.rightforearm || !entry.root) return false;
+    if (!entry.extras) entry.extras = newHumanoidExtras();
+    const ex = entry.extras;
+    // blends EWMA determinísticos (sem snap ao alternar ADS/sprint)
+    ex.adsK = ewma(ex.adsK ?? 0, ads ? 1 : 0, .2);
+    ex.lowK = ewma(ex.lowK ?? 0, speedNorm > 1.02 ? 1 : 0, .18);
+    // alvo no espaço do root: prontidão (peito) ↔ ADS (linha de vista) ↔ sprint (low-ready)
+    const p = ex.adsK, l = ex.lowK;
+    const tx = .16 + .02 * l;
+    const ty = 1.18 + .32 * p - .42 * l;
+    const tz = -.34 - .12 * p + .18 * l;
+    const target = new THREE.Vector3(tx, ty, tz).applyMatrix4(entry.root.matrixWorld);
+    const ok = _aimArmAt(entry, 'right', target);
+    if (!ok) return false;
+    // cotovelo: arma ergida dobra o antebraço (mais em ADS, menos no sprint)
+    b.rightforearm.rotation.x += .55 + .25 * p - .2 * l;
+    return true;
+  } catch { return false; }
+}
+
+// ----------------------------------------------------------------------------------
+// Task 64 — MOVIMENTOS HUMANOS EXTRAS: lean de curva + absorção de aterrissagem
+// ----------------------------------------------------------------------------------
+// LEAN: corredores humanos INCLINAM o tronco para dentro da curva; o yaw vem
+// do chamador (EWMA no main3d) — aqui vira banking no eixo z do corpo.
+// LAND: após a queda (air>0 → 0) os joelhos ABSORVEM o impacto (~0.4 s):
+// quadril desce, tronco inclina, braços abrem levemente — decai exponencial.
+export const HUMANOID_LEAN = Object.freeze({ maxZ: .16, gain: .12 });
+export const HUMANOID_LAND = Object.freeze({ seconds: .42, hipDrop: .16, knee: .55, spine: .18 });
+
+// Estado inicial dos extras (mutado por animateHumanoid — determinístico).
+export function newHumanoidExtras() {
+  return { leanZ: 0, landT: 0, prevAir: 0, prevT: null };
+}
+
 
 export function resetHumanoidCache() {
   clipCache.clear();
