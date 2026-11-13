@@ -351,7 +351,7 @@ export class Game3D {
     // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
     const lpExposure = scene.userData?.lighting?.exposure;
     if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
-    this.ringWall = createRingWall();
+    this.ringWall = createRingWall(this.scenario.id); // Fase 61 — parede no visual do mundo
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {
       // Fase 18 — partículas de combate no pool compartilhado da cena
@@ -1921,8 +1921,10 @@ export class Game3D {
         case 'pulse': {
           // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
           // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          // Fase 61 — a fase oficial do mundo é nomeada (cânon safeZone.js).
+          const fase = e.phaseName ? ` Fase oficial: ${e.phaseName}.` : '';
           const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${fase}${destino}`, 'warn');
           this.audio.ringWarn();
           break;
         }

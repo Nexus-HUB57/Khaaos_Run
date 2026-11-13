@@ -159,7 +159,7 @@ function createSky(scenario) {
   return new THREE.Mesh(geo, mat);
 }
 
-// ---------- parede do anel (zona segura) ----------
+// ---------- parede do anel (zona segura) — Fase 61: VISUAL DO CENÁRIO ----------
 // FIX visual (regressão "mundo vermelho"): o ShaderMaterial da parede NÃO
 // participa do FogExp2 da cena — no Ring de 800 m a parede ficava visível a
 // 800 m como uma cortina vermelha nítida dominando o céu durante a QUEDA
@@ -167,14 +167,41 @@ function createSky(scenario) {
 // 1-exp(-(d·density)²)): a parede some na névoa quando distante e volta a
 // aparecer quando o Ring encolhe. uniforms de fog são sincronizados a cada
 // frame no updateRing (acompanham applyNightness).
-export function createRingWall() {
+//
+// Fase 61 — FIM DO CÍRCULO AMARELO GENÉRICO: cada mundo tem a SUA parede
+// (leitura canônica do README — a borda da zona segura É o hazard):
+//   CIGKV     — energia quântica do Pulso Khaaos (ciano/violeta, grade elétrica)
+//   Barburhen — chuva ácida "Água da Morte" (verde tóxico com filetes caindo)
+//   Priadus   — neblina de esporos "Emboscada Verde" (névoa viva, sem grade)
+//   Ckesalth  — fumaça tóxica "Assassino Silencioso" (cinza densa + brasas)
+//   Arukheea  — parede d'água do "Tsunami" (teal translúcido + crista de espuma)
+export const RING_WALL_STYLES = Object.freeze({
+  CIGKV: Object.freeze({ color: '#66e0ff', color2: '#8b5cf6', opacity: .8, grid: 1, streak: 0, crest: 0, bands: .12, flow: .22 }),
+  Barburhen: Object.freeze({ color: '#8aff3d', color2: '#3f6212', opacity: .8, grid: .25, streak: 1, crest: 0, bands: .2, flow: 1.15 }),
+  Priadus: Object.freeze({ color: '#4d7c2a', color2: '#1a2e12', opacity: .85, grid: 0, streak: 0, crest: 0, bands: .5, flow: .1 }),
+  Ckesalth: Object.freeze({ color: '#4a4238', color2: '#b45309', opacity: .9, grid: 0, streak: 0, crest: 0, bands: .62, flow: .14 }),
+  Arukheea: Object.freeze({ color: '#2a9d9f', color2: '#a5f3fc', opacity: .75, grid: 0, streak: 0, crest: 1, bands: .28, flow: .3 }),
+});
+export function ringWallStyle(scenarioId) {
+  const key = String(scenarioId ?? 'CIGKV');
+  return RING_WALL_STYLES[key] ?? RING_WALL_STYLES.CIGKV;
+}
+
+export function createRingWall(scenarioId = 'CIGKV') {
+  const st = ringWallStyle(scenarioId);
   const group = new THREE.Group();
-  const mk = (radius, opacity, color) => {
+  const mk = (radius, opacity, style) => {
     const geo = new THREE.CylinderGeometry(radius, radius, 34, 96, 1, true);
     const mat = new THREE.ShaderMaterial({
       transparent: true, side: THREE.DoubleSide, depthWrite: false,
       uniforms: {
-        time: { value: 0 }, color: { value: new THREE.Color(color) }, opacity: { value: opacity },
+        time: { value: 0 },
+        color: { value: new THREE.Color(style.color) },
+        color2: { value: new THREE.Color(style.color2) },
+        opacity: { value: opacity * style.opacity },
+        grid: { value: style.grid }, streak: { value: style.streak },
+        crest: { value: style.crest }, bands: { value: style.bands },
+        flow: { value: style.flow },
         fogColor: { value: new THREE.Color('#57382f') }, fogDensity: { value: 0.0035 },
       },
       vertexShader: `
@@ -184,26 +211,45 @@ export function createRingWall() {
           vDepth = -mvPosition.z;
           gl_Position = projectionMatrix * mvPosition; }`,
       fragmentShader: `
-        uniform float time; uniform vec3 color; uniform float opacity;
+        uniform float time; uniform vec3 color; uniform vec3 color2; uniform float opacity;
+        uniform float grid; uniform float streak; uniform float crest; uniform float bands;
+        uniform float flow;
         uniform vec3 fogColor; uniform float fogDensity;
         varying vec2 vUv; varying vec3 vPos; varying float vDepth;
         void main() {
-          float grid = step(.975, fract(vUv.x * 70.0)) + step(.96, fract(vUv.y * 18.0 - time * .18));
+          // grade elétrica (Pulso Khaaos) — some quando grid = 0
+          float gridLine = step(.975, fract(vUv.x * 70.0)) + step(.96, fract(vUv.y * 18.0 - time * .18));
+          // filetes de chuva ácida caindo (Água da Morte) — verticais rápidas
+          float streaks = smoothstep(.5, 1., fract(vUv.y * 34.0 - time * flow * 2.4))
+                        * step(.62, fract(vUv.x * 120.0 + floor(vUv.y * 34.0 - time * flow * 2.4) * .37));
+          // bandas de névoa/fumaça (esporos/fumaça) — horizontais lentas, duas oitavas
+          float band = smoothstep(.35, .95, fract(sin(floor(vUv.y * 9.0 + time * flow * .5) * 91.7) * 43758.5453))
+                     * .75 + smoothstep(.4, .9, fract(sin(floor(vUv.y * 23.0 - time * flow * .3) * 17.3) * 9127.13)) * .35;
+          // crista de espuma do tsunami no topo da parede
+          float foam = smoothstep(.82, .97, vUv.y) * (0.65 + 0.35 * sin(vUv.x * 260.0 + time * flow * 2.0));
           float edgeTop = smoothstep(1.0, .82, vUv.y);
           float edgeBottom = smoothstep(0.0, .10, vUv.y);
-          float a = (0.05 + grid * .16) * edgeTop * edgeBottom;
-          float wave = smoothstep(.4, 1., fract(vUv.y * 2.2 - time * .1)) * .05;
+          float a = (0.05 * (grid > 0.0 ? 1.0 : 0.45)
+                   + gridLine * .16 * grid
+                   + streaks * .5 * streak
+                   + band * .3 * bands
+                   + foam * .8 * crest) * edgeTop * edgeBottom;
+          float wave = smoothstep(.4, 1., fract(vUv.y * 2.2 - time * flow * .45)) * .05;
           float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vDepth * vDepth);
-          vec3 col = mix(color, fogColor, clamp(fogFactor, 0.0, 1.0));
+          // mistura cor base → cor secundária pelas bandas/filetes (profundidade visual)
+          vec3 col = mix(color, color2, clamp(band * bands * .6 + foam * crest * .5 + streaks * streak * .35, 0.0, 1.0));
+          col = mix(col, fogColor, clamp(fogFactor, 0.0, 1.0));
           gl_FragColor = vec4(col, (a + wave) * opacity * (1.0 - clamp(fogFactor, 0.0, 1.0)));
         }`,
     });
     return new THREE.Mesh(geo, mat);
   };
-  const inner = mk(1, .7, '#c8ff3d');
-  const outer = mk(1.004, .3, '#ff6b2c');
+  const inner = mk(1, .7, st);
+  const outer = mk(1.004, .3, { ...st, color: st.color2, color2: st.color });
   group.add(inner, outer);
   group.userData.uniforms = [inner.material.uniforms, outer.material.uniforms];
+  group.userData.style = st;
+  group.userData.scenarioId = String(scenarioId);
   return group;
 }
 
