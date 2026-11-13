@@ -2761,19 +2761,9 @@ Stage Summary:
 - Fim da DIVERGÊNCIA servidor↔sim: a zona segura online agora corre o CÂNON de cada mundo (5 fases × 120 s, nomes/raios/DPS oficiais, encolhimento contínuo, deriva ao setor canônico) — o cliente online vê o mesmo PULSO N · fase e as mesmas regras de dano do offline; MPZEX Opção B preservada (fases 3× em salas cap-2 sem bots)
 - 1240 testes / 0 fail (21 novos), oficiais 584+39 / 0 fail, tsc OK, build OK
 
-<<<<<<< HEAD
-Stage Summary (Task 66 — sincronia câmera×movimento):
-- Sonda E2E com input injetado (scripts/e2e_camera_move.mjs) mediu a causa: sprint recuava a câmera TPS 4.4→5.0 m + zoom-out FOV 62→68 a cada arrancada ("a câmera foge do avatar"); EWMA da amplitude da passada era por-FRAME (máquinas lentas patinavam ~1 s na arrancada)
-- Correção: sprint sem pullback/zoom-out (dist 4.4 e FOV 62 constantes em locomoção; ADS preservado) + EWMA por tempo (1−e^(−12·dt), preserva .18 a 60 fps)
-- E2E local e EM PRODUÇÃO: sprint curDist 4.4 / distCamEye 4.46 constante, corpo↔sim 0.00 m, amplitude convergida no 1º sample; suíte 1244/0 fail (+2 testes de convergência)
-- Deploy: candidate 20261113T194144Z no ar (main-dYG5kNlz.js), rollback 184733Z preservado, nginx -t/reload OK
-=======
 Stage Summary (Task 65 — DEPLOY PRODUÇÃO):
 - PR #391 mesclado no main (539c91d) após CI verde (Gate + Game Runtime Tests ✓, 1234/0 fail); follow-up da equipe #392 em sequência no main
 - dist de produção buildado do main corrigido (vite ✓) → /opt/khaaos-prod-candidate-20261113T184733Z/dist (41 MB, main-C1mnOO91.js)
 - vhost gcodegames-real-ssl.conf atualizado (backup .bak-f65-20261113T184733Z; rollback: candidate 183229Z) + nginx -t OK + reload OK
 - VERIFICAÇÃO NO AR: gcodegames.top HTTP 200 servindo main-C1mnOO91.js; marcadores da Task 65 presentes no bundle (humanoid_body_ ✓, cosmeticAnchor ✓, gear nos bones ✓); GLBs dos avatares 200 (animated 4.8 MB)
 - E2E de plataforma: os avatares GLB em gcodegames.top jogam sincronizados — corpo de frente para a mira/movimento, gear/cosméticos/arma assentados (fim do avatar desconfigurado)
-
-
-
