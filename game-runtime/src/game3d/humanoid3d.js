@@ -129,6 +129,26 @@ export function phaseLockedTime(phase, duration) {
   return ((p % (2 * Math.PI)) / (2 * Math.PI)) * duration;
 }
 
+// Fase 60 — REALISMO DE MOVIMENTO HUMANO (funções PURAS + integração):
+//   • leanPitch — inclinação do tronco pela ACELERAÇÃO (arrancada/freada),
+//     que o relógio sozinho nunca dá; zero em cruzeiro, ±0.2 rad nos picos;
+//   • headYawClamp — arco de rotação de cabeça seguro (±0.85 rad, sem exorcismo);
+//   • strideCadenceScale — cadência por sexo do rig (perna mais curta = passo
+//     mais frequente): F 1.06, M 1.0 — variedade humana sem quebrar o pé-planta.
+export function leanPitch(accel, speedNorm = 0) {
+  const a = Math.max(-1, Math.min(1, Number.isFinite(accel) ? accel : 0));
+  const sn = Math.max(0, Math.min(1.25, Number.isFinite(speedNorm) ? speedNorm : 0));
+  const speedGate = Math.min(1, sn / .55);           // parado não inclina
+  return a * .2 * speedGate;
+}
+export function headYawClamp(yaw) {
+  const y = Number.isFinite(yaw) ? yaw : 0;
+  return Math.max(-.85, Math.min(.85, y));
+}
+export function strideCadenceScale(sex) {
+  return String(sex ?? 'M').toUpperCase() === 'F' ? 1.06 : 1;
+}
+
 // Rest pose capturada na criação (quaternion/position de cada bone) — a morte
 // relaxa para ela e a ressurreição restaura, determinístico.
 function captureRest(bones) {
@@ -245,6 +265,7 @@ export async function createHumanoidBody({ avatarId } = {}) {
     rest: captureRest(bones),
     w: { idle: 1, walk: 0, run: 0 },
     deadPose: false,
+    landT: 0,          // Fase 60 — impulso de aterrissagem (decai em animate)
     host: null,
     weaponRig: null,
   };
@@ -346,15 +367,19 @@ function blendWeights(entry, target) {
 
 /**
  * Anima o corpo humanoide — MESMO contrato de opts de animateOperative:
- * { t, speedNorm, phase, pitch, dead, ads, crouch, knocked, air }.
+ * { t, speedNorm, phase, pitch, dead, ads, crouch, knocked, air } + Fase 60:
+ * { accel, yaw, armed, sex, onLand }.
  * Locomoção é fase-travada (gait.js); idle anda no relógio; mira/crouch/
  * knocked/air são poses aditivas pós-mixer; morte congela e relaxa.
- * Retorna o entry (encadeável).
+ * Fase 60: lean por aceleração no tronco, cabeça segue a mira em YAW,
+ * arma em low-ready quando armada (sem ADS), squash de aterrissagem e
+ * cadência por sexo. Retorna o entry (encadeável).
  */
 export function animateHumanoid(entry, {
   t = 0, speedNorm = 0, phase = null, pitch = 0,
   dead = false, ads = false, crouch = false, knocked = false, air = 0,
   leanVel = 0,
+  accel = 0, yaw = 0, armed = false, sex = null, onLand = false,
 } = {}) {
   if (!entry?.mixer) return entry;
   if (dead) {
@@ -375,6 +400,7 @@ export function animateHumanoid(entry, {
   }
   const sn = Math.max(0, Math.min(1.25, Number.isFinite(speedNorm) ? speedNorm : 0));
   const PH = Number.isFinite(phase) ? phase : t * 8.6;
+  const CADENCE = strideCadenceScale(sex);   // Fase 60 — cadência por sexo
   // Estados especiais (rastejo/queda) CORTAM a locomoção instantaneamente —
   // são eventos abruptos (a pose procedural assume no mesmo frame); a saída
   // volta SUAVE pela EWMA (fade-in da passada). Morto congela via deadPose.
@@ -387,7 +413,7 @@ export function animateHumanoid(entry, {
   const setLocked = (a, w) => {
     if (!a) return;
     a.setEffectiveWeight(w);
-    if (w > 0) a.time = phaseLockedTime(PH, a.getClip().duration); // pé planta onde o corpo chega
+    if (w > 0) a.time = phaseLockedTime(PH * CADENCE, a.getClip().duration); // pé planta onde o corpo chega
   };
   setLocked(entry.actions.walk, entry.w.walk);
   setLocked(entry.actions.run, entry.w.run);
@@ -429,6 +455,25 @@ export function animateHumanoid(entry, {
   if (knocked) { poseKnocked(entry, t); return entry; }
   if (air > 0) { poseAir(entry, t); return entry; }
   poseAim(entry, pitch, ads);
+  // Fase 60 — camada humana final (sobre o aim, antes do crouch):
+  if (onLand && entry.landT <= 0) entry.landT = .32;   // borda de aterrissagem
+  if (entry.landT > 0) {                               // squash de pouso (decai)
+    const k = Math.max(0, Math.min(1, 1 - entry.landT / .32));
+    if (entry.bones.hips?.position) entry.bones.hips.position.y -= .09 * Math.sin(Math.PI * k);
+    entry.landT = Math.max(0, entry.landT - 1 / 60);
+  }
+  const lean = leanPitch(accel, sn);                   // tronco responde à aceleração
+  if (lean) {
+    if (entry.bones.spine1) entry.bones.spine1.rotation.x += lean * .7;
+    if (entry.bones.spine2) entry.bones.spine2.rotation.x += lean * .5;
+    if (entry.bones.head) entry.bones.head.rotation.x -= lean * .4; // olhos compensam
+  }
+  const hy = headYawClamp(yaw);                        // cabeça acompanha a mira em Y
+  if (hy && entry.bones.head) entry.bones.head.rotation.y += hy;
+  if (armed && !ads) {                                 // low-ready humano (arma baixa, pronta)
+    if (entry.bones.rightforearm) entry.bones.rightforearm.rotation.x = Math.min(1.5, (entry.bones.rightforearm.rotation.x || 0) + .42);
+    if (entry.bones.leftforearm) entry.bones.leftforearm.rotation.x = Math.min(1.5, (entry.bones.leftforearm.rotation.x || 0) + .3);
+  }
   if (crouch) poseCrouch(entry);
   return entry;
 }

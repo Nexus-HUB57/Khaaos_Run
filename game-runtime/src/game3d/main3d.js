@@ -13,7 +13,8 @@ import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
-import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos
+import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
+import { resolveIdentityLook, poolBodyForIdentity, identityForBot, dressHumanoid } from './humanoidCosmetics3d.js'; // Fase 60 — identidade humana dos 33 avatares
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
@@ -701,15 +702,27 @@ export class Game3D {
     // sem ?avatar= → determinístico pelo operativo; ?avatar=<id pool> → escolha
     // explícita; ?avatar=legacy|off|0|none → corpo procedural antigo (escape
     // hatch); QUALQUER falha de load/rig → procedural assume (doutrina hero3d).
+    // Fase 60 — o corpo agora é CORRETO POR SEXO DA IDENTIDADE (SK_Gwen →
+    // rigs femininos) e recebe a VESTIMENTA/ACESSÓRIOS do catálogo dos 33
+    // (headgear, colete, mochila, ombreiras e faixa de facção nos bones).
     this.humanoidPlayer = null;
     if (this.humanoidDisabled) { this.#setProceduralBodyVisible(true); return; }
     const g = this.playerOp?.group;
     if (!g) return;
-    const id = resolveGameplayAvatar(this.avatarOverrideId ?? this.avatarParam, this.selectedOperative?.id ?? 'player');
+    const identityId = this.selectedOperative?.id ?? 'player';
+    const override = this.avatarOverrideId ?? this.avatarParam;
+    const id = override
+      ? resolveGameplayAvatar(override, identityId)
+      : poolBodyForIdentity(identityId); // Fase 60 — corpo por identidade
     if (!id) { this.#setProceduralBodyVisible(true); return; } // estático/inválido: procedural
     const body = await createHumanoidBody({ avatarId: id });
     if (!body || this.playerOp?.group !== g) { this.#setProceduralBodyVisible(true); return; } // troca de operativo durante o load
     attachHumanoidToOperative(this.playerOp, body);
+    // Fase 60 — vestimenta/acessórios da identidade no corpo real (override
+    // explícito de pool usa o look do próprio operativo quando existir).
+    const look = resolveIdentityLook(identityId);
+    this.humanoidPlayerSex = look.sex;
+    dressHumanoid(body, look);
     syncHumanoidGear(body, this.playerOp.parts); // Task 64 — capacete/colete/mochila nos bones reais
     this.humanoidPlayer = body;
   }
@@ -720,11 +733,15 @@ export class Game3D {
   async #attachHumanoidForBot(entry, seed) {
     if (this.humanoidDisabled || !entry?.op?.detailGroup || entry.humanoid !== undefined) return;
     entry.humanoid = null; // reserva: evita attach duplo durante o load
-    const id = resolveGameplayAvatar(null, seed);
-    if (!id) return;
-    const body = await createHumanoidBody({ avatarId: id });
+    // Fase 60 — bots vestem o ROSTER CANÔNICO (33 identidades): corpo por sexo
+    // da identidade + uniforme/acessórios do catálogo; determinístico por seed.
+    const identityId = identityForBot(seed);
+    const look = resolveIdentityLook(identityId);
+    const body = await createHumanoidBody({ avatarId: poolBodyForIdentity(identityId) });
     if (!body || !entry.op?.detailGroup) return; // ator saiu durante o load → GC
     attachHumanoidToOperative({ group: entry.op.detailGroup, parts: entry.op.detailParts }, body);
+    dressHumanoid(body, look);
+    entry.humanoidSex = look.sex;
     syncHumanoidGear(body, entry.op.detailParts ?? entry.op.parts); // Task 64 — gear nos bones do remoto
     entry.humanoid = body;
   }
@@ -1368,10 +1385,25 @@ export class Game3D {
         ? Math.atan2(Math.sin(p.yaw - this._playerPrevYaw), Math.cos(p.yaw - this._playerPrevYaw)) / dt
         : 0;
       this._playerPrevYaw = p.yaw;
+      // Fase 60 — camada humana: lean pela aceleração real, cabeça segue a
+      // câmera (yaw relativo ao corpo), low-ready armado e squash de pouso.
+      const hsn = p.moving ? (p.sprinting ? 1.2 : .8) : 0;
+      this._hsn ??= 0;
+      const hAccel = Math.max(-1, Math.min(1, (hsn - this._hsn) / Math.max(1e-3, dt * 6)));
+      this._hsn = hsn;
+      let headYaw = 0;
+      if (this._camDir) {
+        const camYaw = Math.atan2(-this._camDir.x, -this._camDir.z); // convenção −Z local (Task 62)
+        let rel = camYaw - p.yaw;
+        rel = ((rel + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        headYaw = headYawClamp(rel);
+      }
       animateHumanoid(this.humanoidPlayer, {
-        t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
+        t: this.animT, phase: this._gait.phase, speedNorm: hsn,
         pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
         knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0, leanVel: yawVel,
+        accel: hAccel, yaw: headYaw, armed: !!(p.alive && this.playerWeapon),
+        sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !this._dip.wasGround,
       });
       if (this.playerWeapon && p.alive && !p.knocked && !airborne) {
         weldWeaponToHand(this.humanoidPlayer, this.playerWeapon);
@@ -1499,7 +1531,10 @@ export class Game3D {
             ? Math.atan2(Math.sin(b.yaw - entry.prevYaw), Math.cos(b.yaw - entry.prevYaw)) / dt
             : 0;
           entry.prevYaw = b.yaw;
-          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel });
+          entry._hSn ??= 0; // Fase 60 — lean do bot pela aceleração real da passada
+          const bAccel = Math.max(-1, Math.min(1, (gsn - entry._hSn) / Math.max(1e-3, dt * 6)));
+          entry._hSn = gsn;
+          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null });
           const bwr = entry.op.group.userData?.weaponRig;
           if (bwr && !b.knocked && !b.dropPhase) {
             weldWeaponToHand(entry.humanoid, bwr);
@@ -1911,8 +1946,10 @@ export class Game3D {
         case 'pulse': {
           // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
           // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          // Fase 61 — a fase oficial do mundo é nomeada (cânon safeZone.js).
+          const fase = e.phaseName ? ` Fase oficial: ${e.phaseName}.` : '';
           const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${fase}${destino}`, 'warn');
           this.audio.ringWarn();
           break;
         }

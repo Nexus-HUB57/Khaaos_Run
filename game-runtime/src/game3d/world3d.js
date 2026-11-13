@@ -159,7 +159,7 @@ function createSky(scenario) {
   return new THREE.Mesh(geo, mat);
 }
 
-// ---------- parede do anel (zona segura) ----------
+// ---------- parede do anel (zona segura) — Fase 61: VISUAL DO CENÁRIO ----------
 // FIX visual (regressão "mundo vermelho"): o ShaderMaterial da parede NÃO
 // participa do FogExp2 da cena — no Ring de 800 m a parede ficava visível a
 // 800 m como uma cortina vermelha nítida dominando o céu durante a QUEDA
@@ -169,7 +169,8 @@ function createSky(scenario) {
 // frame no updateRing (acompanham applyNightness).
 //
 // Task 64 — SAFE ZONE TEMÁTICA POR CENÁRIO (fim do "círculo de linhas
-// amarelas" genérico): a parede materializa o HAZARD CANÔNICO de cada mundo
+// amarelas" genérico; supersede o estilo F61 mantido abaixo como metadado):
+// a parede materializa o HAZARD CANÔNICO de cada mundo
 // (README "Ontologia dos Mundos" / WORLDS_CANONICAL_SUMMARY):
 //   CIGKV     — PULSO KHAAOS  : campo de energia ciano (mesma assinatura dos
 //               domos de contenção #7fd8e8) com bandas de varredura
@@ -193,8 +194,23 @@ export function ringWallTheme(scenarioId) {
   return RING_WALL_THEMES[scenarioId] ?? RING_WALL_THEMES.CIGKV;
 }
 
+// Fase 61 — paleta/estilo por mundo (metadado de leitura; o shader roda no
+// tema canônico do Task 64). Mantido para compatibilidade de consumo.
+export const RING_WALL_STYLES = Object.freeze({
+  CIGKV: Object.freeze({ color: '#66e0ff', color2: '#8b5cf6', opacity: .8, grid: 1, streak: 0, crest: 0, bands: .12, flow: .22 }),
+  Barburhen: Object.freeze({ color: '#8aff3d', color2: '#3f6212', opacity: .8, grid: .25, streak: 1, crest: 0, bands: .2, flow: 1.15 }),
+  Priadus: Object.freeze({ color: '#4d7c2a', color2: '#1a2e12', opacity: .85, grid: 0, streak: 0, crest: 0, bands: .5, flow: .1 }),
+  Ckesalth: Object.freeze({ color: '#4a4238', color2: '#b45309', opacity: .9, grid: 0, streak: 0, crest: 0, bands: .62, flow: .14 }),
+  Arukheea: Object.freeze({ color: '#2a9d9f', color2: '#a5f3fc', opacity: .75, grid: 0, streak: 0, crest: 1, bands: .28, flow: .3 }),
+});
+export function ringWallStyle(scenarioId) {
+  const key = String(scenarioId ?? 'CIGKV');
+  return RING_WALL_STYLES[key] ?? RING_WALL_STYLES.CIGKV;
+}
+
 export function createRingWall(scenarioId = 'CIGKV') {
   const theme = ringWallTheme(scenarioId);
+  const st = ringWallStyle(scenarioId); // metadado F61 exposto em userData
   const group = new THREE.Group();
   const mk = (radius, opacity, colorKey) => {
     const geo = new THREE.CylinderGeometry(radius, radius, 34, 96, 1, true);
@@ -273,6 +289,8 @@ export function createRingWall(scenarioId = 'CIGKV') {
   group.add(inner, outer);
   group.userData.uniforms = [inner.material.uniforms, outer.material.uniforms];
   group.userData.ringWallTheme = theme;
+  group.userData.style = st; // F61 — metadado de estilo (leitura/debug)
+  group.userData.scenarioId = String(scenarioId);
   return group;
 }
 
