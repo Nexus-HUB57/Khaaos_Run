@@ -82,7 +82,11 @@ export function advanceGait(state, { x = 0, z = 0, dt = 1 / 60, teleportMps = TE
   const prev = state.phase;
   const snInst = speedNormFromMps(v);
   // EWMA alimenta a AMPLITUDE do rig (pose suave, sem estrobo)…
-  state.speed = ewma(state.speed, snInst, .18);
+  // Task 66 — alpha INDEPENDENTE DE FPS (1−e^(−k·dt), k≈12/s preserva o
+  // alpha .18 no render a 60 fps): em máquinas lentas a amplitude chegava
+  // ao regime em ~1 s+ (pernas mais lentas que o chão → patinação sentida
+  // na arrancada); agora converge em TEMPO fixo (~0,25 s) a qualquer fps.
+  state.speed = ewma(state.speed, snInst, 1 - Math.exp(-12 * dtn));
   // …mas a GEOMETRIA do passo usa a velocidade INSTANTÂNEA: strideLen(v) é
   // a definição de zero patinação — os pés varrem o chão exatamente à
   // velocidade do corpo, frame a frame (aceleração incluída), e a cadência
