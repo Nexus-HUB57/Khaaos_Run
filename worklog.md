@@ -1534,4 +1534,5 @@ Stage Summary:
 - Os 33 avatares oficiais agora jogam com o CORPO REAL seguido de ponta a ponta: arma soldada na mão com empunhadura de 2 mãos e postura de prontidão/ADS, capacete/colete/mochila acompanhando a animação nos bones, lean de curva e absorção de aterrissagem — fim da arma no nó desanexado e do gear invisível
 - A safe zone de cada um dos 5 mundos materiaiza o hazard canônico do README (chuva ácida, esporos, fumaça, tsunami, pulso Khaaos) — fim da parede genérica de linhas amarelas
 - Ponto de atenção registrado (não bloqueante): material base da arma quase-preto some contra colete escuro em contraluz — polish de material/rim-light sugerido para a próxima rodada do arsenal
+- MERGE RESOLVIDO em entrega: main avançou (F60 identidade humana + F61 zona segura canônica) durante o pipeline — humanoid3d/main3d/world3d/worklog integrados mantendo Task 64 (gear nos bones, 2 mãos, lean de curva, HUMANOID_LAND, ring wall temática RING_WALL_THEMES) e F60/F61 (dress/identity, lean-accel, cadência por sexo, safezone canônica; RING_WALL_STYLES preservado como metadado); suíte pós-merge 1219 testes / 0 fail; build OK (main-ZixPGd_0.js)
 ---
