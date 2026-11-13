@@ -2768,8 +2768,21 @@ Stage Summary (Task 65 — DEPLOY PRODUÇÃO):
 - VERIFICAÇÃO NO AR: gcodegames.top HTTP 200 servindo main-C1mnOO91.js; marcadores da Task 65 presentes no bundle (humanoid_body_ ✓, cosmeticAnchor ✓, gear nos bones ✓); GLBs dos avatares 200 (animated 4.8 MB)
 - E2E de plataforma: os avatares GLB em gcodegames.top jogam sincronizados — corpo de frente para a mira/movimento, gear/cosméticos/arma assentados (fim do avatar desconfigurado)
 
-Stage Summary (Task 66 — sincronia câmera×movimento):
-- Sonda E2E com input injetado (scripts/e2e_camera_move.mjs) mediu a causa: sprint recuava a câmera TPS 4.4→5.0 m + zoom-out FOV 62→68 a cada arrancada ("a câmera foge do avatar"); EWMA da amplitude da passada era por-FRAME (máquinas lentas patinavam ~1 s na arrancada)
-- Correção: sprint sem pullback/zoom-out (dist 4.4 e FOV 62 constantes em locomoção; ADS preservado) + EWMA por tempo (1−e^(−12·dt), preserva .18 a 60 fps)
-- E2E local e EM PRODUÇÃO: sprint curDist 4.4 / distCamEye 4.46 constante, corpo↔sim 0.00 m, amplitude convergida no 1º sample; suíte 1244/0 fail (+2 testes de convergência)
-- Deploy: candidate 20261113T194144Z no ar (main-dYG5kNlz.js), rollback 184733Z preservado, nginx -t/reload OK
+---
+Task ID: 66
+Agent: Main
+Task: Mobile direcional — look/aim touch (lookPad), strafe liberado, botão de sprint e joystick à prova de stuck (bug "só anda frente/trás")
+
+Work Log:
+- Pedido: "no mobile o avatar só anda para frente ou para trás, não existe comando direcional, revisar e corrigir". Sincronia prévia com origin/main (be72716, +436 commits de PRs #391-393 — fauna canônica/sincronia de avatares f65) e npm install (node_modules sem 'tweetnacl' quebrava 20 suítes de servidor — ambiente, não regressão)
+- Reprodução com Playwright (context isMobile+hasTouch, Pixel 7 390×844) contra o dist do main: strafe dx do joystick FUNCIONA no sim (Δx=+1.83/−2.44), mas o yaw do jogador fica CONGELADO em 0 — a única fonte de rotação é mousemove com pointerLocked (desktop). Sem look/aim touch o avatar nunca muda de direção: é isso que o jogador sente como "não existe comando direcional". Dois gaps adicionais confirmados no mesmo bloco: crash latente setPointerCapture NotFoundError no joystick (ponteiro encerrado/captura perdida) e NEHHUM botão de sprint no touch (touchState.sprint nunca setado)
+- CORREÇÃO hud3d.js: (1) novo lookPad — pointer events no lado direito da tela (62%), Δpixels → callback onLook com pointerId próprio (multi-touch seguro junto do joystick), setPointerCapture em try/catch; (2) joystick endurecido: _stickRect re-medido a cada toque (rotação de tela/barra do navegador), capture blindado, releaseAll em blur/visibilitychange (joystick "grudado" solta sozinho sem matar o segurar-parado legítimo — nada de timeout), joy.id zerado no end; (3) main3d.js: hud.onLook converte Δpixels em yaw/pitch com a MESMA convenção/sensibilidade/clamp do mousemove — incluindo razão de ADS (0.52×) e sensibilidade KR_GFX do painel de vídeo
+- CORREÇÃO index.html + styles3d.css: #lookPad (z-index 24, ABAIXO do joystick/botões z 25 e modais z 40+ — hit-test respeita quem está por cima; touch-action none) + botão » data-key="sprint" (hold, igual Free Fire) emparceirado com o ⤒
+- Teste novo test/mobile-directional-touch.test.js (4 casos): strafe dx puro nos dois lados sem vazamento de Z; dy puro com yaw π/2 avança NA DIREÇÃO DO OLHAR (−X mundo); diagonal normalizada compõe frente+strafe; MESMA entrada em 3 yaws (0/π/2/π) redireciona o avanço no eixo mundo — trava a gramática câmera-relativa que o lookPad passa a alimentar
+- E2E Playwright 8/8 PASS contra o build novo: lookPad presente+visível no touchLayer com sprint; partida ativa fora do trem; arrastar o pad gira o yaw (Δyaw=0.462 rad); após giro de ~1.15 rad o joystick "cima" avança no NOVO eixo (Δmundo dx=−2.23 dominante); strafe desliza (dx=−0.99/dz=2.23); botão sprint seta touchState.sprint e deslocamento sobe (4.33 m em 0.9 s); joystick+lookPad SIMULTÂNEOS (ids 31/32 ativos); ZERO pageerrors. Evidência visual: download/khaaos-mobile-controles-task61.png (avatar girado pelo pad, knob pressionado, » no grid)
+- npm test FULL: 1259 testes, 1246 pass / 0 fail / 13 skip (ajuste pós-mock: listeners globais via globalThis.addEventListener?./document.addEventListener?. — o mock DOM puro Node não tem window); 404s /poj/state+/profile são do pojstrip em hospedagem estática, pré-existentes e fora de escopo
+
+Stage Summary:
+- Mobile tem controle DIRECIONAL completo: arrastar no lado direito gira a câmera/mira (yaw+pitch com o mesmo feel do mouse), joystick move em 4 direções relativas ao olhar, strafe funciona, sprint dedicado — fim do "só frente/trás"
+- Multi-touch real (mover + olhar ao mesmo tempo) e joystick resiliente (rotação de tela re-medida, capture blindado, solta em blur/background) — offline e online (OnlineGame3D herda tudo)
+- Suíte 1246/0 verde + 4 regressões novas de movimento + E2E 8/8 com evidência; plataforma (Pages) atualiza no merge via pipeline game-pages.yml
