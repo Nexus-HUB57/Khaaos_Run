@@ -112,19 +112,24 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FOnPOIGenerated, const FString&, POIName);
  * vegetation, loot placement, and POI layout. Each of the 5 worlds
  * has unique biome configuration and generation rules.
  *
- * World Biome Map:
- *   CIGKV    → UrbanRuins (50p lobby, post-apoc city)
- *   Barburhen → TropicalForest (100p, dense jungle)
- *   Priadus  → VolcanicWastes (75p, lava fields)
- *   Ckesalth → FrozenTundra (60p, ice/snow)
- *   Arukheea → DesertCanyon (80p, sand/canyon)
+ * World Biome Map (cânon F59 — biomas conforme as descrições oficiais;
+ * tabela autoritativa portável em Game/WorldGen/KhaaosWorldCanon.h):
+ *   CIGKV    → UrbanRuins   (vila militar murada, 100p; variante lobby 50p)
+ *   Barburhen → UrbanRuins  (urbano pós-guerra, 100p — "carros abandonados")
+ *   Priadus  → TropicalForest (selva densa/pântanos, 100p — Floresta da Escuridão)
+ *   Ckesalth → DesertCanyon   (bacia de dunas, 100p — Deserto das Almas Esquecidas)
+ *   Arukheea → OceanArchipel  (ilha costeira, 100p — Ilha dos Gritos Calados)
+ *
+ * Vias (cânon F58): estradas/ruas asfaltadas APENAS em CIGKV e Barburhen.
+ * Priadus, Ckesalth e Arukheea NÃO possuem rede viária — o estágio Roads
+ * falha fechado (skip) para mundos não-urbanos.
  *
  * PCG Pipeline:
  *   1. Terrain: Height map from noise (Simplex + ridged)
  *   2. Biome: Apply biome rules (vegetation, water, obstacles)
  *   3. POIs: Place points of interest (villages, compounds, towers)
  *   4. Loot: Density-based placement (POI-heavy, route-sparse)
- *   5. Roads: Connect POIs with paths
+ *   5. Roads: Connect POIs with paths — APENAS mundos urbanos (F58)
  *   6. Water: Rivers, lakes, ocean edges
  *   7. Details: Grass, foliage, debris, ambient
  *
@@ -169,6 +174,13 @@ public:
         /** Get biome config for a specific world. */
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|WorldGen")
         FKhaaosBiomeConfig GetWorldPreset(const FString& WorldName) const;
+
+        /**
+         * Cânon F58: o mundo possui estradas/ruas canônicas?
+         * Verdadeiro SOMENTE para CIGKV e Barburhen (mundos urbanos).
+         */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|WorldGen")
+        bool HasCanonicalRoads(const FString& WorldName) const;
 
         /** Available world presets. */
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
@@ -226,8 +238,8 @@ private:
         /** Generate loot placement based on density map. */
         void GenerateLoot(const FKhaaosLootDensityMap& Density);
 
-        /** Generate roads connecting POIs. */
-        void GenerateRoads();
+        /** Generate roads connecting POIs — urban worlds only (cânon F58). */
+        void GenerateRoads(const FKhaaosBiomeConfig& Config);
 
         /** Generate water features. */
         void GenerateWater(const FKhaaosBiomeConfig& Config);
