@@ -1597,6 +1597,11 @@ export class Game3D {
         u.fogDensity.value = this.scene.fog.density ?? 0.0035;
       }
     }
+    // Task 65 — dedo-duro: fauna reage à PRESSÃO DO RING (1 − raio/170):
+    // conforme a zona fecha, ratos correm mais, enxames crescem e jacarés/
+    // tubarões patrulham mais rápido (visual; dano continua na sim/servidor).
+    this.scene.userData.fauna?.setAgitation?.(
+      Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170)));
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
@@ -2398,6 +2403,11 @@ export class Game3D {
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Task 65 — fauna canônica: patrulha dos jacarés/tubarões, bandas de
+    // gaivotas, corrida dos ratos e enxames do dedo-duro (mesma cadência dos
+    // animators do dressing/worldmarks)
+    const faunaAnim = this.scene.userData.fauna?.animators;
+    if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

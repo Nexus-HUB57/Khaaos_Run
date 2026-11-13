@@ -9,10 +9,19 @@ import {
 import { MatchRoom3D } from '../server/room3d.js';
 import { makeInviteCode, normalizeInviteCode, findRoomByCode, chooseRoom } from '../server/matchmaking.js';
 import { QUALITY_TIERS, resolveQuality, qualityTier } from '../src/game3d/quality3d.js';
+import { scheduleFor } from '../src/game3d/safeZone.js'; // Task 65 — cânon de zona
 import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const idle = (over = {}) => ({ ...DEFAULT_INPUT, ...over });
+
+// Task 65 — helpers de zona no CÂNON (mesmo espírito do knockPlayer da sim):
+// colapso determinístico = FASE DE TESTE com raio 0 (fere qualquer ator —
+// radius/raio passam a ser comandados pelo schedule safeZone.js);
+// restauração = schedule REAL do mundo (fase 0, raio 170, dps 1).
+const COLLAPSE_PHASE = (dps = 20) => [{ index: 4, name: 'Colapso (teste)', radius: 0, radiusFrom: 0, dps, startAt: 0, endAt: 1e9 }];
+const forceRingKill = (room, dps = 20) => { room.zone = COLLAPSE_PHASE(dps); room.zoneElapsed = 0; };
+const restoreZone = (room) => { room.zone = scheduleFor(room.scenario.id); room.zoneElapsed = 0; };
 
 // força um nocaute determinístico: anel pequeno + vida mínima
 function knockPlayer(sim, { x = 100, z = 0 } = {}) {
@@ -294,7 +303,7 @@ test('fase7 room: humano nocauteado recebe knocked e killfeed com marcador', () 
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const v = room.humans.get('p1');
   v.armor = 0; v.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   v.x = 20; v.z = 0;
   room.tick(1 / 20);
   assert.equal(v.knocked, true);
@@ -312,12 +321,12 @@ test('fase7 room: no modo solo, medkit próprio recupera o jogador caído antes 
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   p1.armor = 0; p1.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   p1.x = 20; p1.z = 0;
   room.tick(1 / 20);
   assert.equal(p1.knocked, true);
   assert.ok(p1.knockT > 0 && p1.knockT <= 7);
-  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  restoreZone(room);
   p1.inventory.medkit = 1;
   room.input('p1', { seq: 101, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
   room.tick(1 / 20);
@@ -334,11 +343,11 @@ test('fase7 room: aliado do squad usa medkit no companheiro caído', () => {
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   downed.x = 20; downed.z = 0;
   room.tick(1 / 20);
   assert.equal(downed.knocked, true);
-  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  restoreZone(room);
   downed.x = 60; downed.z = 60; medic.x = 61; medic.z = 60;
   medic.inventory.medkit = 1;
   room.input('p2', { seq: 102, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
@@ -356,11 +365,11 @@ test('fase7 room: aliado pode usar medkit no caído sem squad em modo solo', () 
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   downed.x = 20; downed.z = 0;
   room.tick(1 / 20);
   assert.equal(downed.knocked, true);
-  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  restoreZone(room);
   downed.x = 60; downed.z = 60; medic.x = 61; medic.z = 60;
   medic.inventory.medkit = 1;
   room.input('p2', { seq: 103, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
@@ -378,13 +387,13 @@ test('fase7 room: timeout confirma Game Over só da vítima e mantém a partida 
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.humans.get('p1');
   victim.armor = 0; victim.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   victim.x = 20; victim.z = 0;
   room.tick(1 / 20);
   assert.equal(victim.knocked, true);
   assert.ok(room.snapshot('p1').player.knockT > 0 && room.snapshot('p1').player.knockT <= 7);
   room.drainEvents('p1');
-  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  restoreZone(room);
   const matchState = room.state;
   for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / (1 / 20)) + 2 && victim.alive; i++) room.tick(1 / 20);
   assert.equal(victim.alive, false);
@@ -403,11 +412,11 @@ test('fase7 room: revive por input interagir canaliza e restaura vida', () => {
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const v1 = room.humans.get('p1'), v2 = room.humans.get('p2');
   v1.armor = 0; v1.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   v1.x = 20; v1.z = 0;
   room.tick(1 / 20);
   assert.equal(v1.knocked, true);
-  room.ring.radius = 170; room.ring.pulse = 0;
+  restoreZone(room);
   v1.x = 60; v1.z = 60; v2.x = 61.5; v2.z = 60;
   let seq = 1000;
   let done = false;
@@ -430,11 +439,11 @@ test('fase7 room: aliado pode canalizar revive em sala solo sem squad', () => {
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   downed.x = 20; downed.z = 0;
   room.tick(1 / 20);
   assert.equal(downed.knocked, true);
-  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  restoreZone(room);
   downed.x = 60; downed.z = 60; medic.x = 61.5; medic.z = 60;
   let seq = 2000;
   const frames = Math.ceil((DBNO.reviveSeconds + 1) * 30);
@@ -476,11 +485,11 @@ test('fase7 room: caído não atira mesmo com input fire', () => {
   disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   p1.armor = 0; p1.life = 0.001;
-  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   p1.x = 20; p1.z = 0;
   room.tick(1 / 20);
   assert.equal(p1.knocked, true);
-  room.ring.radius = 170; room.ring.pulse = 0;
+  restoreZone(room);
   let seq = 3000;
   let shots = 0;
   for (let i = 0; i < 40; i++) {
