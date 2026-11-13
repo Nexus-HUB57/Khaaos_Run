@@ -179,11 +179,16 @@ async function clipsForAvatar(avatarId) {
     const asset = await loadAvatarGlb(avatarId);
     if (!asset?.root) return null;
     let clips = asset.clips ?? [];
+    let clipRoot = asset.root;                 // rig que AUTOROU os clips
     if (!clips.length && avatarId !== HUMANOID_CLIP_SOURCE) {
       const src = await loadAvatarGlb(HUMANOID_CLIP_SOURCE); // retarget por NOME
-      if (src?.clips?.length) clips = src.clips;
+      if (src?.clips?.length) { clips = src.clips; clipRoot = src.root; }
     }
-    const byName = (rx) => clips.find((c) => c.name.toLowerCase() === rx) ?? null;
+    const rest = hipsRestTranslation(clipRoot); // Task 65 — translação de bind p/ in-place
+    const byName = (rx) => {
+      const c = clips.find((c) => c.name.toLowerCase() === rx) ?? null;
+      return c ? stripClipRootMotion(c, rest) : null;
+    };
     return Object.freeze({
       idle: byName('idle'),
       walk: byName('walk'),
@@ -212,10 +217,183 @@ export function stripMixamorigPrefix(root) {
   return root;
 }
 
+// ----------------------------------------------------------------------------------
+// Task 65 — CALIBRAÇÃO CANÔNICA (orientação, bind-frame e root motion)
+// ----------------------------------------------------------------------------------
+// 1. ORIENTAÇÃO: rigs Tripo/Mixamo exportados olham +X no espaço do clone
+//    (medido: T-pose abre os braços ao longo de ±Z → frente = ±X; face
+//    confirmada em −X pós-flip π → original +X); o jogo inteiro assume modelo
+//    olhando −Z (Task 62). O clone nasce girado π/2 num PIVÔ limpo
+//    (rotation.y = 0 gerido pelo animateHumanoid) — quem "vê" o corpo (arma,
+//    câmera TPS, poses em espaço do pivô) herda a convenção correta sem
+//    recalcular constantes.
+export const HUMANOID_MODEL_YAW = Math.PI / 2;
+
+// 2. FRAME DE BIND: eixos LOCAIS dos bones Tripo são não-padronizados (medido:
+//    coluna yawada ~90°, braços/pernas ~175° vs eixos canônicos Mixamo). Captura
+//    o frame MUNDIAL de cada bone no espaço do PIVÔ (bind pose, pós-flip) — as
+//    poses aditivas passam a ser escritas em SEMÂNTICA DO CORPO (pitch de mira,
+//    flexão de joelho) e convertidas ao espaço do bone por conjugação.
+function captureBindFrames(root, bones) {
+  root.updateMatrixWorld(true);
+  const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const bind = { q: {}, p: {}, l: {}, s: {} };
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
+  for (const [k, bone] of Object.entries(bones)) {
+    bone.updateWorldMatrix(true, false);
+    m.multiplyMatrices(rootInv, bone.matrixWorld);
+    m.decompose(pos, q, scl);
+    bind.q[k] = q.clone();
+    bind.p[k] = pos.clone();
+    bind.l[k] = bone.quaternion.clone(); // quat LOCAL no bind (fórmulas exatas)
+    // escala ACUMULADA do bone (o normalizeAvatarScale escala o clone inteiro —
+    // filhos do bone herdam ×1.8: gear/cosméticos/arma nasciam GIGANTES e Δ de
+    // posição (agachamento) amplificava — tudo que entra no bone divide por s)
+    bind.s[k] = Math.max(1e-6, Math.abs(scl.x));
+  }
+  return bind;
+}
+
+// Eixos canônicos (espaço do pivô: −Z frente, +Y cima).
+const ROOT_AXES = Object.freeze({
+  x: Object.freeze(new THREE.Vector3(1, 0, 0)),
+  y: Object.freeze(new THREE.Vector3(0, 1, 0)),
+  z: Object.freeze(new THREE.Vector3(0, 0, 1)),
+});
+const _tmpV = new THREE.Vector3();
+
+/** Δ de rotação expresso no CORPO (pivô: x=pitch, y=yaw, z=roll) → quaternion
+ * NO ESPAÇO DO BONE para PREMULTIPLICAR após o mixer. Fórmula exata para
+ * QUALQUER pose corrente do clip: C = bindL·bindQ⁻¹·Δ·bindQ·bindL⁻¹ — o Δ
+ * mundial resultante é exatamente a rotação pedida no corpo. Sem frame de
+ * bind (corpos fake de teste) → multiplicação canônica direta. */
+export function addRootRot(entry, key, axis, angle) {
+  const b = entry?.bones?.[key];
+  if (!b?.quaternion || !Number.isFinite(angle) || !angle) return null;
+  const qDes = new THREE.Quaternion().setFromAxisAngle(ROOT_AXES[axis] ?? ROOT_AXES.x, angle);
+  const bindQ = entry.bind?.q?.[key];
+  const bindL = entry.bind?.l?.[key];
+  if (!bindQ || !bindL) return qDes;
+  return bindL.clone().multiply(bindQ.clone().invert()).multiply(qDes).multiply(bindQ).multiply(bindL.clone().invert());
+}
+
+/** Aplica Δ de rotação em semântica do corpo (aditivo sobre o pose do mixer). */
+export function applyAddRot(entry, key, axis, angle) {
+  const q = addRootRot(entry, key, axis, angle);
+  if (q) entry.bones[key].quaternion.premultiply(q);
+}
+
+/** Pose ABSOLUTA em semântica do corpo (Euler no espaço do pivô): após a
+ * aplicação, a orientação MUNDIAL do bone é exatamente o Euler pedido
+ * (local = bindL·bindQ⁻¹·desEjo). Substitui o que o clip pôs no bone — mesma
+ * semântica dos sets absolutos das poses knocked/air/dead do rig procedural. */
+export function applySetRot(entry, key, rx = 0, ry = 0, rz = 0) {
+  const b = entry?.bones?.[key];
+  if (!b?.quaternion) return;
+  const qDes = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz));
+  const bindQ = entry.bind?.q?.[key];
+  const bindL = entry.bind?.l?.[key];
+  b.quaternion.copy(bindQ && bindL
+    ? bindL.clone().multiply(bindQ.clone().invert()).multiply(qDes)
+    : qDes);
+}
+
+/** Δ de POSIÇÃO em metros do corpo (pivô) → Δ no espaço local do bone
+ * (compensando a escala acumulada do bone — Task 65). */
+export function addRootVec(entry, key, dx, dy, dz) {
+  const bindQ = entry.bind?.q?.[key];
+  const bindS = entry.bind?.s?.[key] ?? 1;
+  const v = _tmpV.set(dx / bindS, dy / bindS, dz / bindS);
+  if (!bindQ) return v.clone();
+  return v.applyQuaternion(bindQ.clone().invert()).clone();
+}
+
+/** Ancora um Object3D num bone com POSIÇÃO/ORIENTAÇÃO/ESCALA em metros do
+ * corpo (espaço do pivô, −Z frente): gear e cosméticos seguem o bone animado
+ * mas nascem no lugar certo e no tamanho certo INDEPENDENTE dos eixos e da
+ * escala acumulada do rig. `pos` é ABSOLUTA no corpo por padrão; `rel: true`
+ * interpreta pos como OFFSET do bind do bone (segue o drift do esqueleto —
+ * cabeça/colete/mochila). `scale` multiplica o tamanho autoral.
+ * Retorna true quando aplicado (bone/frame existentes). */
+export function placeOnBone(entry, key, obj, { pos = [0, 0, 0], quat = null, scale = 1, rel = false } = {}) {
+  const b = entry?.bones?.[key];
+  if (!b || !obj?.isObject3D) return false;
+  const bindQ = entry.bind?.q?.[key];
+  const bindP = entry.bind?.p?.[key];
+  const bindS = entry.bind?.s?.[key] ?? 1;
+  if (!bindQ || !bindP) return false;
+  if (rel) _tmpV.set(bindP.x + (pos[0] ?? 0), bindP.y + (pos[1] ?? 0), bindP.z + (pos[2] ?? 0));
+  else _tmpV.set(pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0);
+  _tmpV.sub(bindP);
+  obj.position.copy(_tmpV.divideScalar(bindS).applyQuaternion(bindQ.clone().invert()));
+  obj.quaternion.copy(bindQ.clone().invert());
+  if (quat) obj.quaternion.multiply(quat);
+  obj.scale.divideScalar(bindS).multiplyScalar(scale); // tamanho autoral em metros
+  return true;
+}
+
+// 3. ROOT MOTION: os clips walk/run/shoot do lote Tripo vêm com o deslocamento
+//    do autor EMBUTIDO na translação de Hips (medido: ~2.9 m por ciclo de run
+//    num eixo lateral do corpo) — reproduzidos fase-travados, o corpo desliza
+//    e "teleporta" no wrap do clip. A conversão in-place zera o deslocamento
+//    líquido: Hips volta à translação de BIND (constante), mantendo rotações.
+export function hipsRestTranslation(assetRoot) {
+  const hips = boneMap(assetRoot)?.hips;
+  return hips?.position
+    ? [hips.position.x, hips.position.y, hips.position.z]
+    : [0, 0, .5];
+}
+export function stripClipRootMotion(clip, restTranslation) {
+  if (!clip || !restTranslation) return clip;
+  let touched = false;
+  for (let i = 0; i < clip.tracks.length; i++) {
+    const t = clip.tracks[i];
+    if (!/\.position$/.test(t.name)) continue;
+    if (!/^mixamorig:?Hips\.position$|^Hips\.position$/i.test(t.name)) continue;
+    // deriva líquida POR COMPONENTE (max−min de cada eixo) acima do ruído de
+    // bob → root motion (misturar componentes daria falso positivo no idle)
+    let range = 0;
+    for (let c = 0; c < 3; c++) {
+      let mn = Infinity, mx = -Infinity;
+      for (let k = 0; k < t.times.length; k++) {
+        const v = t.values[k * 3 + c];
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+      }
+      range = Math.max(range, mx - mn);
+    }
+    if (range < .25) continue;                 // bob legítimo (idle) — mantém
+    const [x, y, z] = restTranslation;
+    const times = [0, t.times[t.times.length - 1] || clip.duration || 1];
+    clip.tracks[i] = new THREE.VectorKeyframeTrack(t.name, times, [x, y, z, x, y, z]);
+    touched = true;
+  }
+  return touched ? clip : clip;
+}
+
 /**
  * Cria o corpo humanoide de um ator. Retorna null em QUALQUER falha
  * (id inválido, rede, rig sem hips, tier estático) — o chamador mantém o
  * procedural (mesma doutrina hero3d/avatars3d).
+ *
+ * Task 65 — SINCRONIA ESTRUTURAL (3 correções canônicas):
+ *   1. ORIENTAÇÃO: os rigs Tripo olham +Z no espaço local do clone, mas o
+ *      jogo assume modelo olhando −Z (convenção do procedural, Task 62). O
+ *      clone entra GIRADO π num PIVÔ (entry.root) — o pivô fica limpo
+ *      (rotation.y = 0 gerido pelo animateHumanoid) e todo o espaço-local do
+ *      pivô passa a valer a convenção −Z: poseWeaponReady, lean de curva e
+ *      morte herdam os sinais corretos sem recalcular constantes.
+ *   2. FRAME DE BIND: os eixos LOCAIS dos bones dos rigs Tripo são
+ *      não-padronizados (coluna yawada ~90°, braços ~175° vs Mixamo) — poses
+ *      aditivas em rotação de Euler bone-local giravam o tronco em vez de
+ *      inclinar. O frame MUNDIAL de bind de cada bone (no espaço do pivô) é
+ *      capturado aqui e as poses passam por conjugação (bind⁻¹·Δ·bind),
+ *      devolvendo semântica física real: pitch de mira inclina, joelho dobra.
+ *   3. GEAR/COSMÉTICOS: same frame resolve o encaixe por ROOT-space (ver
+ *      placeOnBone/syncHumanoidGear/humanoidCosmetics3d).
  */
 export async function createHumanoidBody({ avatarId } = {}) {
   const spec = avatarById(avatarId);
@@ -223,25 +401,31 @@ export async function createHumanoidBody({ avatarId } = {}) {
   const asset = await loadAvatarGlb(avatarId);
   if (!asset?.root) return null;
   if (!boneMap(asset.root)?.hips) return null; // rig inesperado → procedural
-  const root = skeletonClone(asset.root); // clone skinned correto (bones próprios)
-  root.name = `humanoid_${avatarId}`;
-  stripMixamorigPrefix(root);                  // binding dos clips por NOME (see acima)
-  normalizeAvatarScale(root);
-  fitAvatarToGround(root);
-  root.traverse((n) => {
+  const clone = skeletonClone(asset.root); // clone skinned correto (bones próprios)
+  clone.name = `humanoid_body_${avatarId}`;
+  stripMixamorigPrefix(clone);                 // binding dos clips por NOME (see acima)
+  clone.rotation.y = HUMANOID_MODEL_YAW;       // rigs Tripo olham +Z → pivô expõe −Z
+  normalizeAvatarScale(clone);
+  fitAvatarToGround(clone);
+  clone.traverse((n) => {
     if (n.isMesh || n.isSkinnedMesh) { n.castShadow = true; n.receiveShadow = true; }
     if (n.isObject3D) n.userData.avatarAsset = avatarId; // exclusão das rotinas de ocultação
   });
+  // pivô limpo: rotation.y = 0 (animateHumanoid gerencia x/z); o π vive no clone
+  const root = new THREE.Group();
+  root.name = `humanoid_${avatarId}`;
+  root.add(clone);
   // Task 64 — BONES DO CLONE (correção estrutural): boneMap(asset.root)
   // devolvia os nós do ASSET EM CACHE — desanexados da cena. Poses de mira/
   // agachamento, solda da arma (weldWeaponToHand) e gear (syncHumanoidGear)
   // mutavam nós INVISÍVEIS enquanto o clone animado seguia em jogo: arma
   // "flutuando", gear sumido, mira sem resposta do corpo. O boneMap agora
   // atravessa o CLONE que realmente entra na cena.
-  const bones = boneMap(root);
+  const bones = boneMap(clone);
   if (!bones?.hips) return null;               // clone sem rig → procedural
+  const bind = captureBindFrames(root, bones); // Task 65 — frames de bind (espaço do pivô)
   const clips = await clipsForAvatar(avatarId);
-  const mixer = new THREE.AnimationMixer(root);
+  const mixer = new THREE.AnimationMixer(clone);
   const mk = (clip) => {
     if (!clip) return null;
     const a = mixer.clipAction(clip);
@@ -258,10 +442,12 @@ export async function createHumanoidBody({ avatarId } = {}) {
   return {
     kind: 'humanoid',
     avatarId,
-    root,
+    root,      // pivô (rotation.y limpo; convenção −Z no espaço-local)
+    body: clone, // clone girado π (mesh+skeleton) — alvo do mixer
     mixer,
     actions,
     bones,
+    bind,      // Task 65 — frames de bind por bone (espaço do pivô)
     rest: captureRest(bones),
     w: { idle: 1, walk: 0, run: 0 },
     deadPose: false,
@@ -275,6 +461,10 @@ export async function createHumanoidBody({ avatarId } = {}) {
  * Prende o corpo humanoide no operativo (playerOp ou LOD de bot):
  * oculta a MALHA procedural (arma/sombra/nameTag continuam vivas), adiciona o
  * GLB ao grupo e guarda o weaponRig p/ solda por frame. Retorna o entry.
+ * Task 65 — o skip de gear agora cobre a SUBÁRVORE inteira de cada grupo
+ * `gear_*`: o traverse antigo pulava só o NÓ do grupo e escondia as MALHAS
+ * FILHAS — com gear pré-existente (oficiais nascem equipados), syncHumanoidGear
+ * re-ancorava um grupo visível com filhos invisíveis (equipamento apagado).
  */
 export function attachHumanoidToOperative(op, body) {
   if (!op?.group || !body?.root) return null;
@@ -282,12 +472,17 @@ export function attachHumanoidToOperative(op, body) {
   const wr = op.group.userData?.weaponRig ?? op.parts?.weaponRig;
   if (wr?.group) wr.group.traverse((o) => keep.add(o));
   if (op.parts?.shadow) op.parts.shadow.traverse((o) => keep.add(o));
+  // subárvores de gear (F28): nada dentro delas pode dormir — syncHumanoidGear
+  // re-ancora nos bones do corpo real e religa a visibilidade.
+  const gearNodes = new Set();
+  op.group.traverse((o) => {
+    if (typeof o.name === 'string' && o.name.startsWith('gear_')) {
+      o.traverse((c) => gearNodes.add(c));
+    }
+  });
   op.group.traverse((o) => {
     if (o === body.root || keep.has(o) || o.userData?.avatarAsset) return;
-    // Task 64 — GEAR NÃO DORME: capacete/colete/mochila (grupos `gear_*` do
-    // F28) são re-ancorados nos bones do corpo real por syncHumanoidGear —
-    // esconder aqui apagaria o equipamento do jogador/bot com corpo GLB.
-    if (typeof o.name === 'string' && o.name.startsWith('gear_')) return;
+    if (gearNodes.has(o)) return;            // Task 65 — gear NÃO DORME (subárvore)
     if (o.isMesh || o.isSkinnedMesh) o.visible = false; // só a MALHA dorme (pivôs face etc. ok)
   });
   op.group.add(body.root);
@@ -296,63 +491,70 @@ export function attachHumanoidToOperative(op, body) {
   return body;
 }
 
-// Poses procedurais (aplicadas APÓS mixer.update — aditivas sobre o clip):
+// Poses procedurais (aplicadas APÓS mixer.update — aditivas sobre o clip).
+// Task 65 — TODAS escritas em SEMÂNTICA DO CORPO (espaço do pivô: −Z frente,
+// +Y cima) e convertidas ao eixo real do bone por conjugação (bind⁻¹·Δ·bind) —
+// nos rigs Tripo os eixos locais dos bones NÃO são canônicos (coluna ~90°,
+// braços ~175°): pitch de mira em Euler bone-local girava o tronco, joelho
+// "dobra" torcia a perna. Sinais canônicos:
+//   pitch +  = frente (−Z) sobe (olhar/cano sobe) · knee − = pé vai para +Z
+//   roll z   = spread de braços · yaw y = virada de cabeça/corpo
 function poseAim(entry, pitch, ads) {
-  const b = entry.bones;
   const p = Math.max(-1.2, Math.min(1.2, pitch || 0));
-  if (b.spine1) b.spine1.rotation.x += p * .28;
-  if (b.spine2) b.spine2.rotation.x += p * .34;
-  if (b.head) b.head.rotation.x += p * .22;       // olhar acompanha a mira
+  applyAddRot(entry, 'spine1', 'x', p * .28);
+  applyAddRot(entry, 'spine2', 'x', p * .34);
+  applyAddRot(entry, 'head', 'x', p * .22);       // olhar acompanha a mira
   if (ads) {                                       // recuo de ombro da mira
-    if (b.rightarm) b.rightarm.rotation.z -= .04;
-    if (b.leftarm) b.leftarm.rotation.z += .04;
+    applyAddRot(entry, 'rightarm', 'z', -.04);
+    applyAddRot(entry, 'leftarm', 'z', .04);
   }
 }
 function poseCrouch(entry) {
-  const b = entry.bones;
-  if (b.hips?.position) b.hips.position.y -= .32;  // agachamento real do rig
-  if (b.spine2) b.spine2.rotation.x += .28;
-  if (b.leftleg) b.leftleg.rotation.x += .5;
-  if (b.rightleg) b.rightleg.rotation.x += .5;
-  if (b.leftfoot) b.leftfoot.rotation.x -= .18;
-  if (b.rightfoot) b.rightfoot.rotation.x -= .18;
+  const hips = entry.bones.hips;
+  if (hips?.position) {                            // agachamento real do rig
+    const d = addRootVec(entry, 'hips', 0, -.32, 0);
+    hips.position.add(d);
+  }
+  applyAddRot(entry, 'spine2', 'x', -.28);         // tronco adianta (−Z desce)
+  applyAddRot(entry, 'leftleg', 'x', -.5);         // joelhos dobram (pé → +Z)
+  applyAddRot(entry, 'rightleg', 'x', -.5);
+  applyAddRot(entry, 'leftfoot', 'x', .18);        // sola compensa no chão
+  applyAddRot(entry, 'rightfoot', 'x', .18);
 }
-function poseKnocked(entry, t) {                   // deitado arrastando (DBNO)
-  const b = entry.bones;
+function poseKnocked(entry, t) {                   // deitado de costas arrastando (DBNO)
   const crawl = Math.sin(t * 5.2) * .5;
-  entry.root.rotation.x = -1.15;                    // deita de costas (topo p/ +z)
-  if (b.hips?.position) b.hips.position.y += .1;
-  if (b.rightarm) b.rightarm.rotation.x = 1.1 + crawl * .3;
-  if (b.leftarm) b.leftarm.rotation.x = 1.1 - crawl * .3;
-  if (b.rightforearm) b.rightforearm.rotation.x = .5;
-  if (b.leftforearm) b.leftforearm.rotation.x = .5;
-  if (b.rightupleg) b.rightupleg.rotation.x = .55;
-  if (b.leftupleg) b.leftupleg.rotation.x = .55 - crawl * .12;
-  if (b.rightleg) b.rightleg.rotation.x = .5;
-  if (b.leftleg) b.leftleg.rotation.x = .5;
-  if (b.head) b.head.rotation.y = Math.sin(t * 1.3) * .18;
+  entry.root.rotation.x = 1.15;                     // costas no chão (front −Z sobe)
+  const hips = entry.bones.hips;
+  if (hips?.position) hips.position.add(addRootVec(entry, 'hips', 0, .1, 0));
+  applySetRot(entry, 'rightarm', 1.1 + crawl * .3, 0, 0);
+  applySetRot(entry, 'leftarm', 1.1 - crawl * .3, 0, 0);
+  applySetRot(entry, 'rightforearm', .5, 0, 0);
+  applySetRot(entry, 'leftforearm', .5, 0, 0);
+  applySetRot(entry, 'rightupleg', .55, 0, 0);
+  applySetRot(entry, 'leftupleg', .55 - crawl * .12, 0, 0);
+  applySetRot(entry, 'rightleg', .5, 0, 0);
+  applySetRot(entry, 'leftleg', .5, 0, 0);
+  applySetRot(entry, 'head', 0, Math.sin(t * 1.3) * .18, 0);
 }
 function poseAir(entry, t) {                       // queda livre: espalhado
-  const b = entry.bones;
   const flap = Math.sin(t * 5) * .35;
-  if (b.rightarm) b.rightarm.rotation.z = -1.05 - flap * .3;
-  if (b.leftarm) b.leftarm.rotation.z = 1.05 + flap * .3;
-  if (b.rightupleg) b.rightupleg.rotation.x = .5;
-  if (b.leftupleg) b.leftupleg.rotation.x = .35;
-  if (b.rightleg) b.rightleg.rotation.x = .45;
-  if (b.leftleg) b.leftleg.rotation.x = .3;
+  applySetRot(entry, 'rightarm', 0, 0, -1.05 - flap * .3);
+  applySetRot(entry, 'leftarm', 0, 0, 1.05 + flap * .3);
+  applySetRot(entry, 'rightupleg', .5, 0, 0);
+  applySetRot(entry, 'leftupleg', .35, 0, 0);
+  applySetRot(entry, 'rightleg', .45, 0, 0);
+  applySetRot(entry, 'leftleg', .3, 0, 0);
 }
 function poseDeadRelax(entry) {                    // caído: membros abrem e assentam
-  const b = entry.bones;
-  if (b.rightarm) b.rightarm.rotation.z = -.55;
-  if (b.leftarm) b.leftarm.rotation.z = .55;
-  if (b.rightforearm) b.rightforearm.rotation.x = .35;
-  if (b.leftforearm) b.leftforearm.rotation.x = .35;
-  if (b.rightupleg) b.rightupleg.rotation.x = .18;
-  if (b.leftupleg) b.leftupleg.rotation.x = .12;
-  if (b.rightleg) b.rightleg.rotation.x = .22;
-  if (b.leftleg) b.leftleg.rotation.x = .1;
-  if (b.head) b.head.rotation.z = .18;
+  applySetRot(entry, 'rightarm', 0, 0, -.55);
+  applySetRot(entry, 'leftarm', 0, 0, .55);
+  applySetRot(entry, 'rightforearm', .35, 0, 0);
+  applySetRot(entry, 'leftforearm', .35, 0, 0);
+  applySetRot(entry, 'rightupleg', .18, 0, 0);
+  applySetRot(entry, 'leftupleg', .12, 0, 0);
+  applySetRot(entry, 'rightleg', .22, 0, 0);
+  applySetRot(entry, 'leftleg', .1, 0, 0);
+  applySetRot(entry, 'head', 0, 0, .18);
 }
 
 // peso EWMA do frame — suaviza o blend e o corte de estado
@@ -368,18 +570,20 @@ function blendWeights(entry, target) {
 /**
  * Anima o corpo humanoide — MESMO contrato de opts de animateOperative:
  * { t, speedNorm, phase, pitch, dead, ads, crouch, knocked, air } + Fase 60:
- * { accel, yaw, armed, sex, onLand }.
+ * { accel, yaw, armed, sex, onLand } + Task 65: { dt } (dt REAL do frame — o
+ * mixer fixo 1/60 fazia o idle correr 2× a 120 fps e rastejar a 30 fps).
  * Locomoção é fase-travada (gait.js); idle anda no relógio; mira/crouch/
- * knocked/air são poses aditivas pós-mixer; morte congela e relaxa.
- * Fase 60: lean por aceleração no tronco, cabeça segue a mira em YAW,
- * arma em low-ready quando armada (sem ADS), squash de aterrissagem e
- * cadência por sexo. Retorna o entry (encadeável).
+ * knocked/air são poses aditivas pós-mixer (em SEMÂNTICA DO CORPO, Task 65);
+ * morte congela e relaxa. Fase 60: lean por aceleração no tronco, cabeça
+ * segue a mira em YAW, arma em low-ready quando armada (sem ADS), squash de
+ * aterrissagem e cadência por sexo. Retorna o entry (encadeável).
  */
 export function animateHumanoid(entry, {
   t = 0, speedNorm = 0, phase = null, pitch = 0,
   dead = false, ads = false, crouch = false, knocked = false, air = 0,
   leanVel = 0,
   accel = 0, yaw = 0, armed = false, sex = null, onLand = false,
+  dt = 1 / 60,
 } = {}) {
   if (!entry?.mixer) return entry;
   if (dead) {
@@ -397,6 +601,7 @@ export function animateHumanoid(entry, {
       if (a) { a.enabled = true; a.paused = true; a.setEffectiveWeight(0); a.play(); }
     }
     entry.root.rotation.x = 0;
+    entry.root.rotation.z = 0;
   }
   const sn = Math.max(0, Math.min(1.25, Number.isFinite(speedNorm) ? speedNorm : 0));
   const PH = Number.isFinite(phase) ? phase : t * 8.6;
@@ -422,7 +627,8 @@ export function animateHumanoid(entry, {
     idle.paused = false;                    // idle é o único no relógio (respiração)
     idle.setEffectiveWeight(entry.w.idle);
   }
-  entry.mixer.update(special ? 0 : Math.max(0, 1 / 60));
+  const dtMixer = Number.isFinite(dt) ? Math.max(0, Math.min(.25, dt)) : 1 / 60;
+  entry.mixer.update(special ? 0 : dtMixer);
   entry.root.rotation.x = 0;               // limpa pose do frame anterior
   entry.root.rotation.z = 0;
   // ---- Task 64 — extras humanos: ABSORÇÃO de aterrissagem + LEAN de curva ----
@@ -437,10 +643,10 @@ export function animateHumanoid(entry, {
     if (ex.landT > 0) {
       ex.landT = Math.max(0, ex.landT - dtF);
       const k = ex.landT / HUMANOID_LAND.seconds;    // 1 no impacto → 0
-      if (b.hips?.position) b.hips.position.y -= HUMANOID_LAND.hipDrop * k;
-      if (b.leftleg) b.leftleg.rotation.x += HUMANOID_LAND.knee * k;
-      if (b.rightleg) b.rightleg.rotation.x += HUMANOID_LAND.knee * k;
-      if (b.spine2) b.spine2.rotation.x += HUMANOID_LAND.spine * k;
+      if (b.hips?.position) b.hips.position.add(addRootVec(entry, 'hips', 0, -HUMANOID_LAND.hipDrop * k, 0));
+      applyAddRot(entry, 'leftleg', 'x', -HUMANOID_LAND.knee * k);   // joelho absorve (pé → +Z)
+      applyAddRot(entry, 'rightleg', 'x', -HUMANOID_LAND.knee * k);
+      applyAddRot(entry, 'spine2', 'x', -HUMANOID_LAND.spine * k);   // tronco adianta
     }
     // banking para dentro da curva (leanVel = rad/s do yaw, EWMA do chamador);
     // só com velocidade — parado o corpo permanece ereto.
@@ -459,20 +665,20 @@ export function animateHumanoid(entry, {
   if (onLand && entry.landT <= 0) entry.landT = .32;   // borda de aterrissagem
   if (entry.landT > 0) {                               // squash de pouso (decai)
     const k = Math.max(0, Math.min(1, 1 - entry.landT / .32));
-    if (entry.bones.hips?.position) entry.bones.hips.position.y -= .09 * Math.sin(Math.PI * k);
-    entry.landT = Math.max(0, entry.landT - 1 / 60);
+    if (entry.bones.hips?.position) entry.bones.hips.position.add(addRootVec(entry, 'hips', 0, -.09 * Math.sin(Math.PI * k), 0));
+    entry.landT = Math.max(0, entry.landT - dtMixer);
   }
   const lean = leanPitch(accel, sn);                   // tronco responde à aceleração
   if (lean) {
-    if (entry.bones.spine1) entry.bones.spine1.rotation.x += lean * .7;
-    if (entry.bones.spine2) entry.bones.spine2.rotation.x += lean * .5;
-    if (entry.bones.head) entry.bones.head.rotation.x -= lean * .4; // olhos compensam
+    applyAddRot(entry, 'spine1', 'x', -lean * .7);     // arrancada adianta o tronco
+    applyAddRot(entry, 'spine2', 'x', -lean * .5);
+    applyAddRot(entry, 'head', 'x', lean * .4);        // olhos compensam
   }
-  const hy = headYawClamp(yaw);                        // cabeça acompanha a mira em Y
-  if (hy && entry.bones.head) entry.bones.head.rotation.y += hy;
+  const hy = headYawClamp(yaw);                        // cabeça acompanha a mira em YAW
+  if (hy) applyAddRot(entry, 'head', 'y', hy);
   if (armed && !ads) {                                 // low-ready humano (arma baixa, pronta)
-    if (entry.bones.rightforearm) entry.bones.rightforearm.rotation.x = Math.min(1.5, (entry.bones.rightforearm.rotation.x || 0) + .42);
-    if (entry.bones.leftforearm) entry.bones.leftforearm.rotation.x = Math.min(1.5, (entry.bones.leftforearm.rotation.x || 0) + .3);
+    applyAddRot(entry, 'rightforearm', 'x', .42);      // antebraço dobra p/ frente
+    applyAddRot(entry, 'leftforearm', 'x', .3);
   }
   if (crouch) poseCrouch(entry);
   return entry;
@@ -496,10 +702,16 @@ export function weldWeaponToHand(entry, weaponRig = entry?.weaponRig) {
     entry.weaponRig = weaponRig;
     const g = weaponRig.group;
     if (g.parent !== hand) hand.add(g);          // arma vive NA MÃO do corpo real
+    // Task 65 — a escala ACUMULADA do bone (normalizeAvatarScale escala o
+    // clone ×1.8) inflava a arma — a fábrica de armas entrega em metros do
+    // corpo; compensa escala E offset de grip (que também é ampliado).
+    hand.getWorldScale(_tmpV);
+    const s = Math.max(1e-6, Math.abs(_tmpV.x));
     // transform local fixa no espaço da MÃO (a animação do bone carrega a arma;
     // a calibração HUMANOID_GRIP alinha cano à mão — ajuste visual centralizado)
-    g.position.set(HUMANOID_GRIP.pos[0], HUMANOID_GRIP.pos[1], HUMANOID_GRIP.pos[2]);
+    g.position.set(HUMANOID_GRIP.pos[0] / s, HUMANOID_GRIP.pos[1] / s, HUMANOID_GRIP.pos[2] / s);
     g.quaternion.setFromEuler(new THREE.Euler(HUMANOID_GRIP.rot[0], HUMANOID_GRIP.rot[1], HUMANOID_GRIP.rot[2]));
+    g.scale.setScalar(1 / s);
     return true;
   } catch { return false; }
 }
@@ -521,9 +733,13 @@ export const HUMANOID_GRIP = Object.freeze({
 // grupos `gear_*` nos BONES do rig real (mesh acompanha a animação) com
 // calibração única por peça. Idempotente e barato: só move quando o pai mudou.
 const HUMANOID_GEAR_FIT = Object.freeze({
-  helmet: Object.freeze({ bone: 'head', pos: Object.freeze([0, .055, .012]), rot: Object.freeze([0, 0, 0]), scale: .96 }),
-  vest:   Object.freeze({ bone: 'spine2', pos: Object.freeze([0, .04, .012]), rot: Object.freeze([0, 0, 0]), scale: 1.04 }),
-  pack:   Object.freeze({ bone: 'spine1', pos: Object.freeze([0, .02, .055]), rot: Object.freeze([0, 0, 0]), scale: 1.02 }),
+  // Task 65 — offsets RELATIVOS ao bind do bone, em METROS DO CORPO (−Z frente,
+  // +Y cima), convertidos ao espaço do bone por placeOnBone (rel: true) —
+  // seguem o drift do esqueleto (medido: head em x +0.078) e compensam a
+  // escala acumulada (×1.8) e os eixos não-canônicos dos rigs Tripo.
+  helmet: Object.freeze({ bone: 'head', rel: true, pos: Object.freeze([0, .10, 0]), scale: .96 }),
+  vest:   Object.freeze({ bone: 'spine2', rel: true, pos: Object.freeze([0, .01, -.02]), scale: 1.04 }),
+  pack:   Object.freeze({ bone: 'spine1', rel: true, pos: Object.freeze([0, .04, .09]), scale: 1.02 }),
 });
 export const HUMANOID_GEAR_TAGS = Object.freeze({
   helmet: 'gear_helmet', vest: 'gear_vest', pack: 'gear_pack',
@@ -551,17 +767,39 @@ export function syncHumanoidGear(body, opParts) {
       if (child !== group && child.name === tag) bone.remove(child);
     }
     if (group.parent === bone) continue;
+    const anchorQuat = group.quaternion.clone(); // rotação de fábrica (fit fino)
     group.parent?.remove(group);
     bone.add(group);
-    group.position.set(fit.pos[0], fit.pos[1], fit.pos[2]);
-    group.rotation.set(fit.rot[0], fit.rot[1], fit.rot[2]);
-    group.scale.setScalar(fit.scale);
-    group.visible = true; // attach escondeu as malhas procedurais — gear volta
+    // Task 65 — encaixe em METROS DO CORPO via bind-frame (relativo ao bind do
+    // bone: segue o drift do esqueleto), preservando a rotação de fábrica do
+    // mesh (fábricas de gear constroem em espaço canônico).
+    placeOnBone(body, fit.bone, group, { pos: fit.pos, quat: anchorQuat, scale: fit.scale, rel: fit.rel });
+    // Task 65 — visibilidade da SUBÁRVORE inteira: o attach pode ter dormido
+    // as malhas filhas (gear pré-existente ao attach) — religar tudo.
+    group.traverse((o) => { o.visible = true; });
     group.traverse((o) => { o.userData.humanoidGear = true; }); // exclusão de ocultação
     group.userData.gearKind = kind;
     moved++;
   }
+  _reconcileCosmeticGearVisibility(body);
   return moved;
+}
+
+// Task 65 — doutrina F28 no corpo GLB: capacete/colete/mochila do F28
+// SUBSTITUEM o equivalente cosmético da identidade (F60) — sem isto os dois
+// empilham no mesmo bone (boné laranja DENTRO do capacete balístico). A faixa
+// de facção (faction_trim) permanece sempre. Roda a cada sync (attach,
+// pickup e remoção de gear) — idempotente e barato.
+function _reconcileCosmeticGearVisibility(body) {
+  const parts = body.root?.userData?.cosmeticGroup?.userData?.cosmeticParts;
+  if (!parts) return;
+  for (const m of parts) {
+    const a = m.userData?.cosmeticAnchor;
+    if (!a) continue;
+    const kind = a.bone === 'head' ? 'helmet' : (a.bone === 'spine1' ? 'pack' : 'vest');
+    const f28 = body.bones[a.bone]?.children?.find((c) => c.name === HUMANOID_GEAR_TAGS[kind]);
+    m.visible = !f28 || m.name === 'faction_trim';
+  }
 }
 
 // ----------------------------------------------------------------------------------
