@@ -2786,3 +2786,24 @@ Stage Summary:
 - Mobile tem controle DIRECIONAL completo: arrastar no lado direito gira a câmera/mira (yaw+pitch com o mesmo feel do mouse), joystick move em 4 direções relativas ao olhar, strafe funciona, sprint dedicado — fim do "só frente/trás"
 - Multi-touch real (mover + olhar ao mesmo tempo) e joystick resiliente (rotação de tela re-medida, capture blindado, solta em blur/background) — offline e online (OnlineGame3D herda tudo)
 - Suíte 1246/0 verde + 4 regressões novas de movimento + E2E 8/8 com evidência; plataforma (Pages) atualiza no merge via pipeline game-pages.yml
+
+---
+Task ID: 67
+Agent: Main
+Task: Mira touch REAL no mobile — Parte 2 do direcional (containers invisíveis comendo o toque + slide-to-aim + deploy da plataforma gcodegames.top que estava no build PRÉ-Task 66)
+
+Work Log:
+- Retorno do usuário: "O problema da direção ainda permanece ... não é possível direcionar para os lados, trás ou alto e baixo, o avatar só caminha em frente, porém deveria acompanhar a direção da mira". Task 66 validou com eventos SINTÉTICOS (dispatchEvent direto no elemento — BYPASSA o hit-testing!); desta vez o padrão de ouro é touch REAL via CDP Input.dispatchTouchEvent (pipeline do Chromium, com hit-testing de verdade)
+- Auditoria elementFromPoint + trace de eventos em headless (Pixel 7 390×844): descartada a teoria de yaw re-pinado no sim (setter-espião com stack trace + patch temporário de log em sim3d #stepActor mostraram o gate correto: enquanto trainOnboard, o sim pula o step do jogador por DESIGN — look morto a bordo do trem é regra, não bug). Causa REAL achada em camadas:
+  (1) PLATAFORMA ERRADA NO AR: gcodegames.top (nginx/VPS, onde o usuário joga) servia main-dYG5kNlz.js — candidate da Task 65, ANTERIOR ao lookPad; o Pages tinha a Task 66 (main-Cgp0DYD7.js) mas o usuário não joga lá
+  (2) PÁGINAS: o container .touch-actions (z 25) cobria um retângulo ~140×382px no MEIO do lado direito e engolia os toques de mira por cima do lookPad (z 24) — os VÃOS entre os botões redondos eram zona morta (elementFromPoint cai no container, não no botão)
+  (3) PÁGINAS: .topbar3d > * { pointer-events: auto } dava hit-box às PILLS/GRUPOS flex inteiros (match-state, grupos) — caixas invisíveis gigantes no topo; e os botões reais (audioBtn ~160,70 · gfxBtn 225-284·91-121 · mapBtn 310-380·91-121 · viewBtn 10-84·127-157) formam uma faixa de controles que precisa continuar tocável
+- CORREÇÕES (styles3d.css): .touch-actions { pointer-events: none } + .tbtn { pointer-events: auto } (só os círculos capturam); .topbar3d container pe:none (já era) com pe:auto APENAS em button/input/select (fim das caixas-fantasma); #lookPad agora TELA CHEIA (inset:0 — padrão Free Fire: mira em qualquer área livre, não só 62% direita); .classic-link z 26 (segue tocável sobre o pad)
+- NOVO hud3d.js — slide-to-aim nos botões de COMBATE (fire/ads), padrão Free Fire: pressionar e ARRASTAR ajusta a mira mantendo o disparo (pointermove do botão → onLook com deltas; capture implícito do touch mantém os eventos no botão durante o arrasto); tap puro segue disparando
+- VALIDAÇÃO COM TOUCH REAL (CDP): 11/11 PASS contra o build novo — mira gira em 4 quadrantemente (esquerda Δyaw -0.315, centro 0.283, direita 0.315, topo 0.189); pitch vertical -0.525; slide-to-aim no fire (Δyaw 0.378 COM fire ativo); tap fire; MAPA tocável; strafe Δx 10.41; sprint; zero pageerrors. npm test FULL 1248/0/13skip. Nota de método: RAF do headless roda ~9fps → o trem dura ~60s reais em tempo simulado; E2E agora espera o DESEMBARQUE real + 3s (testes anteriores rodaram parcialmente a bordo, onde look é desligado por design)
+- Veredito da investigação: pipeline look→sim sadio ponta a ponta com touch real (simYaw 0.315 == inputYaw 0.315 pós-desembarque); o "ainda não funciona" do usuário era a plataforma desatualizada + zonas mortas de hit-test. Deploy da gcodegames.top executado na sequência (mesma task)
+
+Stage Summary:
+- Mira touch REAL funciona em qualquer área livre da tela (pad tela cheia), slide-to-aim no botão de fogo, botões/topbar 100% tocáveis — o avatar acompanha a direção da mira (yaw=olhar; alto/baixo via pitch)
+- Suíte 1248/0 + E2E touch-real 11/11 (padrão de ouro CDP com hit-testing) — fim dos falsos positivos de dispatchEvent sintético
+- gcodegames.top atualizada do candidate pré-Task 66 para o build desta task (deploy na sequência) — a plataforma que o usuário joga passa a ter o direcional completo
