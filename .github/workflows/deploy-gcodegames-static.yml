@@ -1,0 +1,130 @@
+# =============================================================================
+# Khaaos Run — Deploy do CLIENT estático na VPS da plataforma (gcodegames.top)
+# =============================================================================
+# Publica o dist do game-runtime (build --base=/) no vhost nginx da
+# gcodegames.top (143.95.213.237:22022), preservando rollback por candidate:
+#   /opt/khaaos-prod-candidate-<TS>/dist  ← novo root do vhost
+# Chave SSH no secret CREDENCIAIS_SSH (ed25519 vps-mavis) — a MESMA do
+# vps-staging-deploy. NÃO toca no serviço khaaos-staging (runtime WS).
+#
+# workflow_dispatch APENAS (deploy é decisão consciente).
+# Contratos (grep): GCODEGAMES_DEPLOY_OK | GCODEGAMES_DEPLOY_FAIL
+# =============================================================================
+
+name: Deploy GCodeGames Static (gcodegames.top)
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: 'Só verificar (sem publicar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gcodegames-static-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build --base=/ + candidate novo + vhost + nginx reload + verificação
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Build do client (base raiz para o vhost)
+        working-directory: game-runtime
+        run: |
+          set -euo pipefail
+          npm ci --include=dev --no-audit --no-fund
+          npm run build -- --base=/
+          echo "ASSET=$(ls dist/assets/main-*.js | xargs basename)" >> "$GITHUB_ENV"
+
+      - name: Preparar chave SSH
+        env:
+          CREDENCIAIS_SSH: ${{ secrets.CREDENCIAIS_SSH }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CREDENCIAIS_SSH" ]]; then
+            echo "::error::Secret CREDENCIAIS_SSH ausente (chave ed25519 vps-mavis)"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CREDENCIAIS_SSH" > ~/.ssh/khaaos_vps
+          chmod 600 ~/.ssh/khaaos_vps
+          ssh-keyscan -p 22022 143.95.213.237 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Empacotar e enviar dist
+        if: ${{ !inputs.verify_only }}
+        run: |
+          set -euo pipefail
+          tar czf /tmp/kr-static.tgz -C game-runtime/dist .
+          scp -P 22022 -i ~/.ssh/khaaos_vps /tmp/kr-static.tgz \
+            root@143.95.213.237:/tmp/kr-static.tgz
+
+      - name: Publicar candidate + apontar vhost + reload + verificação
+        run: |
+          set -euo pipefail
+          ssh -p 22022 -i ~/.ssh/khaaos_vps root@143.95.213.237 bash -s <<'REMOTE'
+          set -euo pipefail
+          TS=$(date -u +%Y%m%dT%H%M%SZ)
+          NEW=/opt/khaaos-prod-candidate-$TS
+          VH=$(grep -rl 'gcodegames' /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
+          if [[ -z "$VH" ]]; then echo "GCODEGAMES_DEPLOY_FAIL (vhost não encontrado)"; exit 1; fi
+          echo "vhost: $VH"
+          OLD_ROOT=$(grep -o 'root [^;]*;' "$VH" | head -1 | sed 's/^root //; s/;$//')
+          echo "root atual: $OLD_ROOT"
+
+          if [[ "${VERIFY_ONLY:-false}" != "true" ]]; then
+            mkdir -p "$NEW/dist"
+            tar xzf /tmp/kr-static.tgz -C "$NEW/dist"
+            rm -f /tmp/kr-static.tgz
+            cp "$VH" "$VH.bak-task67-$TS"
+            sed -i "s|root $OLD_ROOT;|root $NEW/dist;|" "$VH"
+            if ! nginx -t 2>&1 | grep -q successful; then
+              cp "$VH.bak-task67-$TS" "$VH"
+              echo "GCODEGAMES_DEPLOY_FAIL (nginx -t — rollback aplicado)"
+              exit 1
+            fi
+            systemctl reload nginx
+            sleep 2
+          fi
+
+          LIVE=$(curl -sk https://gcodegames.top/ | grep -o 'assets/main-[^"]*\.js' | head -1)
+          CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://gcodegames.top/)
+          ASSET_CODE=$(curl -sk -o /dev/null -w '%{http_code}' "https://gcodegames.top/${LIVE}")
+          echo "index: $CODE | asset: $LIVE ($ASSET_CODE)"
+          echo "esperado: assets/$ASSET_NAME_PLACEHOLDER"
+          if [[ "$CODE" == "200" && "$ASSET_CODE" == "200" ]]; then
+            echo "GCODEGAMES_DEPLOY_OK (gcodegames.top 200; rollback: $VH.bak-task67-$TS / root anterior $OLD_ROOT)"
+          else
+            echo "GCODEGAMES_DEPLOY_FAIL (index $CODE asset $ASSET_CODE)"
+            exit 1
+          fi
+          REMOTE
+        env:
+          VERIFY_ONLY: ${{ inputs.verify_only }}
+          ASSET_NAME_PLACEHOLDER: ${{ env.ASSET }}
+
+      - name: Verificação externa (fora da VPS)
+        run: |
+          set -euo pipefail
+          sleep 3
+          LIVE=$(curl -s https://gcodegames.top/ | grep -o 'assets/main-[^"]*\.js' | head -1)
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' https://gcodegames.top/)
+          echo "externo: index $CODE | $LIVE (build: assets/$ASSET)"
+          if [[ "$CODE" == "200" && "$LIVE" == "assets/$ASSET" ]]; then
+            echo "GCODEGAMES_DEPLOY_OK (externo — hash confere com o build do main)"
+          else
+            echo "::warning::hash externo ainda não propagou (CDN/cache) — conferir manualmente"
+          fi
