@@ -78,6 +78,7 @@ jobs:
           ssh -p 22022 -i ~/.ssh/khaaos_vps root@143.95.213.237 bash -s <<'REMOTE'
           set -euo pipefail
           TS=$(date -u +%Y%m%dT%H%M%SZ)
+          echo "esperado: assets/${GCODEGAMES_EXPECTED_ASSET:-?}"
           NEW=/opt/khaaos-prod-candidate-$TS
           VH=$(grep -rl 'gcodegames' /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
           if [[ -z "$VH" ]]; then echo "GCODEGAMES_DEPLOY_FAIL (vhost não encontrado)"; exit 1; fi
@@ -104,7 +105,7 @@ jobs:
           CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://gcodegames.top/)
           ASSET_CODE=$(curl -sk -o /dev/null -w '%{http_code}' "https://gcodegames.top/${LIVE}")
           echo "index: $CODE | asset: $LIVE ($ASSET_CODE)"
-          echo "esperado: assets/$ASSET_NAME_PLACEHOLDER"
+          echo "esperado: assets/__ASSET__ (passado via env GCODEGAMES_EXPECTED_ASSET)"
           if [[ "$CODE" == "200" && "$ASSET_CODE" == "200" ]]; then
             echo "GCODEGAMES_DEPLOY_OK (gcodegames.top 200; rollback: $VH.bak-task67-$TS / root anterior $OLD_ROOT)"
           else
@@ -114,7 +115,7 @@ jobs:
           REMOTE
         env:
           VERIFY_ONLY: ${{ inputs.verify_only }}
-          ASSET_NAME_PLACEHOLDER: ${{ env.ASSET }}
+          GCODEGAMES_EXPECTED_ASSET: ${{ env.ASSET }}
 
       - name: Verificação externa (fora da VPS)
         run: |
