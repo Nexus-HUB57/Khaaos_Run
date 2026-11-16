@@ -1,0 +1,5 @@
+ALTER TABLE "campaign_outbox" DROP CONSTRAINT "campaign_outbox_status_check";--> statement-breakpoint
+ALTER TABLE "campaign_outbox" ADD COLUMN "claim_token" uuid;--> statement-breakpoint
+ALTER TABLE "campaign_outbox" ADD COLUMN "locked_until" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "campaign_outbox" ADD CONSTRAINT "campaign_outbox_claim_lease_check" CHECK (("campaign_outbox"."status" = 'PROCESSING' AND "campaign_outbox"."claim_token" IS NOT NULL AND "campaign_outbox"."locked_until" IS NOT NULL) OR ("campaign_outbox"."status" <> 'PROCESSING' AND "campaign_outbox"."claim_token" IS NULL AND "campaign_outbox"."locked_until" IS NULL));--> statement-breakpoint
+ALTER TABLE "campaign_outbox" ADD CONSTRAINT "campaign_outbox_status_check" CHECK ("campaign_outbox"."status" IN ('PENDING', 'PROCESSING', 'DELIVERED', 'DEAD'));
