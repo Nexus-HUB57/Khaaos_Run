@@ -202,6 +202,11 @@ export class MatchRoom3D {
     this.interiorLootSpots = [];
     this.syncPhysicsWorld();
   }
+  // Mantém a mesma regra de XP da simulação offline: cada mundo aplica seu
+  // multiplicador canônico, com fallback neutro para cenários legados.
+  worldXp(base) {
+    return Math.round(base * (this.scenario.xpMultiplier ?? 1));
+  }
   // Reconcilia o mundo físico da sala (estáticos + gloo + folhas fechadas + vidro).
   syncPhysicsWorld() {
     const active = this.walls.filter((w) => w.active).map(glooCollider);
