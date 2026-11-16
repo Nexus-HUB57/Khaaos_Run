@@ -618,16 +618,9 @@ export class KhaaosSim3D {
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
-    // Task 53 — protocolo do trem do ZU: elapsed desde o start (s), rota pura e
-    // trava global de combate (chegada + 15 s). `trainT === null` = entrada
-    // sem trem (portal/legacy) — nenhum gate ativo.
-    this.trainT = null; this.trainRoutePts = null; this.trainArrived = false;
-    this.lastWagonArrived = -1; // Task 68 — chegada escalonada dos vagões (a cada 5 s)
-    this.combatLockedUntil = 0; this.combatUnlockedAnnounced = false;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
-    const zuIngress = this.scenario.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
-    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
-    this.zuIngress = { ...zuIngress, synchronized: true, startedAt: null };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_vehicle_entry_v1';
+    this.zuVehicleEntry = { protocol: 'ZU_VEHICLE_ENTRY_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
@@ -840,55 +833,20 @@ export class KhaaosSim3D {
     p.armor = entry === 'belt' ? 60 : 18;
     p.speed = entry === 'belt' ? 5.2 : 6.1;
     // Zu de entrada: os operativos já estão no spawn autoritativo de solo.
-    // O relógio compartilhado serve apenas para a apresentação do portal.
+    // O relógio compartilhado serve apenas para a apresentação do veículo.
     if (this.airdrop) {
       this.#airdropActor(p, 0, this.world.lootSpots);
       this.bots.forEach((b, i) => this.#airdropActor(b, i + 1, this.world.lootSpots));
       this.emit('airdrop', { altitude: DROP_START_Y, deprecated: true });
     } else {
-      this.zuIngress.startedAt = this.time;
-      // Task 53 — protocolo OFICIAL do trem (mode 'train'): todos a bordo, combate
-      // travado até CHEGADA + 15 s (grace global). Portal (fallback fora do CIGKV)
-      // preserva o contrato canônico anterior.
-      if (this.zuIngress.mode === 'train') {
-        this.trainT = 0;
-        this.trainRoutePts = trainRoute(this.world.playerSpawn, this.seedHash);
-        this.player.trainOnboard = true;
-        for (const b of this.bots) b.trainOnboard = true;
-        this.combatLockedUntil = COMBAT_UNLOCK_MS / 1000;
-        // Task 68 — alocação canônica nos VAGÕES (10×10 = 100 operativos):
-        // jogador é o índice 0, bots seguem na ordem de spawn. Escudo de pouso
-        // zerado no embarque (só entra em vigor no pouso — salto/desembarque).
-        this.player.wagon = wagonOfIndex(0);
-        this.player.zuSeat = wagonSeatOfIndex(0);
-        this.player.zuShieldT = 0;
-        for (let i = 0; i < this.bots.length; i++) {
-          this.bots[i].wagon = wagonOfIndex(i + 1);
-          this.bots[i].zuSeat = wagonSeatOfIndex(i + 1);
-          this.bots[i].zuShieldT = 0;
-        }
-        this.lastWagonArrived = -1;
-      }
+      this.zuVehicleEntry.startedAt = this.time;
       this.emit('zuIngress', {
-        protocol: this.zuIngress.eventProtocol,
-        entryProtocol: this.entryProtocol,
-        mode: this.zuIngress.mode,
-        startedAt: this.zuIngress.startedAt,
-        durationMs: this.zuIngress.durationMs,
+        protocol: this.zuVehicleEntry.protocol,
+        vehicle: 'train',
+        startedAt: this.zuVehicleEntry.startedAt,
+        durationMs: this.zuVehicleEntry.durationMs,
         world: this.scenario.id,
         spawn: this.world.playerSpawn,
-        // Task 53 — timeline oficial do trem (SSOT src/shared/zuTrain.js)
-        ...(this.zuIngress.mode === 'train' ? {
-          doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
-          arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
-          graceS: ZU_TRAIN.GRACE_S,
-          combatLockedAfterS: COMBAT_UNLOCK_MS / 1000,
-          // Task 68 — contrato dos vagões (10×10, chegada a cada 5 s)
-          wagons: ZU_TRAIN.WAGONS,
-          wagonCapacity: ZU_TRAIN.WAGON_CAPACITY,
-          wagonGapMs: ZU_TRAIN.WAGON_GAP_MS,
-          lastWagonStopMs: LAST_WAGON_STOP_MS,
-        } : {}),
       });
     }
     this.emit('entry', { entry, entryProtocol: this.entryProtocol });
