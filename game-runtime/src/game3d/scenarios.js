@@ -39,6 +39,7 @@ export const SCENARIOS = Object.freeze({
     }),
     groundTint: '#ffffff',
     fogColor: '#57382f',
+    treeDensity: 1, // T71 — identidade da vegetação (CIGKV)
     sky: { top: '#160f2e', mid: '#4a2a4e', horizon: '#c65a2e' },
   }),
   BARBURHEN: Object.freeze({
@@ -55,6 +56,7 @@ export const SCENARIOS = Object.freeze({
     ringFinal: Object.freeze({ x: -100, z: 95, name: 'Parque Abandonado' }),
     groundTint: '#d9d4ca',
     fogColor: '#a89e92',
+    treeDensity: 1.4, // T71 — identidade da vegetação (BARBURHEN)
     sky: { top: '#4e5a64', mid: '#8e958f', horizon: '#d8b894' },
   }),
   PRIADUS: Object.freeze({
@@ -74,6 +76,7 @@ export const SCENARIOS = Object.freeze({
     ringFinal: Object.freeze({ x: 100, z: 95, name: 'Templo Antigo' }),
     groundTint: '#86a58e',
     fogColor: '#2a2f45',
+    treeDensity: 7, // T71 — identidade da vegetação (PRIADUS)
     sky: { top: '#0a0f1c', mid: '#252c44', horizon: '#7d9078' },
   }),
   CKESALTH: Object.freeze({
@@ -93,6 +96,7 @@ export const SCENARIOS = Object.freeze({
     ringFinal: Object.freeze({ x: 95, z: -95, name: 'Vila Sombria' }),
     groundTint: '#cdbb9d',
     fogColor: '#5e452c',
+    treeDensity: 0.8, // T71 — identidade da vegetação (CKESALTH)
     sky: { top: '#241418', mid: '#8a4a2a', horizon: '#e8bd6e' },
   }),
   ARUKHEEA: Object.freeze({
@@ -112,6 +116,7 @@ export const SCENARIOS = Object.freeze({
     ringFinal: Object.freeze({ x: 95, z: -95, name: 'Prisão do Sol da Noite' }),
     groundTint: '#b5c2bb',
     fogColor: '#243648',
+    treeDensity: 2.5, // T71 — identidade da vegetação (ARUKHEEA)
     sky: { top: '#0e1526', mid: '#2a4258', horizon: '#a8c3c9' },
   }),
 });

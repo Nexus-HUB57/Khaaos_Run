@@ -40,6 +40,19 @@ export function propagateNoCull(root) {
   return n;
 }
 
+/** Distância EFETIVA câmera→mesh usando a bounding sphere do mesh:
+ * dist = max(0, dist(câmera, centro_mundo) − raio). Para meshes GRANDES
+ * (terreno 440 m centrado na origem, domo do céu, shells) o centro pode
+ * estar além do raio de cull COM o jogador EM CIMA do mesh — a distância ao
+ * centro sozinha esconde o chão inteiro (regressão T70: "mundo preto").
+ * Câmera dentro da esfera ⇒ 0 ⇒ nunca culled. */
+export function cullEffectiveDist({ camX = 0, camY = 0, camZ = 0, cx = 0, cy = 0, cz = 0, r = 0 } = {}) {
+  const dx = cx - camX, dy = cy - camY, dz = cz - camZ;
+  const rad = Math.max(0, Number(r) || 0);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(dz)) return 0; // defensivo: nunca cull
+  return Math.max(0, Math.hypot(dx, dy, dz) - rad);
+}
+
 /** Decisão de visibilidade com HISTERESE: quem está escondido só reabre
  * dentro do raio + folga (evita pop na fronteira). baseVisible false nunca
  * é forçado a true (respeita esconderijos do próprio jogo). */

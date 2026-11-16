@@ -322,7 +322,10 @@ export function centralPlazaMaterial(scenarioId) {
     m.userData.surfaceTag = 'asphalt-plaza';
     return m;
   }
-  const m = groundMaterial(6, null, scenarioId);
+  // T71 — o groundTint OFICIAL do cenário (README W1–W4) agora chega ao chão
+  // (antes: só pintava o círculo do env-map; chão ficava sem identidade)
+  const tint = resolveScenario(scenarioId).groundTint;
+  const m = groundMaterial(6, tint === '#ffffff' ? null : tint, scenarioId);
   m.userData.surfaceTag = 'biome-ground';
   return m;
 }
@@ -737,7 +740,12 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
   // ---- árvores (arquétipo por mundo — identidade W1-W4) ----
-  const TREES = Math.max(8, Math.round(64 * q.treeFactor));
+  // T71 — densidade pela IDENTIDADE do mundo: Priadus é "A Floresta da
+  // Escuridão" (64 × 1 = savana era risível). InstancedMesh mantém o custo
+  // em 2 draw calls independentemente do número de árvores (contrato T70).
+  const treeDensity = scenario?.treeDensity ?? 1;
+  const treeSpacing = treeDensity > 3 ? 3.4 : 5.5; // floresta densa: copa pode encostar
+  const TREES = Math.min(700, Math.max(8, Math.round(64 * q.treeFactor * treeDensity)));
   const shadowSpots = []; // Fase 7 — sombras de contato da natureza
   const seedBase = `${scenario?.id ?? 'CIGKV'}`.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const archetype = treeArchetypeFor(scenario?.id ?? 'CIGKV');
@@ -745,7 +753,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   let ti = 0, guard = 0;
   while (ti < TREES && guard++ < 600) {
     const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
-    if (!free(x, z) || !districtClear(x, z) || treeSpots.some((p) => Math.hypot(x - p.x, z - p.z) < 5.5)) continue;
+    if (!free(x, z) || !districtClear(x, z) || treeSpots.some((p) => Math.hypot(x - p.x, z - p.z) < treeSpacing)) continue;
     const s = .8 + rng.next() * .7;
     shadowSpots.push({ x, y: terrainHeightAt(x, z, scenario?.id), z, sizeX: 3.1 * s, sizeZ: 2.35 * s });
     treeSpots.push({

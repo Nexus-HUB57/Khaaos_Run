@@ -20,9 +20,9 @@ export const NIGHT = Object.freeze({
   fog: '#191428',         // fog escura dessaturada
   sunColor: '#8ea6ff',    // "lua" fria (mesma direção do sol)
   sunIntensity: 0.5,
-  hemiIntensity: 0.52,
-  fillIntensity: 0.14,
-  backIntensity: 0.18,
+  hemiIntensity: 0.6,   // T71 — piso legível: noite é escura, não preta
+  fillIntensity: 0.18,
+  backIntensity: 0.22,
   starBoost: 1.6,         // estrelas do shader ganham peso
   sunDiscDim: 0.12,       // disco solar quase apagado (virou lua)
 });
