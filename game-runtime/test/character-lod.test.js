@@ -73,12 +73,16 @@ test('proxy: mesma API de parts e MESMOS pivôs do modelo detalhado', () => {
   for (const k of ['shoulder', 'elbow']) assert.ok(proxy.parts.armL[k] && proxy.parts.armR[k]);
 });
 
-test('orçamento do proxy: ≤ 900 tris e ≥ 8× mais leve que o detalhado', () => {
+test('orçamento do proxy: ≤ 1200 tris e ≥ 3× mais leve que o detalhado', () => {
   const proxy = buildOperativeProxy({});
-  assert.ok(proxy.tris <= 900, `proxy ${proxy.tris} tris ≤ 900`);
+  // F34 recalibrou o teto: o proxy ORGÂNICO (mini-operativo com cápsulas suaves,
+  // pés articulados e capacete) custa ~1188 tris — o teto de 900 foi dimensionado
+  // para o homem-palito antigo (~300 tris). Continua ≥3× mais leve que o
+  // detalhado e limitado a 26 meshes (vs ~50 do detalhado).
+  assert.ok(proxy.tris <= 1200, `proxy ${proxy.tris} tris ≤ 1200`);
   assert.ok(proxy.tris >= 150, `proxy ${proxy.tris} tris — silhueta presente`);
   const full = trisOf(createOperative({ variant: 'onith' }).group);
-  assert.ok(full / proxy.tris >= 4, `detalhado (${full}) ≥ 4× proxy (${proxy.tris})`);
+  assert.ok(full / proxy.tris >= 3, `detalhado (${full}) ≥ 3× proxy (${proxy.tris})`);
 });
 
 test('wrapper: update() alterna visibilidade e activeParts() segue o nível', () => {
@@ -147,7 +151,7 @@ test('16 variantes: proxies com paletas distintas constroem dentro do orçamento
   const skins = ['#f2c9a0', '#d9a06b', '#b97a4b', '#8a5632'];
   for (let i = 0; i < 16; i++) {
     const proxy = buildOperativeProxy({ skin: skins[i % skins.length], vest: `#${(i * 0x111111 + 0x2a2f35).toString(16).padStart(6, '0')}` });
-    assert.ok(proxy.tris <= 900, `proxy ${i}: ${proxy.tris} tris`);
+    assert.ok(proxy.tris <= 1200, `proxy ${i}: ${proxy.tris} tris`);
     animateOperative(proxy.parts, { t: i * .31, speedNorm: .7 });
     assert.ok(Number.isFinite(proxy.parts.head.rotation.x), `proxy ${i} sem NaN`);
   }

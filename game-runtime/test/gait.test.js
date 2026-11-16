@@ -195,3 +195,26 @@ test('NetClient3D: recommendedDelay sobe com jitter de chegada simulado', async 
   const view = net.interpolate();
   assert.ok(view === null || typeof view === 'object');
 });
+
+// ---- Task 66: EWMA da amplitude independente de FPS -------------------------
+test('Task 66: amplitude (state.speed) converge em TEMPO fixo, não por frame', () => {
+  // mesma corrida de 2 s de parede: 20 frames de dt=.1 (máquina lenta) vs
+  // 120 frames de dt=1/60 (60 fps) — o regime final deve ser o MESMO
+  // (antes: por-frame alpha .18 deixava a máquina lenta ~2.5× mais atrás).
+  const v = 7.384;                                   // sprint ≈ speedNorm 1.42→clamp 1.25
+  const slow = newGait(); const fast = newGait();
+  slow.px = 0; slow.pz = 0; fast.px = 0; fast.pz = 0;
+  for (let i = 0; i < 20; i++) advanceGait(slow, { x: (i + 1) * v * .1, z: 0, dt: .1 });
+  for (let i = 0; i < 120; i++) advanceGait(fast, { x: (i + 1) * v / 60, z: 0, dt: 1 / 60 });
+  assert.ok(Math.abs(slow.speed - fast.speed) < .02,
+    `lenta=${slow.speed.toFixed(3)} rápida=${fast.speed.toFixed(3)} — divergência > .02`);
+  assert.ok(slow.speed > 1.15, `amplitude em 2 s deve ter chegado ao regime (=${slow.speed.toFixed(3)})`);
+});
+test('Task 66: arrancada — amplitude em .3 s já cobre >70% do regime (sem patinar no início)', () => {
+  const v = 5.2;
+  const g = newGait(); g.px = 0; g.pz = 0;
+  const frames = Math.round(.3 * 60);
+  for (let i = 0; i < frames; i++) advanceGait(g, { x: (i + 1) * v / 60, z: 0, dt: 1 / 60 });
+  assert.ok(g.speed > speedNormFromMps(v) * .7,
+    `speed após .3 s = ${g.speed.toFixed(3)} (regime ${speedNormFromMps(v).toFixed(2)})`);
+});

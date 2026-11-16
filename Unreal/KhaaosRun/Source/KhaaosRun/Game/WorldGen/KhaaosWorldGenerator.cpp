@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/WorldGen/KhaaosWorldGenerator.h"
+#include "Game/WorldGen/KhaaosWorldCanon.h"
 #include "KhaaosRun.h"
 
 #include "Math/UnrealMathUtility.h"
@@ -39,7 +40,7 @@ void UKhaaosWorldGenerator::GenerateWorld(const FKhaaosBiomeConfig& Config)
         GenerateTerrain(Config);
         PlacePOIs(Config);
         GenerateLoot(LootDensity);
-        GenerateRoads();
+        GenerateRoads(Config);
         GenerateWater(Config);
         GenerateFoliage(Config);
 
@@ -56,68 +57,52 @@ FKhaaosBiomeConfig UKhaaosWorldGenerator::GetWorldPreset(const FString& WorldNam
 {
         FKhaaosBiomeConfig Config;
 
-        if (WorldName == TEXT("CIGKV"))
+        // Fase 59 — presets vêm do cânon portável (KhaaosWorldCanon), que alinha
+        // biomas e parâmetros às descrições oficiais (README "Arquitetura dos
+        // Mundos" + shared/worlds.ts). Mundo desconhecido falha fechado no
+        // default do struct (TropicalForest) e loga aviso.
+        KhaaosWorldCanon::WorldPreset Preset;
+        if (!KhaaosWorldCanon::TryGetPreset((const char*)TCHAR_TO_UTF8(*WorldName), Preset))
         {
-                Config.BiomeType = EKhaaosBiomeType::UrbanRuins;
-                Config.HeightScale = 200.0f;       // Flat city
-                Config.NoiseFrequency = 0.0005f;
-                Config.VegetationDensity = 0.1f;    // Sparse (urban)
-                Config.ObstacleDensity = 0.6f;      // Buildings/cover
-                Config.WaterCoverage = 0.05f;
-                Config.LootDensityMultiplier = 1.5f; // High loot in city
-                Config.POICount = 20;               // Many buildings
-                Config.WorldSize = 1000000.0f;      // 10km
-        }
-        else if (WorldName == TEXT("Barburhen"))
-        {
-                Config.BiomeType = EKhaaosBiomeType::TropicalForest;
-                Config.HeightScale = 800.0f;
-                Config.NoiseFrequency = 0.001f;
-                Config.VegetationDensity = 0.8f;    // Dense jungle
-                Config.ObstacleDensity = 0.2f;
-                Config.WaterCoverage = 0.15f;
-                Config.LootDensityMultiplier = 1.0f;
-                Config.POICount = 15;
-                Config.WorldSize = 2000000.0f;      // 20km
-        }
-        else if (WorldName == TEXT("Priadus"))
-        {
-                Config.BiomeType = EKhaaosBiomeType::VolcanicWastes;
-                Config.HeightScale = 1500.0f;       // Volcanic peaks
-                Config.NoiseFrequency = 0.002f;
-                Config.VegetationDensity = 0.05f;    // Barren
-                Config.ObstacleDensity = 0.4f;       // Lava rocks
-                Config.WaterCoverage = 0.02f;        // Lava pools
-                Config.LootDensityMultiplier = 0.8f;
-                Config.POICount = 10;
-                Config.WorldSize = 1800000.0f;
-        }
-        else if (WorldName == TEXT("Ckesalth"))
-        {
-                Config.BiomeType = EKhaaosBiomeType::FrozenTundra;
-                Config.HeightScale = 600.0f;
-                Config.NoiseFrequency = 0.001f;
-                Config.VegetationDensity = 0.15f;    // Sparse pines
-                Config.ObstacleDensity = 0.2f;       // Ice formations
-                Config.WaterCoverage = 0.2f;          // Frozen lakes
-                Config.LootDensityMultiplier = 0.7f;
-                Config.POICount = 8;
-                Config.WorldSize = 1500000.0f;
-        }
-        else if (WorldName == TEXT("Arukheea"))
-        {
-                Config.BiomeType = EKhaaosBiomeType::DesertCanyon;
-                Config.HeightScale = 1200.0f;       // Deep canyons
-                Config.NoiseFrequency = 0.003f;
-                Config.VegetationDensity = 0.05f;    // Cacti only
-                Config.ObstacleDensity = 0.5f;       // Canyon walls
-                Config.WaterCoverage = 0.03f;        // Oases
-                Config.LootDensityMultiplier = 0.9f;
-                Config.POICount = 12;
-                Config.WorldSize = 1800000.0f;
+                UE_LOG(LogKhaaosRun, Warning, TEXT("KhaaosWorldGenerator::GetWorldPreset - mundo desconhecido '%s' (cânon F59)"), *WorldName);
+                return Config;
         }
 
+        switch (Preset.Biome)
+        {
+        case KhaaosWorldCanon::WorldBiome::UrbanRuins:
+                Config.BiomeType = EKhaaosBiomeType::UrbanRuins;
+                break;
+        case KhaaosWorldCanon::WorldBiome::TropicalForest:
+                Config.BiomeType = EKhaaosBiomeType::TropicalForest;
+                break;
+        case KhaaosWorldCanon::WorldBiome::DesertCanyon:
+                Config.BiomeType = EKhaaosBiomeType::DesertCanyon;
+                break;
+        case KhaaosWorldCanon::WorldBiome::OceanArchipel:
+                Config.BiomeType = EKhaaosBiomeType::OceanArchipel;
+                break;
+        default:
+                Config.BiomeType = EKhaaosBiomeType::TropicalForest;
+                break;
+        }
+
+        Config.HeightScale = Preset.HeightScale;
+        Config.NoiseFrequency = Preset.NoiseFrequency;
+        Config.VegetationDensity = Preset.VegetationDensity;
+        Config.ObstacleDensity = Preset.ObstacleDensity;
+        Config.WaterCoverage = Preset.WaterCoverage;
+        Config.LootDensityMultiplier = Preset.LootDensityMultiplier;
+        Config.POICount = Preset.POICount;
+        Config.WorldSize = Preset.WorldSize;
+
         return Config;
+}
+
+bool UKhaaosWorldGenerator::HasCanonicalRoads(const FString& WorldName) const
+{
+        // Cânon F58 — só os mundos urbanos (CIGKV e Barburhen) possuem vias.
+        return KhaaosWorldCanon::HasCanonicalRoads((const char*)TCHAR_TO_UTF8(*WorldName));
 }
 
 // ─── POI Management ─────────────────────────────────────────────────────────────
@@ -191,10 +176,23 @@ void UKhaaosWorldGenerator::GenerateLoot(const FKhaaosLootDensityMap& Density)
                 POILoot, RouteLoot, WildLoot, WaterLoot, Total);
 }
 
-void UKhaaosWorldGenerator::GenerateRoads()
+void UKhaaosWorldGenerator::GenerateRoads(const FKhaaosBiomeConfig& Config)
 {
+        // Cânon F58/F59 — estradas/ruas asfaltadas existem APENAS nos mundos
+        // urbanos (CIGKV e Barburhen, bioma UrbanRuins). Selva (Priadus),
+        // deserto (Ckesalth) e ilha (Arukheea) não descrevem vias nas
+        // descrições oficiais: qualquer rede viária neles é divergência.
+        // (A tabela urbana canônica vive em KhaaosWorldCanon e é pinada pelo
+        // teste portável tests/ue5/worldgen_vias_canon_test.cpp.)
+        const bool bUrbanWorld = (Config.BiomeType == EKhaaosBiomeType::UrbanRuins);
+        if (!bUrbanWorld)
+        {
+                UE_LOG(LogKhaaosRun, Log, TEXT("  [PCG 4/7] Roads: SKIPPED — mundo não-urbano não possui vias no cânon (F58)"));
+                return;
+        }
+
         // Connect POIs with minimum spanning tree + some extra connections
-        UE_LOG(LogKhaaosRun, Log, TEXT("  [PCG 4/7] Roads: MST + extras connecting %d POIs"), POILocations.Num());
+        UE_LOG(LogKhaaosRun, Log, TEXT("  [PCG 4/7] Roads: MST + extras connecting %d POIs (mundo urbano — vias canônicas)"), POILocations.Num());
 }
 
 void UKhaaosWorldGenerator::GenerateWater(const FKhaaosBiomeConfig& Config)

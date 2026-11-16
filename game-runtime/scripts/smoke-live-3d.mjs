@@ -1,5 +1,7 @@
-// Smoke test ao vivo: servidor autoritativo em :8787 + 2 clientes 3D jogando
-// contra bots por ~15s — valida snapshots, eventos de combate e killfeed reais.
+// Smoke test ao vivo: servidor autoritativo em :8790 + 2 clientes 3D jogando
+// contra bots por ~55s — valida snapshots, protocolo ZU (trem → portas →
+// chegada → grace de 15 s, COMBAT_UNLOCK_MS = 31 s — src/shared/zuTrain.js),
+// eventos de combate pós-grace e killfeed reais.
 import { WebSocket } from 'ws';
 
 const PORT = 8790;
@@ -66,13 +68,20 @@ console.log('[live] clientes conectados — c1 sala:', stats.c1.last?.roomId, '|
 c1.startMatch('belt');
 c2.startMatch('rush');
 
-// loop de jogo 15s: c1 avança e gira atirando; c2 avança e coleta
+// loop de jogo 55s — consciente do protocolo ZU (Task 53):
+//   0–8 s   embarque (trem; inputs de movimento mantêm o client vivo)
+//   8–16 s  portas abertas (c1 salta — entrada oficial pela porta)
+//   16–31 s chegada + grace (combate TRAVADO pelo servidor — atirar agora é
+//           ignorado/ilegal; só deslocamento)
+//   31–55 s COMBATE LIVRE: c1 avança girando atirando; c2 avança e atira
 const t0 = Date.now();
 const gameTimer = setInterval(() => {
   const t = (Date.now() - t0) / 1000;
-  c1.sendInput({ dy: -1, yaw: t * 0.8, fire: t > 2, sprint: t < 2 });
-  c2.sendInput({ dy: -0.6, dx: Math.sin(t * 1.3) * 0.7, yaw: -t * 0.5, fire: t > 4 });
-  if (t >= 15) {
+  const doorOpen = t >= 8 && t < 16;
+  const combatFree = t >= 32;
+  c1.sendInput({ dy: combatFree ? -1 : -0.4, yaw: t * 0.8, fire: combatFree, sprint: combatFree && t < 36, jump: doorOpen && ((t * 20) | 0) % 6 === 0 });
+  c2.sendInput({ dy: combatFree ? -0.6 : -0.3, dx: Math.sin(t * 1.3) * 0.7, yaw: -t * 0.5, fire: combatFree });
+  if (t >= 55) {
     clearInterval(gameTimer);
     done();
   }

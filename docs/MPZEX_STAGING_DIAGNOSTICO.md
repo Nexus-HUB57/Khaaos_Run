@@ -72,3 +72,57 @@ do gameplay — as correções pertencem ao mundo, não ao cliente de teste.
    (inputs padrão);
 4. contratos: `MP-ZEX-08 PASS` + `[MP-ZEX-09] RELATÓRIO:` → artefatos 14 d;
 5. `GH_TOKEN=… node scripts/eos/p0_gate.mjs` para o retrato final.
+
+---
+
+## Atualização 2026-11-11 — staging dedicado no VPS + Opção B implementada
+
+- **Alvo do despacho**: `KR_STAGING_BASE_URL` no environment `staging` aponta para o
+  **staging dedicado no VPS** (`https://staging.143-95-213-237.sslip.io`, sempre ativo,
+  certificado Let's Encrypt válido) — elimina a hibernação do Render free (causa da
+  rodada #13). Contas `kr_zex_a`/`kr_zex_b` resetadas e validadas no próprio servidor
+  (`/auth/login` 200 nas duas; senhas apenas nos secrets — PB-07).
+- **Primeiro despacho contra o staging dedicado (run 43079303822)**: gate ✅;
+  **MP-ZEX-08 ✅ PASS** (`[MP-ZEX-08] MP-ZEX-08 PASS: sem XP/extração para A; resume
+  preservado; B canalizando o terminal.`); MP-ZEX-09 ❌ na Fase 2 —
+  `Timeout esperando estado do servidor: liberação do terminal leste após queda
+  degradada (B(resume))` — orçamento de 4 s herdado do loopback, com RTT real +
+  DegradedLink (os orçamentos RTT-aware dos PRs #343–#351 cobrem as fases 1/3;
+  a liberação da Fase 2 ficou atrás).
+- **Opção B IMPLEMENTADA (este PR)**: `server/room3d.js` — salas capacidade 2 sem
+  botFill (perfil das salas do despacho) têm pulsos do Ring 3× mais espaçados
+  (`PULSE_INTERVAL * 3`); salas normais e sim offline intocados. Resolve a corrida
+  anel × terminais (§4) sem tocar gameplay canônico.
+- Depois do merge: atualizar o `room3d.js` do staging no VPS, reiniciar
+  `khaaos-staging` e re-despachar (cenários `08,09`).
+
+## Cadeia causal da Fase 2 (resolvida com evidência local — 2026-11-11, noite)
+
+Reprodução local com RTT sintético (selftest + `KR_ZEX09_UP_MS=350 KR_ZEX09_DOWN_MS=350`
+≈ RTT 700 ms, o mesmo patamar runner↔VPS real). Três defeitos independentes, cada um
+com evidência de instrumentação (`[DBG-CH]` no servidor, observador B1 no cliente):
+
+1. **Ressurreição do canal por input em voo** (causa-raiz da Fase 2):
+   `cancelZexChannelForDisconnect` cancelava o canal, mas os inputs já enfileirados
+   (`actor.inputQueue`) e o `actor.lastInput` (fallback do tick quando a fila esvazia)
+   continuavam sendo processados — um `interact=true` pré-queda reabria o canal 11
+   ticks depois do cancelamento (`start → cancel → start → COMPLETOU`, mesmo ator).
+   O canal zumbi completava e extraía — exatamente o que a Fase 2 existe para proibir.
+   **Fix (server)**: morte de transporte marca o ator (`transportDead`), esvazia a
+   fila, neutraliza `lastInput`; o resume reativa (`reviveTransport`, chamado no
+   caminho de resume do `server.js`).
+2. **Laço de sala sem `break`** (script 09): após `navigated = true` o `for` de
+   tentativas continuava — 8 salas aceitas com partidas vivas simultâneas no staging
+   (evidência: 8× "aceita na tentativa K/8" + 8× "B no alcance" + zero "rejeitada").
+   **Fix (script)**: `if (navigated) break;`.
+3. **`drain()` sem teto** (script 09, Fase 3): a bomba de input por cliente
+   (`client.hold`, 20 Hz) realimenta a fila de subida do link degradado — com RTT
+   sintético a fila nunca esvazia e `await linkA3.drain()` pendurava a fase
+   (evidência: servidor completou o canal no tick 1519; script sem progresso até o
+   timeout global). **Fix (script)**: `Promise.race([drain, sleep(2_500)])` — o
+   intent (assentar quadros atrasados) é preservado; a convergência é provada
+   pelas asserções seguintes.
+
+Validação local: selftest 08 PASS + 09 Fases 1/2/3 PASS + `MPZEX_STAGING_SELFTEST_OK`
+(exit 0); 24/24 nos testes sensíveis (zu-train-protocol, world-survival-load,
+environmental-death).

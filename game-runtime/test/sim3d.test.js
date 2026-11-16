@@ -95,9 +95,12 @@ test('zona encolhe em pulsos e causa dano fora do anel', () => {
   disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   s.player.x = 0; s.player.z = 0; // fica dentro do anel para a partida continuar
   const r0 = s.ring.radius;
-  for (let i = 0; i < 30 * 100; i++) s.step(idle(), STEP); // ~100s => 2 pulsos
-  assert.ok(s.ring.radius < r0, 'anel deveria encolher');
-  assert.ok(s.ring.pulse >= 2, 'pulsos deveriam acontecer');
+  // Fase 61 — cânon: fase 0 segura 120 s no raio inicial; a Compressão Alfa
+  // (fase 1) encolhe continuamente entre 120 s e 240 s.
+  for (let i = 0; i < 30 * 150; i++) s.step(idle(), STEP); // 150 s => fase 1 em curso
+  assert.ok(s.ring.radius < r0, 'anel deveria encolher na fase 1');
+  assert.equal(s.ring.pulse, 2, 'fase 1 = pulso 02 (Compressão Alfa)');
+  assert.equal(s.ring.phaseName, 'Compressão Alfa');
   // jogador fora do anel sofre dano
   const s2 = new KhaaosSim3D({ seed: 'RING-2', botCount: 0, airdrop: false });
   s2.start('belt');
@@ -163,7 +166,11 @@ test('ZEX: movimento ou dano cancela sem gastar o terminal nem conceder XP', () 
   p.x = t.x; p.z = t.z;
   s.step({ ...idle(), interact: true }, STEP);
   assert.ok(p.zexChannel, 'o jogador pode reiniciar após cancelar');
-  s.ring.x = t.x + 20; s.ring.z = t.z + 20; s.ring.radius = 0;
+  // Fase 61 — o raio/centro vêm do schedule canônico: usa o colapso legítimo
+  // (fase 4, raio <= 70 m) e posiciona o terminal-fora-do-anel a 90 m do centro.
+  s.zoneElapsed = 480;
+  s.player.x = (s.scenario.ringFinal?.x ?? 0) + 90;
+  s.player.z = s.scenario.ringFinal?.z ?? 0;
   s.step(idle(), STEP);
   assert.equal(p.zexChannel, null, 'dano ambiental interrompe o canal');
   assert.equal(t.active, true);

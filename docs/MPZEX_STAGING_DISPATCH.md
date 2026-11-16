@@ -59,6 +59,25 @@ domínio confirmado, defina a variável NÃO secreta
 `KR_STAGING_ALLOW_CUSTOM_HOST=true` no environment — decisão humana
 consciente, nunca automática.
 
+### 1.4 Staging dedicado: bots, anel e papel dos terminais
+
+O matchmaking cria salas com `botFill: capacity - 1` (14 bots com capacidade
+16). Bots atacam e o dano **cancela a canalização ZEX** (`room3d #damage →
+cancel 'damage'`) — canal de 4 s nunca conclui sob fogo de bot. O staging da
+plataforma GoodCode Games roda **dedicado**: `KR_ROOM_CAPACITY=2` e
+`KR_BOT_FILL=0` (env do server, defaults preservam produção; ver
+`docs/GOODCODE_PLATFORM.md`).
+
+Anel (Fase 42): em cenário sem `ringFinal` o anel fecha sobre o centro do
+mundo `(0,0)` até raio 42, com dano ring contínuo fora dele; os terminais
+CENTRO `(8,0)`, OESTE `(-130,-30)` e LESTE `(120,40)` nunca cabem dois dentro
+do anel final. Por isso o 09 usa papéis assimétricos: **A** (fases 2/3,
+tardias) canaliza o terminal dentro do anel final; **B** (fase 1, ceda) o
+terminal externo cuja janela do anel atual cobre navegação + canal. Pós-navegação
+o ator pode deslizar/sofrer impacto e sair do alcance: os dois scripts fazem
+`settle` (inputs nulos) e **re-navegação por gameplay** antes de canalizar —
+nunca teleporte/debug.
+
 ## 2. Despacho
 
 GitHub → Actions → **MP-ZEX 08+09 — Despacho único em staging** → Run workflow:
@@ -116,6 +135,8 @@ a única superfície manual — exige hardware/navegador touch real.
 | `Recusado: o host não identifica staging` | domínio sem rótulo | variável `KR_STAGING_ALLOW_CUSTOM_HOST=true` (confirmar destino antes) |
 | `Login da conta A falhou` | contas não provisionadas | §1.2 (`KR_USERS_JSON` + restart) |
 | `As duas contas caíram em salas distintas` | staging com tráfego paralelo | rodar em staging isolado; re-despachar |
+| `Timeout esperando conclusão do terminal` | dano contínuo cancelando o canal (bots ou anel) | staging dedicado (`KR_BOT_FILL=0`); papéis assimétricos do 09 (§1.4) |
+| `ator deslizou pós-parada` (recorrente) | deslize/queda física após chegar ao terminal | automático — settle + re-navegação por gameplay (08/09) |
 | `A e B caíram no mesmo terminal` | spawns próximos no staging fazem ambos adotarem o mesmo terminal | **resolvido no #335**: B desempata excluindo o terminal de A (rota real de gameplay); em caso de colisão remanescente, restart do staging (Actions → "Staging — restart") e re-despachar |
 | `não progride pela rota` | mapa/obstáculo novo | log agora imprime pos/waypoint; o unstick cobre quinas — investigar layout se >10 manobras |
 | Sala com bots interferindo | staging compartilhado | usar instância de staging dedicada ao teste |

@@ -1,0 +1,557 @@
+{
+  "schema": "khaaos.avatar-roster-optimization-report/v1",
+  "profile": "Unreal/KhaaosRun/Content/Characters/avatar_optimization_profile.json",
+  "engine_less": true,
+  "assets": [
+    {
+      "path": "game-runtime/public/assets/avatars/animated-avatar-m-01.glb",
+      "kind": "gameplay_glb",
+      "status": "within_source_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 4815596,
+        "sha256": "6804daf4484d1315f7313abb47399be31c9be78c058bf05816389fc396bea884",
+        "meshes": 1,
+        "vertices": 18347,
+        "triangles": 11547,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 5,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/avatar-f-03.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "not_rigged_gameplay_candidate",
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 3924864,
+        "sha256": "8509461ffc5309c3d7705ac26e68698de018818876e873bc3ef4df0cc61d855a",
+        "meshes": 1,
+        "vertices": 18653,
+        "triangles": 11530,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 0,
+        "animations": 0,
+        "joints": 0,
+        "attributes": [
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/avatar-m-01.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "not_rigged_gameplay_candidate",
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 3846060,
+        "sha256": "ac27b19c5d0ba58a1fc8f5d618ce6599b0f3f95a06b7f482a04d2f88b614f736",
+        "meshes": 1,
+        "vertices": 18220,
+        "triangles": 11547,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 0,
+        "animations": 0,
+        "joints": 0,
+        "attributes": [
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/avatar-m-02.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "not_rigged_gameplay_candidate",
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 3856860,
+        "sha256": "03c8f49b1225e3932624091f014a6849ac5cd467979da2c36e89975425ef67b4",
+        "meshes": 1,
+        "vertices": 16944,
+        "triangles": 10814,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 0,
+        "animations": 0,
+        "joints": 0,
+        "attributes": [
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/avatar-m-04.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "not_rigged_gameplay_candidate",
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 3505652,
+        "sha256": "993d6869bd453fb5115e5deb3be0e6307c0d732c2a1d148ab3a7ce653a040301",
+        "meshes": 1,
+        "vertices": 17778,
+        "triangles": 11266,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 0,
+        "animations": 0,
+        "joints": 0,
+        "attributes": [
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/rigged-avatar-f-01.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 4392504,
+        "sha256": "21a8fe06271b0ee905c01a031e9898f54e8228a1e1cec5aaeaf7586bc09d5d4a",
+        "meshes": 1,
+        "vertices": 19362,
+        "triangles": 11564,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/rigged-avatar-f-03.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 4315076,
+        "sha256": "9c08a8572eb522ab5911044a5cdf003ac3a9115f76ac4a1c08d56c3df46a2210",
+        "meshes": 1,
+        "vertices": 18832,
+        "triangles": 11530,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/rigged-avatar-m-01.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 4223300,
+        "sha256": "f4b8c4dec6c62ce74927696c262d9002a92775cda1cf644d72c8fc7817f4f4b1",
+        "meshes": 1,
+        "vertices": 18317,
+        "triangles": 11547,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/rigged-avatar-m-02.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 4203784,
+        "sha256": "43363d99795412963c9908e3671e7cacc9321f7048c387dd4d035171f570857a",
+        "meshes": 1,
+        "vertices": 16948,
+        "triangles": 10814,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    },
+    {
+      "path": "game-runtime/public/assets/avatars/rigged-avatar-m-04.glb",
+      "kind": "gameplay_glb",
+      "status": "ready_for_lod_pipeline",
+      "warnings": [
+        "no_embedded_animation_clips"
+      ],
+      "errors": [],
+      "metrics": {
+        "format": "glb",
+        "bytes": 3880180,
+        "sha256": "79cb83735c83f0310c3e3b93b794a7fd3d59f91cdf63a19fc29eebc7587a2ded",
+        "meshes": 1,
+        "vertices": 17995,
+        "triangles": 11266,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "joints": 23,
+        "attributes": [
+          "JOINTS_0",
+          "NORMAL",
+          "POSITION",
+          "TEXCOORD_0",
+          "WEIGHTS_0"
+        ]
+      }
+    }
+  ],
+  "portraits": [
+    {
+      "path": "client/public/avatars/realistic/op_gng_female_cotovela.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 82866,
+        "sha256": "c11d49dd24a01258be40a775a868a212fb513909cdbe35a543e42c51db6293e6",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_female_pixel.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 91142,
+        "sha256": "b53e364cf4567ee530371071071047694681eb731862e7b74230fc9272abd533",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_female_rota.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 92200,
+        "sha256": "6aea8bbf4b9fd55a699c17aba51af25d99eef5ac4528f4579161d9da6a0da53c",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_female_sombra.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 80580,
+        "sha256": "bc2ec58c42adc7004070c0e8ce1f3f328d57fa54c917c77b77db848ad6eb06ff",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_male_baile.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 93218,
+        "sha256": "eb32759e861975b6ba9f8d894ebdc4a20d6e09f6c50c107bd85ef0012f318212",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_male_corta.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 68294,
+        "sha256": "d61d6345082a7b3dc046dec7d2d30a25ffdc44d8879cfa56389a64b9724eb652",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_male_spray.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 82226,
+        "sha256": "1995ff89160e0b707a8ebcc7e886c6de0bcbb9f4359161e766455704ade82d79",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_gng_male_ventania.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 102714,
+        "sha256": "01d37e6cf00b2252b9922f437c65dc2f05958ecc5198ccadff68c0851be1b982",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_female_coruja.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 82992,
+        "sha256": "7140d7349033027e8197233b14076d826a3f4e60a51ed66a226f2c1c763a9aa2",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_female_nota.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 83540,
+        "sha256": "848ae92164e4ec0b56843cd670b3ddb4b0cb6c7e9979d0a3daf7f0147b727e35",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_female_sirene.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 82396,
+        "sha256": "46afd0aeacaf6fd1ab65ed3b93b2ee3f866ba3560274ca3ce12076e75c40f7c3",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_female_soro.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 77226,
+        "sha256": "3ac64be960fe9f3a06410f1d0e979a13dcc018675b546247780e9a25975ad11c",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_male_eco.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 94424,
+        "sha256": "971844d498273a79d51764a73a666e92166dc44f9878b5c1d133c1cc9843d689",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_male_ferraz.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 115202,
+        "sha256": "958a0d6d6de4983b6454b5e41e0d9a8e6355bb6a73dc2e9e916f428474437dac",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_male_grau.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 87532,
+        "sha256": "d30ddef7921e6699faeefa5297ed0559c04adf83c651feecdb17089fb9bf6693",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    },
+    {
+      "path": "client/public/avatars/realistic/op_mil_male_vulto.webp",
+      "kind": "portrait_web",
+      "status": "within_budget",
+      "warnings": [],
+      "errors": [],
+      "metrics": {
+        "format": "webp",
+        "bytes": 113240,
+        "sha256": "d7c8f4c5dde845cd4dbd2d10e0dc152149a5baa5dce4f1d4ca5bd4be40e9e2e3",
+        "width": 768,
+        "height": 768,
+        "mode": "RGB"
+      }
+    }
+  ],
+  "summary": {
+    "glb_total": 10,
+    "glb_ready_or_warned": 10,
+    "glb_blocked": 0,
+    "glb_rigged": 6,
+    "portraits_total": 16,
+    "portraits_needing_optimization": 0
+  },
+  "decisions": [
+    "Keep full-quality GLB in UE5 content; do not ship all gameplay GLBs in the web bundle.",
+    "Generate LOD0-LOD3 in Blender/UE5 and apply Screen Sizes from the shared profile.",
+    "Do not promote unmapped or invalid assets to canonical operatives.",
+    "Use KTX2/meshopt only after the toolchain is available and output hashes are recorded."
+  ]
+}

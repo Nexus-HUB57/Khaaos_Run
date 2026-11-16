@@ -119,10 +119,10 @@ test('poses especiais ignoram o flinch (knocked rasteja, morto decai igual)', ()
 test('regime de arma preservado: flinch não arranca os braços da pose de tiro', () => {
   const base = posed(null);
   const hit = posed({ angle: Math.PI / 2, power: 1, age: .05 });
-  const aim = -Math.PI / 2 + BASE.pitch;
+  const aim = .10 + BASE.pitch; // Task 62 — regime de tiro: ombro à frente (aBase + pitch)
   // ombro NÃO é tocado no eixo x (só z) — mira intacta
   assert.ok(Math.abs(hit.armRs.x - base.armRs.x) < 1e-9, 'shoulder.x intocado pelo flinch');
-  assert.ok(Math.abs(hit.armRs.x - (aim + .18)) < .32, 'braço segue na pose de arma');
+  assert.ok(Math.abs(hit.armRs.x - aim) < .32, 'braço segue na pose de arma');
   // cotovelo recua no máximo .18 rad + base
   const dElbow = Math.abs(hit.armRe.x - base.armRe.x);
   assert.ok(dElbow <= .19 + 1e-9, `cotovelo desloca ≤ .19 (Δ${dElbow.toFixed(3)})`);

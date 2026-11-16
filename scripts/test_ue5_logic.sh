@@ -77,3 +77,11 @@ TRAIN_HANDOVER_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/MatchFlow"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${TRAIN_HANDOVER_INCLUDE_DIR}" \
     "${TRAIN_HANDOVER_TEST_SOURCE}" "${TRAIN_HANDOVER_SOURCE}" -o "${TEMP_DIR}/train-handover-idempotency-test"
 "${TEMP_DIR}/train-handover-idempotency-test"
+
+# Fase 59 — cânon de biomas e vias por mundo (F58/F59): apenas CIGKV e
+# Barburhen possuem estradas; biomas UE5 alinhados às descrições oficiais.
+WORLDCANON_TEST_SOURCE="${ROOT_DIR}/tests/ue5/worldgen_vias_canon_test.cpp"
+WORLDCANON_SOURCE="${MODULE_INCLUDE_DIR}/Game/WorldGen/KhaaosWorldCanon.cpp"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" \
+    "${WORLDCANON_TEST_SOURCE}" "${WORLDCANON_SOURCE}" -o "${TEMP_DIR}/worldgen-vias-canon-test"
+"${TEMP_DIR}/worldgen-vias-canon-test"

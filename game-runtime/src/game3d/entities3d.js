@@ -280,6 +280,36 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   return { hairTail, cape };
 }
 
+// ---------- Task 62 — POSTURA DE TIRO + GRIP DA ARMA (arma nas mãos) ----------
+// Geometria weapon-local do PUNHO (mão direita) e do PONTO DE APOIO (mão
+// esquerda) por família de arma — a solda punho↔grip é exata por construção
+// (animateOperative posiciona o mount a cada frame: position = luva − R·grip).
+const GRIP_LOCAL = {
+  default: new THREE.Vector3(0, -.11, .12),  // rifle: pistol grip (ar47/m4/mp5/lmg/shotgun/barrett/pulse)
+  g19: new THREE.Vector3(0, -.1, .04),       // pistola: punho curto
+  sucata: new THREE.Vector3(0, -.06, -.1),   // lança: punho de fita
+};
+const MAGW_LOCAL = {
+  default: new THREE.Vector3(0, -.09, .02),  // poço do carregador (apoio)
+  g19: new THREE.Vector3(0, -.05, -.02),     // pistola: apoio junto do punho
+  sucata: new THREE.Vector3(0, 0, -.35),     // lança: meio do cabo
+};
+const HAND_EL = new THREE.Vector3(.026, -.31, 0); // luva em espaço do cotovelo
+// postura dos braços por regime (rad) — derivada do solver de cinemática
+// (scripts/pose_kinematics.mjs): braço direito no plano sagital (y=0), punho
+// à frente do tórax; esquerdo com cotovelo erguido apoiando a arma.
+const ARM_POSE = {
+  aBase: .10, aAds: .30,            // ombro direito (eleva ao mirar; Δ ≤ .28 — contrato F41)
+  bBase: 1.95, bAds: 2.17,          // cotovelo direito
+  aLBase: .95, aLAds: 1.15,         // ombro esquerdo (cotovelo do suporte)
+  bLBase: 1.35, bLAds: 1.08,        // cotovelo esquerdo (Δ ≤ .28 — contrato F41)
+  yL: -.25,                         // pronacao do suporte (no COTOVELO — ombro fica puro p/ F34)
+  dropReady: -.32, dropAds: -.02,   // queda natural do cano (patrulha → ADS nível)
+  dropSprint: .55,                  // low-ready: sprint inclina o cano p/ baixo
+  cantY: .10,                       // convergência do cano (≈ 5.7°)
+  pullAds: -.10,                    // ADS puxa a arma para a linha central
+};
+
 // ---------- operativo (Fase 6/7/9) ----------
 // cores: skin, vest (primária), secondary (calça/boina), trim (faixas),
 // eyes, hair — todas opcionais com fallback coerente.
@@ -510,7 +540,11 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const thumb = ball(.024, gearM2, -side * .052, -.298, -.045, 6, 5, 1, .9, 1.15);
     elbow.add(elbowCap, lower, cuff, glove, knuckles, fingers, thumb);
     shoulder.add(deltoid, biceps, upper, pad, stripe, elbow);
-    return { shoulder, elbow };
+    // Task 62 — meshes da mão + posições-base (IK fake do suporte: a luva
+    // desliza até a arma sem quebrar a cadeia procedural de ombro/cotovelo)
+    const hand = { glove, knuckles, fingers, thumb };
+    for (const m of Object.values(hand)) m.userData.gripBase = m.position.clone();
+    return { shoulder, elbow, hand };
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
   const armR = mkArm(1), armL = mkArm(-1);
@@ -541,7 +575,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
 // (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
 // (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
-export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null, sprintK = null } = {}) {
   let hitEnv = 0;                                            // acopla rosto à dor
   // Fase 26 — Talon: física de mola SIMPLES das tiras da jaqueta (determinística:
   // fase semeada no userData; amplitude cresce com velocidade e no ar).
@@ -597,11 +631,14 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
     parts.legR.knee.rotation.x = -.5;
     // Fase 16: pés arrastam com a ponta flexionada (não congela no último passo)
     if (parts.legL.foot) { parts.legL.foot.rotation.x = .3 + crawl * .12; parts.legR.foot.rotation.x = .3 - crawl * .12; }
-    parts.armR.shoulder.rotation.x = -1.15 - crawl * .3;
-    parts.armL.shoulder.rotation.x = -1.15 + crawl * .3;
-    parts.armR.elbow.rotation.x = -.35;
-    parts.armL.elbow.rotation.x = -.35;
-    parts.head.rotation.x = -.6;
+    // Task 62 — convenção nova: torso deitado de costas (topo do tronco p/ +z),
+    // face para cima; braços alcançam na direção dos PÉS (−z torso) arrastando
+    // o corpo — antes apontavam para dentro do chão.
+    parts.armR.shoulder.rotation.x = 1.0 + crawl * .3;
+    parts.armL.shoulder.rotation.x = 1.0 - crawl * .3;
+    parts.armR.elbow.rotation.x = .4;
+    parts.armL.elbow.rotation.x = .4;
+    parts.head.rotation.x = .25;
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
     if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
@@ -653,25 +690,37 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
       parts.legR.foot.rotation.z = -Math.sin(t * .7) * .03 * idle;
     }
   }
-  const aim = -Math.PI / 2 + pitch;
-  // braços seguram a arma — swing macro proibido; micro-oscilação do passo
+  // ---- Task 62 — POSTURA DE TIRO REAL (arma nas mãos) ----
+  // Braço DIREITO pilota o grip: ombro no plano sagital, elevação de mira com
+  // slope 1 no ombro + cano (o mount rastreia o pitch exato — ver bloco da
+  // arma abaixo). Braço ESQUERDO apoia: cotovelo erguido, antebraço orientado
+  // à arma, e a LUVA desliza até o ponto de apoio (IK fake — clamp .35 m).
+  // A solda punho↔grip é EXATA por construção (position = luva − R·grip).
   const armStep = Math.cos(PH) * .045 * speedNorm;
-  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
-  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
-  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + breathe * .012;
-  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6 + breathe * .012;
-  // F41 — ergonomia de tiro: os OMBROS contra-rolam o tronco (mãos niveladas no
-  // plano do horizonte enquanto a passada rola o tórax) e, em ADS, micro-balço
-  // de respiração do atirador (2 eixos, frequências dessintonizadas — sem loop).
+  // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA (low-ready): constante de tempo
+  // própria no main3d (`sprintK` explícito); ADS/crouch/knocked força tiro.
+  const sprintRaw = (sprintK != null)
+    ? Math.max(0, Math.min(1, sprintK))
+    : Math.max(0, Math.min(1, (speedNorm - 1.02) / .18));
+  const sk = (!ads && !crouch && !knocked) ? sprintRaw : 0;
+  const adsK = ads ? 1 : 0;
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const aR = lerp(ARM_POSE.aBase, ARM_POSE.aAds, adsK) + pitch - sk * .38 - armStep + breathe * .022;
+  const bR = lerp(ARM_POSE.bBase, ARM_POSE.bAds, adsK) + armStep * .5 + breathe * .012;
+  const aL = lerp(ARM_POSE.aLBase, ARM_POSE.aLAds, adsK) + pitch * .9 - sk * .3 + armStep * .5 + breathe * .022;
+  const bL = lerp(ARM_POSE.bLBase, ARM_POSE.bLAds, adsK) + armStep * .5 + breathe * .012;
+  // F41 — ergonomia de tiro: os OMBROS contra-rolam o tronco (mãos niveladas
+  // no plano do horizonte) e, em ADS, micro-balço de respiração em 2 eixos
+  // (x e z, frequências dessintonizadas — sem loop) que o hip fire NÃO herda.
   const roll = Math.sin(PH + .4) * .05 * speedNorm;
-  parts.armR.shoulder.rotation.z = -roll * .35;
-  parts.armL.shoulder.rotation.z = -roll * .35;
-  if (ads) {
-    parts.armR.shoulder.rotation.z += Math.sin(t * 1.7) * .012;
-    parts.armR.shoulder.rotation.x += Math.sin(t * 2.3) * .008;
-    parts.armL.shoulder.rotation.z += Math.sin(t * 1.9) * .012;
-    parts.armL.shoulder.rotation.x += Math.sin(t * 2.6) * .008;
-  }
+  const adsXr = ads ? Math.sin(t * 2.3) * .008 : 0;
+  const adsXl = ads ? Math.sin(t * 2.6) * .008 : 0;
+  const adsZr = ads ? Math.sin(t * 1.7) * .012 : 0;
+  const adsZl = ads ? Math.sin(t * 1.9) * .012 : 0;
+  parts.armR.shoulder.rotation.set(aR + adsXr, 0, -roll * .35 + adsZr);
+  parts.armL.shoulder.rotation.set(aL + adsXl, 0, -roll * .35 + adsZl);
+  parts.armR.elbow.rotation.x = bR;
+  parts.armL.elbow.rotation.set(bL, ARM_POSE.yL, 0); // pronacao do suporte no cotovelo
   // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
   const sway = Math.sin(PH) * .07 * speedNorm;
   parts.torso.rotation.y = sway;
@@ -687,8 +736,57 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   parts.torso.position.y = crouch ? .88 : 1.22 + bounce;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
-  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
-  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
+  // Fase 34 — contra-balanço dos ombros: giram em CONTRAFASE ao sway do tronco
+  // (a arma amortece nos ombros reais; elimina a rigidez de "torso+braços como
+  // peça única" na passada). Aditivo sobre a base de cada braço (o direito
+  // permanece sagital; o esquerdo guarda a convergência do suporte).
+  if (parts.armR?.shoulder && parts.armL?.shoulder) {
+    const shoulderCounter = -sway * .5;
+    parts.armR.shoulder.rotation.y = shoulderCounter;
+    parts.armL.shoulder.rotation.y = shoulderCounter; // F34: juntos, contra o tronco
+  }
+  // ---- Task 62 — MONTAGEM DA ARMA NO PUNHO (solda exata por frame) ----
+  // mount = filho do cotovelo direito. quaternion local resolve R_arm⁻¹·R_desej:
+  //   R_desej = R_y(cant) · R_x(pitch + queda + sk·inclinação) · R_z(cantado sk)
+  // → o CANO aponta o pitch de mira com convergência constante; o PUNHO (luva,
+  // fixa em espaço do cotovelo) segura o grip: position = luva − R_mount·grip.
+  // Sprint (sk): cano abaixa (drop), arma cruzada no peito (z) e puxada ao corpo.
+  const wr = parts.weaponRig;
+  if (wr?.mount && wr.gripW) {
+    // dropSprint ABAIXA o cano (low-ready): subtrai da queda natural
+    const drop = lerp(ARM_POSE.dropReady, ARM_POSE.dropAds, adsK) - sk * ARM_POSE.dropSprint;
+    const cantZ = sk * .3;
+    const sinPD = Math.sin(Math.max(-1.45, Math.min(1.45, pitch + drop)));
+    const w = Math.asin(Math.max(-1, Math.min(1, sinPD / Math.cos(ARM_POSE.cantY)))) - (aR + bR);
+    const qArm = new THREE.Quaternion().setFromEuler(parts.armR.shoulder.rotation)
+      .multiply(new THREE.Quaternion().setFromEuler(parts.armR.elbow.rotation));
+    const qDesired = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ARM_POSE.cantY, 0))
+      .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch + drop, 0, cantZ)));
+    const qMount = qArm.clone().invert().multiply(qDesired);
+    wr.mount.quaternion.copy(qMount);
+    wr.mount.position.copy(HAND_EL).sub(wr.gripW.clone().applyQuaternion(qMount));
+    if (sk > 0) wr.mount.position.add(new THREE.Vector3(0, -.03 * sk, .05 * sk)); // puxada ao corpo
+    // IK fake do suporte: a luva esquerda desliza até o ponto de apoio da arma
+    // (magwell) — clamp .35 m para nunca "flutuar" longe do antebraço.
+    if (parts.armL?.hand && wr.magW) {
+      const fistT = new THREE.Vector3(0, -.31, 0).applyQuaternion(qArm).add(HAND_EL.clone().applyQuaternion(qArm));
+      const magT = fistT.clone(); // mesma origem: apoio relativo ao punho direito
+      magT.add(wr.magW.clone().sub(wr.gripW).applyQuaternion(qDesired));
+      const handT = new THREE.Vector3(-.31, .24, 0) // ombro esquerdo (torso)
+        .add(new THREE.Vector3(0, -.31, 0).applyQuaternion(new THREE.Quaternion().setFromEuler(parts.armL.shoulder.rotation)))
+        .add(HAND_EL.clone().applyQuaternion(new THREE.Quaternion().setFromEuler(parts.armL.shoulder.rotation)
+          .multiply(new THREE.Quaternion().setFromEuler(parts.armL.elbow.rotation))));
+      const delta = magT.sub(handT);
+      const d = delta.length();
+      if (d > .35) delta.multiplyScalar(.35 / d);
+      for (const m of Object.values(parts.armL.hand)) {
+        m.position.copy(m.userData.gripBase).add(delta);
+      }
+    }
+  }
+  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle + olhar
+  // sobe um pouco no sprint (tronco inclinado compensa) ----
+  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05 - sk * .1;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
   parts.head.rotation.z = -parts.torso.rotation.z * .5;
   // F41 — estabilização VESTIBULAR do olhar: a cabeça contra-move o bounce
@@ -763,6 +861,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
       if (bp < .11) face.set('blink', 1); else face.set('neutral', 0);
     }
   }
+  return { sprintK: sk };                       // arma de 3ª pessoa acompanha o low-ready
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
@@ -791,7 +890,11 @@ function addSockets(g, table = {}) {
 export function createWeaponModel(id, skin = null, opts = {}) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
-  const gun2 = M('#15171a', { rough: .48, metal: .72 });
+  // Task 65 (P0) — LEGIBILIDADE DO ARSENAL: o material das peças escuras era
+  // #15171a (quase-preto) e "sumia" contra colete escuro em contraluz (dívida
+  // do Task 64). Peças sobem para #1d2126 + emissivo frio sutil (rim-light
+  // fake) — a arma continua aço escuro, mas LÊ em qualquer luz.
+  const gun2 = M('#1d2126', { rough: .5, metal: .72, extra: { emissive: '#0e141d', emissiveIntensity: .34 } });
   const accent = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .9, roughness: .4 });
   const rar = skin ? RARITIES[skin] : null;
   const skinColor = rar?.color ?? null;
@@ -997,17 +1100,35 @@ export function createWeaponModel(id, skin = null, opts = {}) {
   return { group: g, muzzle };
 }
 
-// orienta braços/arma no corpo — retorna o anchor da arma (na mão direita)
+// orienta braços/arma no corpo — Task 62: a arma NASCE NO PUNHO DIREITO.
+// Um mount (grupo) é criado dentro do cotovelo direito e a arma nele encaixada;
+// animateOperative posiciona o mount a cada frame (solda punho↔grip exata +
+// cano rastreando o pitch de mira). Retorna o rig { group, muzzle, mount,
+// gripW, magW } — group segue sendo a raiz da arma p/ compat (weaponRig).
 export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opts = {}) {
   const old = operativeGroup.userData.weaponRig;
   if (old) {
     unregisterMythic(old.group);   // Fase 30 — arma removida sai do pulso mítico
-    operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); });
+    old.mount?.parent?.remove(old.mount);
+    old.group.traverse(o => { o.geometry?.dispose?.(); });
   }
   const model = createWeaponModel(weaponId, skin, opts);
-  model.group.position.set(.3, 1.4, -.25);
-  operativeGroup.add(model.group);
+  const mount = new THREE.Group();
+  mount.name = 'weaponMount';
+  mount.add(model.group);
+  const elbowR = opParts?.armR?.elbow;
+  if (elbowR) {
+    elbowR.add(mount);           // Task 62 — arma vive no PUNHO, não no root
+  } else {
+    // fallback defensivo (rig sem braços): comportamento legado de root fixo
+    mount.position.set(.3, 1.4, -.25);
+    operativeGroup.add(mount);
+  }
+  model.mount = mount;
+  model.gripW = GRIP_LOCAL[weaponId] ?? GRIP_LOCAL.default;
+  model.magW = MAGW_LOCAL[weaponId] ?? MAGW_LOCAL.default;
   operativeGroup.userData.weaponRig = model;
+  if (opParts) opParts.weaponRig = model; // animateOperative lê daqui por frame
   return model;
 }
 
@@ -1024,6 +1145,13 @@ function fgeo(r, l) {
   const key = `f${r}:${l}`;
   if (!_fgeo.has(key)) _fgeo.set(key, new THREE.CapsuleGeometry(r, l, 2, 6));
   return _fgeo.get(key);
+}
+// Task 59 (sessão 56) — cápsula de braço em 1ª pessoa (cache compartilhado)
+function fpcap(r, l, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(fgeo(r, l), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
 }
 
 // constrói uma mão articulada; side = +1 (direita) | -1 (esquerda).
@@ -1108,21 +1236,30 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
     const arm = new THREE.Group();
     arm.position.set(side * .2, -.26, -.4);
     arm.rotation.set(-.4, side * .14, side * .2);
-    const sleeve = box(.16, .42, .16, camoM, 0, -.18, 0);    // manga
-    const cuff = box(.17, .07, .17, secM, 0, -.34, 0);       // punho
-    const glove = box(.14, .16, .15, gloveM, 0, -.46, -.01); // luva
-    sleeve.userData.tintable = true;
-    arm.add(sleeve, cuff, glove);
+    arm.userData.base = { x: -.4, y: side * .14, z: side * .2 }; // Task 59 — base absoluta p/ pose de sprint (sem drift)
+    // Task 59 — braço ORGÂNICO (fim do braço de CAIXA em 1ª pessoa): ombro
+    // esférico + bíceps/antebraço em cápsula com cotovelo — a MESMA gramática
+    // anatômica do operativo em 3ª pessoa; a mão articulada continua presa no
+    // MESMO pivô (local y -.545) para não deslocar o grip da arma.
+    const shoulder = ball(.075, camoM, 0, -.02, 0, 7, 5);
+    const upper = fpcap(.062, .16, camoM, 0, -.15, 0);
+    const elbow = ball(.06, camoM, 0, -.3, 0, 7, 5);
+    const forearm = fpcap(.055, .18, camoM, 0, -.4, 0);
+    const cuff = fpcap(.058, .04, secM, 0, -.5, 0);
+    upper.userData.tintable = true;      // manga tintable (contrato do recolor)
+    elbow.userData.tintable = true;
     const hand = buildArticulatedHand({ side, skinM, gloveM });
-    arm.add(hand.group);
+    arm.add(shoulder, upper, elbow, forearm, cuff, hand.group);
     rig.add(arm);
     arm.userData.hand = hand;
     return arm;
   };
   const armL = makeArm(-1);
   const armR = makeArm(1);
-  const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
+  // Task 59 — peitoral do colete ARREDONDADO (plate carrier elíptico)
+  const chest = fpcap(.2, .1, vestM, 0, -.54, -.22);
   chest.rotation.x = -.24;
+  chest.scale.set(1.05, 1, .5);
   chest.userData.tintable = true;
   const chestPouch = box(.14, .1, .05, M('#26282d', { rough: .8 }), 0, -.5, -.31);
   rig.add(chest, chestPouch);
