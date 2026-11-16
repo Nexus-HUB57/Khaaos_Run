@@ -4,21 +4,20 @@
 
 Consolidar a cobertura oficial da aplicação Node acima de 40% sem perseguir execução artificial de linhas. A Fase 1 elevou a cobertura do domínio de salas com testes unitários isolados, formalizou a injeção de storage no `RoomManager` e centralizou a instância de produção em `server/game/roomManagerSingleton.ts`.
 
-A leitura atual do relatório `coverage:official` é:
+A leitura atual do relatório `coverage:official` na base Zu mesclada é:
 
-- **Agregado instrumentado:** 38,44% de statements/linhas.
-- **Servidor:** 42,47%.
-- **`server/game/RoomManager.ts`:** 73,68%.
-- **Branches agregados:** 73,40%.
-- **Funções agregadas:** 61,08%.
-- **Suíte oficial:** 451 aprovados, 0 falhas e 8 skips condicionais.
+- **Agregado instrumentado:** 42,00% de statements/linhas.
+- **Branches agregados:** 73,08%.
+- **Funções agregadas:** 63,63%.
+- **`server/game/RoomManager.ts`:** 73,94%.
+- **Suíte oficial:** 595 testes, 586 aprovados, 0 falhas e 9 skips condicionais.
 
 O relatório deve ser interpretado com o escopo configurado em `.c8rc.json`, que inclui cliente, servidor e `shared`. A meta de 40% global exige atacar arquivos de produção ainda não exercitados, não apenas ampliar os testes do `RoomManager`.
 
 ## Prioridade P0 — Cobertura diferencial e qualidade do CI
 
-1. Publicar `coverage/official/coverage-summary.json` e o relatório LCOV como artefatos do CI.
-2. Impedir regressão da cobertura global em qualquer PR.
+1. Publicar `coverage/official/coverage-summary.json` e o relatório LCOV como artefatos do CI. O workflow `ci.yml` já preserva ambos em `unit-test-results`.
+2. Impedir regressão da cobertura global em qualquer PR. O comando `npm run coverage:gate` falha abaixo de 40% usando a menor métrica entre linhas e statements.
 3. Exigir cobertura mínima de linhas alteradas, inicialmente 80% para código de domínio e 100% para schemas/validadores novos.
 4. Manter `npm run check`, `npm run test:official` e `npm run coverage:official` como gates independentes.
 5. Não elevar o threshold global diretamente para 40% antes de medir a cobertura diferencial; primeiro subir em incrementos de 0,5–1 ponto percentual.
@@ -88,17 +87,17 @@ Todo teste que abre servidor, socket, intervalo ou listener deve possuir uma sa�
 
 ## Plano incremental
 
-### Marco 2.1 — 39%
+### Marco 2.1 — 39% — concluído
 
-Cobrir branches remanescentes do `RoomManager`, especialmente ciclo de countdown, cancelamento, derrota/vitória e falha de preparação de PackBack.
+Cobertura do `RoomManager` estabilizada acima de 70%, com ciclo de salas, reconexão, quotas, PackBack, persistência de loot e falhas de preparação cobertos.
 
-### Marco 2.2 — 39,5%
+### Marco 2.2 — 39,5% — concluído
 
-Cobrir rotas administrativas, telemetry stream, rate limit e respostas uniformes de autenticação/autorização.
+Rotas administrativas, telemetry stream, rate limit e respostas uniformes de autenticação/autorização exercitados na suíte oficial; os relatórios JSON/LCOV são publicados pelo CI.
 
-### Marco 2.3 — 40%+
+### Marco 2.3 — 40%+ — concluído
 
-Cobrir falhas de storage, idempotência e cenários de matchmaking não exercitados. O gate global só deve ser aumentado quando os testes forem determinísticos e a cobertura diferencial estiver ativa.
+Falhas de storage relevantes, idempotência e cenários de matchmaking permanecem cobertos; a cobertura limpa atingiu 42,00%. O gate global de 40% está ativo, enquanto a expansão diferencial continua como Fase 3.
 
 ## Regras de revisão
 
@@ -116,7 +115,8 @@ Cobrir falhas de storage, idempotência e cenários de matchmaking não exercita
 npm run check
 DATABASE_URL=postgres://test:test@127.0.0.1:5432/khaaos_test npm run test:official
 DATABASE_URL=postgres://test:test@127.0.0.1:5432/khaaos_test npm run coverage:official
+npm run coverage:gate
 npm run build
 ```
 
-Aceitar a Fase 2 quando a cobertura global atingir pelo menos 40%, a suíte oficial continuar sem falhas, o `RoomManager` permanecer acima de 70%, os relatórios forem publicados e não houver regressão no contrato `ZU_VEHICLE_ENTRY_V1`.
+Aceitar a Fase 2 quando a cobertura global atingir pelo menos 40%, a suíte oficial continuar sem falhas, o `RoomManager` permanecer acima de 70%, os relatórios forem publicados e não houver regressão no contrato `ZU_VEHICLE_ENTRY_V1`. Esses critérios foram atendidos na medição atual; a execução do gate é obrigatória no CI.
