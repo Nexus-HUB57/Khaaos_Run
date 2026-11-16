@@ -1,0 +1,47 @@
+{
+  "schema": "khaaos.avatar-optimization-profile/v1",
+  "status": "pipeline_ready_engine_validation_pending",
+  "targets": {
+    "gameplay_glb": {
+      "lods": {
+        "LOD0": {"screen_size": 0.55, "triangle_budget": 20000, "texture_max_px": 2048},
+        "LOD1": {"screen_size": 0.25, "triangle_budget": 11000, "texture_max_px": 1024},
+        "LOD2": {"screen_size": 0.10, "triangle_budget": 6000, "texture_max_px": 512},
+        "LOD3": {"screen_size": 0.03, "triangle_budget": 2500, "texture_max_px": 256}
+      },
+      "source_file_max_bytes": 5242880,
+      "required_attributes": ["POSITION", "NORMAL", "TEXCOORD_0"],
+      "rigged_required_for_gameplay": true,
+      "max_material_slots_lod0": 4,
+      "max_material_slots_lod1": 3,
+      "max_material_slots_lod2": 2,
+      "max_material_slots_lod3": 1,
+      "max_skin_influences": 8
+    },
+    "portrait_web": {
+      "format": "webp",
+      "max_side_px": 768,
+      "quality": 86,
+      "max_file_bytes": 262144
+    }
+  },
+  "transitions": {
+    "screen_size_hysteresis": [0.02, 0.02, 0.015, 0.01],
+    "dithered_lod_transition": true,
+    "preserve_silhouette_features": ["head", "hair", "shoulders", "hands", "boots", "weapon_sockets"]
+  },
+  "delivery": {
+    "web_full_quality_glb": false,
+    "ue5_content_full_quality": true,
+    "texture_streaming": true,
+    "compression": ["KTX2", "meshopt"],
+    "compression_status": "pending_toolchain"
+  },
+  "acceptance": {
+    "engine": "UE5.8",
+    "medium_target_fps": 60,
+    "medium_gpu_p95_ms_max": 16.67,
+    "visual_checks": ["silhouette_20m", "pbr_day_night_interior", "weapon_alignment", "lod_pop", "deformation_clipping"],
+    "runtime_checks": ["draw_calls", "vram_mb", "shader_hitches", "render_thread_p95_ms"]
+  }
+}

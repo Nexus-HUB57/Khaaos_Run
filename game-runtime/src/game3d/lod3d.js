@@ -271,6 +271,8 @@ export function createCharacterLOD(detail, proxy, silhouette = null, opts = {}) 
     group: root,
     parts: detail.parts,
     detailParts: detail.parts,
+    detailGroup: detail.group,   // Fase 57 — corpo GLB humano vive no tier DETALHADO
+    proxyGroup: proxy.group,     // ( LOD alterna visibilidade do grupo inteiro )
     proxyParts: proxy.parts,
     silhouetteParts: silhouette ? silhouette.parts : null,
     th,

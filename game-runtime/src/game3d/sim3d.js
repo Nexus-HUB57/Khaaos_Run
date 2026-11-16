@@ -25,11 +25,14 @@ import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxConte
 // Fase 30/31/32 — anexos generalizados, skins míticas por arma e raridade dos anexos
 import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS, mythicSkinFor, attachmentRarityFor } from './attachments3d.js';
 import { ZU_TRAIN, COMBAT_UNLOCK_MS, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, seedHashOf } from '../shared/zuTrain.js'; // Task 53 — protocolo oficial de entrada ZU
+import { scheduleFor, phaseStateAt, centerDrift } from './safeZone.js'; // Fase 61 — zona segura no cânon de cada mundo
 import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
 export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
+// Fase 61 — PULSE_INTERVAL aposentado pelo cânon de zona segura por mundo
+// (safeZone.js: 5 fases × 120 s — mantido só por compatibilidade de import).
 export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (igual ao da sala online)
 
 // Fase 25 — portas funcionais/destrutíveis: MESMOS números na sim offline,
@@ -608,6 +611,8 @@ export class KhaaosSim3D {
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
+    // Fase 61 — schedule canônico da zona segura DO MUNDO (5 × 120 s)
+    this.zone = scheduleFor(this.scenario.id); this.zoneElapsed = 0;
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.sporeTimer = 0; this.sporeRemaining = 0; this.sporeActive = false;
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
@@ -619,7 +624,8 @@ export class KhaaosSim3D {
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
-    this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
+    // Fase 61 — dps/phaseName do cânon alimentados por frame pelo schedule
+    this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0, phaseName: '', dps: 1 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
     // Fase 7 — esquadrões determinísticos: jogador lidera o sq-1 (3 aliados)
@@ -921,10 +927,12 @@ export class KhaaosSim3D {
     } else if (ability.effect === 'temporaryArmor') {
       p.temporaryArmor = params.armor;
     } else if (ability.effect === 'ringRead' || ability.effect === 'ringForecast') {
-      details.nextPulseSeconds = Math.max(0, PULSE_INTERVAL - this.pulseTimer);
-      details.targetRadius = this.ring.radius > 42
-        ? Math.max(42, 168 - (this.ring.pulse + 1) * 30)
-        : this.ring.radius;
+      // Fase 61 — leitura no cânon: segundos até a PRÓXIMA FASE oficial + raio-alvo dela
+      const zNow = phaseStateAt(this.zone, this.zoneElapsed);
+      const next = this.zone[Math.min(this.zone.length - 1, (zNow?.index ?? 0) + 1)];
+      const nextIn = next ? Math.max(0, next.startAt - this.zoneElapsed) : 0;
+      details.nextPulseSeconds = nextIn;
+      details.targetRadius = zNow ? (this.ring.radius > (next?.radius ?? 42) ? (next?.radius ?? this.ring.radius) : this.ring.radius) : this.ring.radius;
     } else if (ability.effect === 'terminalScan') {
       const terminal = this.terminals.filter((item) => item.active)
         .sort((a, b) => dist2d(p.x, p.z, a.x, a.z) - dist2d(p.x, p.z, b.x, b.z))[0];
@@ -962,30 +970,35 @@ export class KhaaosSim3D {
     this.#advanceAbility();
     if (input.ability && !this.player.trainOnboard) this.#activateAbility();
 
-    // --- zona segura ---
-    if (!this.#combatLocked()) this.pulseTimer += dt;
-    if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
-      this.pulseTimer = 0;
-      this.ring.pulse++;
-      this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
-      // Fase 42 — README (Mundos W1–W4): o anel FECHA SOBRE o setor canônico de
-      // cada mundo (W1 Parque / W2 Templo / W3 Vila Sombria / W4 Prisão). O centro
-      // deriva em passos determinísticos: 25% do caminho por pulso (100% no 4º).
-      const fin = this.scenario.ringFinal;
-      if (fin) {
-        const k = Math.min(1, this.ring.pulse / 4);
-        this.ring.x = fin.x * k;
-        this.ring.z = fin.z * k;
+    // --- zona segura (Fase 61 — CÂNON DO MUNDO: 5 fases × 120 s com nome,
+    // raio projetado da fração oficial e dps oficial; encolhimento CONTÍNUO
+    // dentro da fase e centro derivando ao setor canônico ringFinal).
+    // Como o relógio da partida, o schedule só corre com o COMBATE LIBERADO
+    // (Task 53 — rota/portas/grace não consomem zona nem pulso do Ring) ---
+    if (!this.#combatLocked()) {
+      this.zoneElapsed += dt;
+      const zone = phaseStateAt(this.zone, this.zoneElapsed);
+      if (zone) {
+        if (zone.index !== this.ring.pulse - 1) {
+          this.ring.pulse = zone.index + 1;
+          const drift = centerDrift(this.scenario, zone.index);
+          if (drift) { this.ring.x = drift.x; this.ring.z = drift.z; }
+          this.emit('pulse', { pulse: this.ring.pulse, target: zone.radiusTo, phaseName: zone.name, dps: zone.dps, finalName: this.scenario.ringFinal?.name ?? null });
+        }
+        this.ring.radius = zone.radius;      // diminui sem saltos (smoothstep)
+        this.ring.target = zone.radiusTo;
+        this.ring.phaseName = zone.name;
+        this.ring.dps = zone.dps;
       }
-      this.emit('pulse', { pulse: this.ring.pulse, target: this.ring.target, finalName: fin?.name ?? null });
     }
-    if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
     // Task 53 — a bordo do trem dos Rings: imune ao ring (o "Cinto" da entrada
     // ZU protege quem não pode se mover; quem salta pela porta volta a responder
     // ao anel). Paridade 1:1 com room3d (dano de ring server-side).
     if (p.alive && !p.trainOnboard && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
-      this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
+      // Fase 61 — DPS OFICIAL da fase canônica do mundo (1→40; sem multiplicador
+      // legado — o contraste entre mundos já vem do cânon safeZone.js)
+      this.#hurtPlayer((this.ring.dps || 1) * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     // Fase 42 — sobrevivência dirigida pela CONFIGURAÇÃO do mundo (scenarios.js),

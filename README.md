@@ -499,6 +499,14 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 | W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
 | W4/C4 Arukheea | 18.000 m² | 180 m × 100 m | 560 m | 180 m²/jogador | Ilha costeira com enseadas (`coastal_island`) |
 
+> **Vias por mundo (cânon F58):** estradas/ruas asfaltadas existem APENAS nos
+> mundos urbanos — CIGKV ("Khaaos Ville", setor Urbano Denso) e W1 Barburhen
+> (urbano pós-guerra, "carros abandonados"). W2 Priadus, W3 Ckesalth e
+> W4 Arukheea não descrevem vias nas descrições oficiais e não as possuem no
+> runtime (`roadSegments` = ∅; praça central = clareira do bioma). Contrato em
+> `game-runtime/src/game3d/detail3d.js` (`URBAN_WORLDS`/`hasCanonicalRoads`) e
+> testes em `game-runtime/test/mundos-vias-canon.test.js`.
+
 ### W1/C1 — Barburhen (Mundo da Destruição)
 
 Ambiente urbano pós-guerra: construções inacabadas, carros abandonados, corpos que **não desaparecem** e apodrecem. O cenário degrada dia após dia (chuva ácida, desabamentos, fumaça).

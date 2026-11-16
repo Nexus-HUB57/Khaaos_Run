@@ -36,6 +36,7 @@ export class HUD {
     $('#endBtn')?.addEventListener('click', () => { this.uiClick(); this.onRestart(); });
     $('#replayBtn')?.addEventListener('click', () => this.onReplayExport?.());
     $('#mapBtn')?.addEventListener('click', () => { this.uiClick(); this.toggleMap(); }); // F40 — mapa tático (touch)
+    $('#viewBtn')?.addEventListener('click', () => { this.uiClick(); this.onViewToggle?.(); }); // Task 62 — 1ª/3ª pessoa (touch)
     $('#seedInput').value = this.seed;
     $('#seedInput')?.addEventListener('change', (e) => {
       this.onRestart(e.target.value.trim() || this.seed);
@@ -50,22 +51,58 @@ export class HUD {
     // joystick touch
     const stick = $('#joyBase'), knob = $('#joyKnob');
     if (stick && knob) {
-      const rect = () => stick.getBoundingClientRect();
       this.joy = { active: false, dx: 0, dy: 0, id: null };
       const start = (e) => {
         this.joy.active = true; this.joy.id = e.pointerId;
-        stick.setPointerCapture(e.pointerId);
+        this._stickRect = null; // Task 61 — re-medir a cada toque (rotação de tela/barra do navegador)
+        try { stick.setPointerCapture(e.pointerId); } catch { /* ponteiro sintético/encerrado: segue sem captura */ }
         this.#joyMove(e);
       };
       stick.addEventListener('pointerdown', start);
       stick.addEventListener('pointermove', (e) => { if (this.joy.active && e.pointerId === this.joy.id) this.#joyMove(e); });
       const end = (e) => {
         if (e.pointerId !== this.joy.id) return;
-        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0;
+        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0; this.joy.id = null;
         knob.style.transform = 'translate(-50%,-50%)';
       };
       stick.addEventListener('pointerup', end);
       stick.addEventListener('pointercancel', end);
+      // Task 61 — joystick "grudado" (app em segundo plano/aba perdida) solta
+      // sozinho: blur/visibilitychange liberam SEM depender de pointermove
+      // (segurar o dedo parado é movimento legítimo — nada de timeout aqui).
+      // globalThis/?. — o ambiente de teste (mock DOM puro Node) não tem window.
+      const releaseAll = () => {
+        this.joy.active = false; this.joy.dx = 0; this.joy.dy = 0; this.joy.id = null;
+        knob.style.transform = 'translate(-50%,-50%)';
+        this.look && (this.look.active = false, this.look.id = null);
+      };
+      globalThis.addEventListener?.('blur', releaseAll);
+      document.addEventListener?.('visibilitychange', () => { if (document.hidden) releaseAll(); });
+    }
+    // Task 61 — look/aim touch (pad direito): arrastar gira a câmera (yaw + pitch),
+    // a MESMA convenção/clamp do mousemove (main3d.initInput). Multi-touch seguro:
+    // pointerId próprio, independente do joystick (Free Fire style).
+    const pad = $('#lookPad');
+    if (pad) {
+      this.look = { active: false, id: null, lx: 0, ly: 0 };
+      pad.addEventListener('pointerdown', (e) => {
+        if (this.look.active) return; // um dedo só no olhar
+        this.look.active = true; this.look.id = e.pointerId;
+        this.look.lx = e.clientX; this.look.ly = e.clientY;
+        try { pad.setPointerCapture(e.pointerId); } catch { /* idem joystick */ }
+      });
+      pad.addEventListener('pointermove', (e) => {
+        if (!this.look.active || e.pointerId !== this.look.id) return;
+        const dx = e.clientX - this.look.lx, dy = e.clientY - this.look.ly;
+        this.look.lx = e.clientX; this.look.ly = e.clientY;
+        if (dx || dy) this.onLook?.(dx, dy);
+      });
+      const endLook = (e) => {
+        if (e.pointerId !== this.look.id) return;
+        this.look.active = false; this.look.id = null;
+      };
+      pad.addEventListener('pointerup', endLook);
+      pad.addEventListener('pointercancel', endLook);
     }
   }
   #joyMove(e) {
@@ -173,11 +210,12 @@ export class HUD {
       ctx.beginPath(); ctx.arc(c.px, c.py, 5, 0, Math.PI * 2); ctx.fill();
     }
     // jogador (seta girada pelo yaw — MESMA gramática do radar)
+    // Task 62 — convenção corrigida: a seta aponta a DIREÇÃO DE MIRA (yaw 0 = −z = norte)
     for (const m of markers) if (m.kind === 'player') {
       const c = at(m.x, m.z);
       ctx.save();
       ctx.translate(c.px, c.py);
-      ctx.rotate(-m.yaw + Math.PI);
+      ctx.rotate(-m.yaw);
       ctx.fillStyle = '#ffd28a';
       ctx.beginPath();
       ctx.moveTo(0, -9); ctx.lineTo(6.5, 7.5); ctx.lineTo(0, 3.5); ctx.lineTo(-6.5, 7.5);
@@ -199,6 +237,25 @@ export class HUD {
     if (chip) chip.title = online
       ? `${ability.description} (autoritativa no servidor)`
       : ability.description;
+  }
+
+  // Task 62 — aviso grande e curto da troca de câmera (tecla V / botão ◉ VISTA)
+  viewToast(msg) {
+    if (typeof document === 'undefined') return;
+    let el = document.getElementById('krViewToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'krViewToast';
+      el.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);'
+        + 'background:rgba(8,10,14,.92);border:1px solid #c8ff3d;color:#c8ff3d;'
+        + 'font:700 13px/1 "Courier New",monospace;letter-spacing:.08em;padding:10px 18px;'
+        + 'border-radius:4px;z-index:60;pointer-events:none;opacity:0;transition:opacity .18s;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(this._viewToastT);
+    this._viewToastT = setTimeout(() => { el.style.opacity = '0'; }, 1400);
   }
 
   feed(who, msg, cls = '') {
@@ -391,7 +448,9 @@ export class HUD {
     $('#aliveValue').textContent = String(alive).padStart(2, '0');
     const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     $('#matchClock').textContent = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-    $('#pulseValue').textContent = `PULSO ${String(s.ring.pulse).padStart(2, '0')}`;
+    // Fase 61 — HUD mostra a FASE OFICIAL do mundo (cânon safeZone.js) além do número
+    const phaseLabel = s.ring?.phaseName ? `PULSO ${String(s.ring.pulse).padStart(2, '0')} · ${s.ring.phaseName}` : `PULSO ${String(s.ring.pulse).padStart(2, '0')}`;
+    $('#pulseValue').textContent = phaseLabel;
     $('#krcValue').textContent = String(p.krc).padStart(4, '0');
     $('#xpValue').textContent = String(p.xp).padStart(4, '0');
     $('#killsValue').textContent = String(p.kills).padStart(2, '0');
@@ -539,10 +598,10 @@ export class HUD {
     // loot
     ctx.fillStyle = 'rgba(66,217,222,.8)';
     for (const i of s.loot) if (i.active) ctx.fillRect(i.x * scale - 1, i.z * scale - 1, 2, 2);
-    // jogador (seta com rotação do yaw)
+    // jogador (seta com rotação do yaw) — Task 62: aponta a direção de mira
     ctx.save();
     ctx.translate(p.x * scale, p.z * scale);
-    ctx.rotate(-p.yaw + Math.PI);
+    ctx.rotate(-p.yaw);
     ctx.fillStyle = '#ffd28a';
     ctx.beginPath();
     ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 2.5); ctx.lineTo(-4.5, 5);

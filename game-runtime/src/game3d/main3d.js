@@ -8,10 +8,13 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW,
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
-import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, poseWeaponSprint, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
+import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
+import { resolveIdentityLook, poolBodyForIdentity, identityForBot, dressHumanoid } from './humanoidCosmetics3d.js'; // Fase 60 — identidade humana dos 33 avatares
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
@@ -58,6 +61,12 @@ export class Game3D {
     // Fase 56 — avatar GLB real no corpo do herói (?avatar=<id> da biblioteca).
     // Contrato do pipeline: QUALQUER falha de carga mantém o corpo procedural.
     this.avatarOverrideId = avatarById(urlParams.get('avatar') ?? '')?.id ?? null;
+    // Fase 57 — corpo humano realista como PADRÃO (jogador + bots + remotos).
+    // ?avatar=legacy|off|0|none mantém o corpo procedural antigo (escape hatch);
+    // ?avatar=<id do pool> escolhe o rig do herói; sem parâmetro → determinístico.
+    this.avatarParam = (urlParams.get('avatar') ?? '').trim();
+    this.humanoidDisabled = LEGACY_BODY_IDS.includes(this.avatarParam.toLowerCase());
+    this.humanoidPlayer = null;        // corpo GLB do herói (attach assíncrono)
     this.avatarRoot = null;
     this.avatarMixer = null;
     this.avatarShowcase = null;        // vitrine de rigs no menu
@@ -99,7 +108,11 @@ export class Game3D {
     this.online = !!net;
     this.pendingSlot = 0;
     this.netAccumulator = 0;
-    this.viewMode = new URLSearchParams(location.search).get('view') === 'tps' ? 'tps' : 'fps';
+    this.viewMode = resolveViewMode({
+      param: new URLSearchParams(location.search).get('view'),
+      stored: (() => { try { return localStorage.getItem(VIEW_STORAGE_KEY); } catch { return null; } })(),
+      fallback: 'tps', // Task 62 — default: avatar à frente do console
+    });
     this.cameraSway = 0;
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
@@ -130,6 +143,15 @@ export class Game3D {
       onReplayExport: () => this.exportReplay(),
     });
     this.hud.audio = this.audio;
+    this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
+    // Task 61 — look/aim touch: o pad direito entrega Δpixels; aqui vira yaw/pitch
+    // com a MESMA convenção, sensibilidade e clamp do mousemove (initInput) —
+    // incluindo a razão de ADS (~0.52×) e a sensibilidade do painel KR_GFX.
+    this.hud.onLook = (dxPx, dyPx) => {
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
+      this.input.yaw -= dxPx * sens;
+      this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch - dyPx * sens));
+    };
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
@@ -337,7 +359,9 @@ export class Game3D {
     // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
     const lpExposure = scene.userData?.lighting?.exposure;
     if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
-    this.ringWall = createRingWall();
+    // Task 64 — a parede do anel MATERIALIZA o hazard canônico do cenário
+    // (energia CIGKV, chuva ácida W1, esporos W2, fumaça W3, tsunami W4).
+    this.ringWall = createRingWall(this.scenario.id);
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {
       // Fase 18 — partículas de combate no pool compartilhado da cena
@@ -396,6 +420,7 @@ export class Game3D {
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
+        this.#attachHumanoidForBot(this.botOps.get(b.id), b.op || b.id); // Fase 57 + Task 64 — corpo real com IDENTIDADE: mesmo operativo → mesmo avatar
       });
     }
     // loot
@@ -622,6 +647,8 @@ export class Game3D {
       // Fase 40 — mapa tático em tela cheia (toggle; a partida NUNCA pausa)
       if (k === TACTICAL_HOTKEY && !e.repeat) this.hud?.toggleMap();
       if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
+      // Task 62 — alternância 1ª/3ª pessoa (V)
+      if (k === 'v' && !e.repeat) this.toggleView();
       // Fase 5 — espectador: troca o operativo acompanhado
       if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
       if (k === 'arrowright' && !e.repeat) this.spectateCycle(1);
@@ -634,6 +661,25 @@ export class Game3D {
   }
 
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
+
+  // ---------- Task 62 — alternância de câmera (1ª pessoa ↔ avatar à frente) ----------
+  // Tecla V + botão ◉ VISTA do HUD. Persistida em localStorage (kr_view_mode);
+  // ?view= da URL tem prioridade apenas na abertura (resolveViewMode).
+  toggleView() {
+    this.setViewMode(this.viewMode === 'fps' ? 'tps' : 'fps');
+  }
+
+  setViewMode(mode) {
+    if (mode !== 'fps' && mode !== 'tps' || mode === this.viewMode) return;
+    this.viewMode = mode;
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* storage privado */ }
+    // visibilidade: em 1ª pessoa o corpo do jogador dorme (o rig FP assume);
+    // em 3ª pessoa o operativo volta com a arma presa nas mãos.
+    if (this.playerOp?.group) this.playerOp.group.visible = mode !== 'fps';
+    if (this.firstPersonRig) this.firstPersonRig.visible = mode === 'fps';
+    if (mode === 'tps') { this.camRig.curDist = 4.4; this.camRig.curEye = 1.62; } // re-enquadra
+    this.hud?.viewToast?.(mode === 'fps' ? 'CÂMERA // PRIMEIRA PESSOA' : 'CÂMERA // AVATAR À FRENTE (3ª PESSOA)');
+  }
 
   // ---------- fluxo ----------
   // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
@@ -660,21 +706,52 @@ export class Game3D {
   }
 
   async #applyAvatarOverride() {
-    this.#removeAvatarModel();
-    const id = this.avatarOverrideId;
-    if (!id) return;
-    const a = await loadAvatarGlb(id);
+    // Fase 57 — corpo humano realista do HERÓI. O GLB é o corpo PADRÃO:
+    // sem ?avatar= → determinístico pelo operativo; ?avatar=<id pool> → escolha
+    // explícita; ?avatar=legacy|off|0|none → corpo procedural antigo (escape
+    // hatch); QUALQUER falha de load/rig → procedural assume (doutrina hero3d).
+    // Fase 60 — o corpo agora é CORRETO POR SEXO DA IDENTIDADE (SK_Gwen →
+    // rigs femininos) e recebe a VESTIMENTA/ACESSÓRIOS do catálogo dos 33
+    // (headgear, colete, mochila, ombreiras e faixa de facção nos bones).
+    this.humanoidPlayer = null;
+    if (this.humanoidDisabled) { this.#setProceduralBodyVisible(true); return; }
     const g = this.playerOp?.group;
-    if (!a?.root || !g) { this.#setProceduralBodyVisible(true); return; }
-    normalizeAvatarScale(a.root);
-    fitAvatarToGround(a.root);
-    this.avatarRoot = a.root;
-    this.#setProceduralBodyVisible(false); // corpo procedural dorme; GLB assume
-    g.add(a.root);
-    if (a.clips?.length) {
-      this.avatarMixer = new THREE.AnimationMixer(a.root);
-      this.avatarMixer.clipAction(a.clips[0]).play();
-    }
+    if (!g) return;
+    const identityId = this.selectedOperative?.id ?? 'player';
+    const override = this.avatarOverrideId ?? this.avatarParam;
+    const id = override
+      ? resolveGameplayAvatar(override, identityId)
+      : poolBodyForIdentity(identityId); // Fase 60 — corpo por identidade
+    if (!id) { this.#setProceduralBodyVisible(true); return; } // estático/inválido: procedural
+    const body = await createHumanoidBody({ avatarId: id });
+    if (!body || this.playerOp?.group !== g) { this.#setProceduralBodyVisible(true); return; } // troca de operativo durante o load
+    attachHumanoidToOperative(this.playerOp, body);
+    // Fase 60 — vestimenta/acessórios da identidade no corpo real (override
+    // explícito de pool usa o look do próprio operativo quando existir).
+    const look = resolveIdentityLook(identityId);
+    this.humanoidPlayerSex = look.sex;
+    dressHumanoid(body, look);
+    syncHumanoidGear(body, this.playerOp.parts); // Task 64 — capacete/colete/mochila nos bones reais
+    this.humanoidPlayer = body;
+  }
+
+  // Fase 57 — corpo humano realista nos ATORES REMOTOS/bots (attach único,
+  // assíncrono e idempotente: o GLB vive no tier DETALHADO do LOD, então o
+  // proxy/silhueta seguem governando a distância automaticamente).
+  async #attachHumanoidForBot(entry, seed) {
+    if (this.humanoidDisabled || !entry?.op?.detailGroup || entry.humanoid !== undefined) return;
+    entry.humanoid = null; // reserva: evita attach duplo durante o load
+    // Fase 60 — bots vestem o ROSTER CANÔNICO (33 identidades): corpo por sexo
+    // da identidade + uniforme/acessórios do catálogo; determinístico por seed.
+    const identityId = identityForBot(seed);
+    const look = resolveIdentityLook(identityId);
+    const body = await createHumanoidBody({ avatarId: poolBodyForIdentity(identityId) });
+    if (!body || !entry.op?.detailGroup) return; // ator saiu durante o load → GC
+    attachHumanoidToOperative({ group: entry.op.detailGroup, parts: entry.op.detailParts }, body);
+    dressHumanoid(body, look);
+    entry.humanoidSex = look.sex;
+    syncHumanoidGear(body, entry.op.detailParts ?? entry.op.parts); // Task 64 — gear nos bones do remoto
+    entry.humanoid = body;
   }
 
   #initAvatarVitrine(host) {
@@ -1069,6 +1146,10 @@ export class Game3D {
       if (cache === sig) continue;
       parts.userData.gearSig = sig;
       applyOperativeGear(parts, a.gear);
+      // Task 64 — pickup/troca de nível DURANTE a partida: o gear renasce nos
+      // anchors procedurais; o corpo GLB (se presente) re-adota na hora.
+      if (a.id === 'player') { if (this.humanoidPlayer) syncHumanoidGear(this.humanoidPlayer, parts); }
+      else { const h = this.botOps.get(a.id)?.humanoid; if (h) syncHumanoidGear(h, parts); }
     }
   }
 
@@ -1204,7 +1285,7 @@ export class Game3D {
     const p = s.player;
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
-    pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
+    pg.rotation.y = p.yaw; // Task 62 — modelo olha −Z local = direção de mira (fim do avatar de costas)
     if (!p.alive) {
       // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
       let dfx = this.deathFX.get('player');
@@ -1252,21 +1333,22 @@ export class Game3D {
     // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
     this._dip ??= { v: 0, wasGround: !!p.onGround, fallV: 0 };
     const groundedNow = !!p.onGround;
+    const wasGroundBefore = this._dip.wasGround; // Task 65 — borda ar→chão ANTES da mutação (onLand nunca disparava: wasGround já tinha sido sobrescrito)
     if (groundedNow && !this._dip.wasGround) this._dip.v = Math.min(.12, Math.max(0, -(this._dip.fallV ?? 0)) * .016);
     this._dip.wasGround = groundedNow;
     this._dip.fallV = groundedNow ? 0 : (p.vy ?? 0);
     this._dip.v *= Math.exp(-dt * 6.5);
     const pFx = animateOperative(this.playerOp.parts, {
       t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
-      pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+      pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
       sprintK: this._sk, // Task 59 — low-ready do sprint (suavizado por ator)
     });
-    // Task 59 — arma em 3ª pessoa acompanha o low-ready do sprint
-    poseWeaponSprint(this.playerOp.group.userData.weaponRig, pFx?.sprintK ?? 0);
+    // Task 62 — o low-ready da arma no sprint é resolvido DENTRO de
+    // animateOperative (solda punho↔grip por frame); sem pose externa.
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
@@ -1301,6 +1383,46 @@ export class Game3D {
         this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
       }
     }
+    // Fase 57 — corpo humano REAL do herói (3ª pessoa): locomoção fase-travada
+    // pela passada predita (gait.js), mira/rastejo/agachamento/queda + arma
+    // SOLDADA na mão direita do rig real. Em 1ª pessoa o grupo dorme (o rig FP
+    // assume) — a visibilidade já é herdada de playerOp.group.visible.
+    if (this.humanoidPlayer) {
+      // Task 64 — lean de curva: vel angular do yaw (EWMA interna no rig),
+      // clampada no animateHumanoid (mouse rápido nunca derruba o corpo).
+      const yawVel = Number.isFinite(this._playerPrevYaw) && dt > 0
+        ? Math.atan2(Math.sin(p.yaw - this._playerPrevYaw), Math.cos(p.yaw - this._playerPrevYaw)) / dt
+        : 0;
+      this._playerPrevYaw = p.yaw;
+      // Fase 60 — camada humana: lean pela aceleração real, cabeça segue a
+      // câmera (yaw relativo ao corpo), low-ready armado e squash de pouso.
+      // Task 65 — speedNorm CONTÍNUO pela passada (gait.js, F42) — o binário
+      // .8/1.2 fazia o blend idle↔walk↔run pular em degraus.
+      const hsn = Math.max(p.moving ? .12 : 0, this._gait.speed);
+      this._hsn ??= 0;
+      const hAccel = Math.max(-1, Math.min(1, (hsn - this._hsn) / Math.max(1e-3, dt * 6)));
+      this._hsn = hsn;
+      let headYaw = 0;
+      if (this._camDir) {
+        const camYaw = Math.atan2(-this._camDir.x, -this._camDir.z); // convenção −Z local (Task 62)
+        let rel = camYaw - p.yaw;
+        rel = ((rel + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        headYaw = headYawClamp(rel);
+      }
+      animateHumanoid(this.humanoidPlayer, {
+        t: this.animT, phase: this._gait.phase, speedNorm: hsn,
+        pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+        knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0, leanVel: yawVel,
+        accel: hAccel, yaw: headYaw, armed: !!(p.alive && this.playerWeapon),
+        sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !wasGroundBefore,
+        dt, // Task 65 — dt REAL do frame (idle respira na velocidade renderizada)
+      });
+      if (this.playerWeapon && p.alive && !p.knocked && !airborne) {
+        weldWeaponToHand(this.humanoidPlayer, this.playerWeapon);
+        poseLeftHandSupport(this.humanoidPlayer, this.playerWeapon); // Task 64 — empunhadura de 2 mãos
+        poseWeaponReady(this.humanoidPlayer, { speedNorm: hsn, ads: p.ads }); // Task 64 — arma erguida (low-ready/ADS)
+      }
+    }
     // bots
     const seen = new Set();
     const mySquad = s.player?.squad ?? null;
@@ -1333,6 +1455,7 @@ export class Game3D {
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
+        this.#attachHumanoidForBot(entry, b.op || (b.officer ? `OCE_${b.id}` : b.id)); // Fase 57 + Task 64 — identidade do operativo (oficial mantém fallback OCE_)
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
         entry.name.material.map.dispose();
@@ -1376,6 +1499,11 @@ export class Game3D {
         // Fase 13 — congelada fora do frustum (rotação da raiz continua: barata)
         const dparts = entry.op.activeParts();
         if (dparts && !entry.frozen) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
+        // Fase 57 — corpo humano REAL caído: relaxa uma única vez (assenta);
+        // a rotação de queda vive na RAIZ do LOD (herdada pelo GLB filho).
+        if (entry.humanoid && entry.op.level === 'full' && !entry.frozen) {
+          animateHumanoid(entry.humanoid, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true });
+        }
         continue;
       }
       g.userData.deadVisible = false;
@@ -1383,7 +1511,7 @@ export class Game3D {
       g.visible = true;
       g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
-      g.rotation.y = b.yaw + Math.PI;
+      g.rotation.y = b.yaw; // Task 62 — mesma convenção do jogador (modelo olha −Z local)
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
@@ -1406,8 +1534,27 @@ export class Game3D {
         entry.sk ??= 0;
         entry.sk += (bSkT - entry.sk) * (1 - Math.exp(-(bSkT > entry.sk ? 5.5 : 7) * dt));
         if (entry.sk < 1e-4) entry.sk = 0;
-        const bFx = animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
-        poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
+        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
+        // Fase 57 — corpo humano REAL do ator remoto: locomoção fase-travada
+        // (mesma fase do gait.js), rastejo/queda/agachamento + arma na mão.
+        if (entry.humanoid && entry.op.level === 'full') {
+          // Task 64 — lean dos remotos: yaw do snapshot vira vel angular (wrap-safe)
+          const bYawVel = Number.isFinite(entry.prevYaw) && dt > 0
+            ? Math.atan2(Math.sin(b.yaw - entry.prevYaw), Math.cos(b.yaw - entry.prevYaw)) / dt
+            : 0;
+          entry.prevYaw = b.yaw;
+          entry._hSn ??= 0; // Fase 60 — lean do bot pela aceleração real da passada
+          const bAccel = Math.max(-1, Math.min(1, (gsn - entry._hSn) / Math.max(1e-3, dt * 6)));
+          entry._hSn = gsn;
+          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null, dt });
+          const bwr = entry.op.group.userData?.weaponRig;
+          if (bwr && !b.knocked && !b.dropPhase) {
+            weldWeaponToHand(entry.humanoid, bwr);
+            poseLeftHandSupport(entry.humanoid, bwr); // Task 64 — 2 mãos também nos remotos
+            poseWeaponReady(entry.humanoid, { speedNorm: gsn, ads: !!b.ads }); // Task 64 — arma erguida
+          }
+        }
+        // Task 62 — arma acompanha o low-ready dentro do animateOperative
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
@@ -1458,6 +1605,11 @@ export class Game3D {
         u.fogDensity.value = this.scene.fog.density ?? 0.0035;
       }
     }
+    // Task 65 — dedo-duro: fauna reage à PRESSÃO DO RING (1 − raio/170):
+    // conforme a zona fecha, ratos correm mais, enxames crescem e jacarés/
+    // tubarões patrulham mais rápido (visual; dano continua na sim/servidor).
+    this.scene.userData.fauna?.setAgitation?.(
+      Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170)));
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
@@ -1551,7 +1703,12 @@ export class Game3D {
       this.sun.target.position.set(p.x, 0, p.z);
       return;
     }
-    const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
+    // Task 66 — fim do recuo de câmera no sprint: o enquadramento fica
+    // ESTÁVEL em movimento (dist e FOV constantes andando/correndo). O
+    // pullback 4.4→5.0 + zoom-out 62→68 liam como a câmera "fugindo" do
+    // avatar a cada arrancada — a sensação de velocidade agora vem do
+    // low-ready (Task 59) e do FOV de slide, não de recorte de câmera.
+    const targetDist = p.ads ? 2.2 : 4.4;
     rig.curDist += (targetDist - rig.curDist) * Math.min(1, dt * 8);
     // altura do olhar: agachado ~1.15m / deslizando ~0.92m (Fase 5 + movimento avançado)
     const eyeH = p.sliding ? 0.92 : (p.crouching ? 1.15 : 1.62);
@@ -1598,7 +1755,8 @@ export class Game3D {
     }
     // FOV dinâmico
     const zoomTps = p.attachStats?.adsZoom ?? 1;  // Fase 30 — Mira 4x aproxima
-    const targetFov = p.ads ? 42 * zoomTps : (p.sprinting ? 68 : 62);
+    // Task 66 — FOV fixo em locomoção TPS (sprint não faz zoom-out)
+    const targetFov = p.ads ? 42 * zoomTps : 62;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
     this.camera.updateProjectionMatrix();
     // sol acompanha (sombras)
@@ -1811,8 +1969,10 @@ export class Game3D {
         case 'pulse': {
           // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
           // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          // Fase 61 — a fase oficial do mundo é nomeada (cânon safeZone.js).
+          const fase = e.phaseName ? ` Fase oficial: ${e.phaseName}.` : '';
           const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${fase}${destino}`, 'warn');
           this.audio.ringWarn();
           break;
         }
@@ -2071,14 +2231,14 @@ export class Game3D {
 
   // ---------- Fase 10 — reação de impacto ----------
   // Converte o ponto de impacto (mundo) em ângulo no espaço LOCAL do modelo
-  // desfeito o rotation.y real do grupo (yaw + π): 0 = frente do modelo,
-  // +π/2 = lado +x do modelo, π = costas. Registra flinch só para atores vivos.
+  // desfeito o rotation.y real do grupo (= yaw desde a Task 62): 0 = frente do
+  // modelo, +π/2 = lado +x do modelo, π = costas. Registra flinch só para vivos.
   #registerHit(victimId, e) {
     const s = this.sim;
     const actor = victimId === 'player' ? s.player : (s.bots ?? []).find((b) => b.id === victimId);
     if (!actor || !actor.alive) return;
     const dx = e.x - actor.x, dz = e.z - actor.z;
-    const th = actor.yaw + Math.PI;
+    const th = actor.yaw;
     const cos = Math.cos(th), sin = Math.sin(th);
     const lx = dx * cos - dz * sin;  // mundo → local (inverso de rotation.y)
     const lz = dx * sin + dz * cos;
@@ -2257,6 +2417,11 @@ export class Game3D {
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Task 65 — fauna canônica: patrulha dos jacarés/tubarões, bandas de
+    // gaivotas, corrida dos ratos e enxames do dedo-duro (mesma cadência dos
+    // animators do dressing/worldmarks)
+    const faunaAnim = this.scene.userData.fauna?.animators;
+    if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

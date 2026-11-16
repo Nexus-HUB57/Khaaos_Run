@@ -97,7 +97,6 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     getItemForUser: storage.getItemForUser,
     consumeItemDurability: storage.consumeItemDurability,
     createItem: storage.createItem,
-    pickupLoot: storage.pickupLoot,
   };
   let durabilityWrites = 0;
   storage.getPlayerStats = async () => ({
@@ -223,10 +222,10 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     let allowPersistence!: () => void;
     const persistenceGate = new Promise<void>((resolve) => { allowPersistence = resolve; });
     releaseLootPersistence = allowPersistence;
-    storage.createItem = async (values) => {
+    storage.createItem = async ({ userId, name, type, rarity, stats }) => {
       signalPersistenceStarted();
       await persistenceGate;
-      return { ...values, id: lootId } as any;
+      return { id: lootId, userId, name, type, rarity, stats } as any;
     };
     let lootBroadcastSeen = false;
     const monitorLootBroadcast = (raw: WebSocket.RawData) => {
@@ -339,6 +338,5 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     storage.getItemForUser = originals.getItemForUser;
     storage.consumeItemDurability = originals.consumeItemDurability;
     storage.createItem = originals.createItem;
-    storage.pickupLoot = originals.pickupLoot;
   }
 });

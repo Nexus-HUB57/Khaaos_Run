@@ -33,7 +33,7 @@ test('Barburhen resolve o MUNDO DA DESTRUIÇÃO (diretiva W1) e mapeia os setore
   assert.equal(getWorldLayout('BARBURHEN-TEST', scenario.id), layout);
 });
 
-test('Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo', () => {
+test('Barburhen segue o CÂNON de zona segura do mundo e KRC/XP do multiplicador', () => {
   const training = new KhaaosSim3D({ seed: 'ZONE-RULES', botCount: 0 });
   const barburhen = new KhaaosSim3D({ seed: 'ZONE-RULES', botCount: 0, scenarioId: 'Barburhen' });
   training.start('belt');
@@ -46,7 +46,17 @@ test('Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
     sim.ring.radius = 170;
     sim.step(DEFAULT_INPUT, 1 / 30);
   }
-  assert.ok(barburhen.player.life < training.player.life);
+  // Fase 61 — cânon: fase 0 de CIGKV e Barburhen tem o MESMO dps oficial (1.0);
+  // o contraste canônico do W1 é o COLAPSO mais apertado (50 m vs 60 m oficiais).
+  assert.ok(Math.abs((100 - training.player.life) - (100 - barburhen.player.life)) < 1e-9,
+    'fase 0: mesmo dps oficial nas duas zonas');
+  assert.ok(barburhen.zone[4].radius < training.zone[4].radius,
+    `W1 colapsa mais fundo (${barburhen.zone[4].radius.toFixed(1)} < ${training.zone[4].radius.toFixed(1)})`);
+  assert.equal(barburhen.zone[4].dps, 20);
+  assert.equal(barburhen.zone[4].name, 'Colapso da Refinaria');
+  // contraste entre mundos: W4 colapsa ao DOBRO do dps do CIGKV
+  assert.ok(training.zone[4].dps === 20);
+
   assert.equal(training.scenario.krcMultiplier, 0.5);
   assert.equal(training.scenario.xpMultiplier, 1.0);
   assert.equal(barburhen.scenario.krcMultiplier, 1.0);

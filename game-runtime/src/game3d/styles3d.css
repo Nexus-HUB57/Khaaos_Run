@@ -497,6 +497,13 @@ body.locked .controls-hint { opacity: .25; }
   border: 2px solid rgba(200,255,61,.3); border-radius: 50%;
   background: rgba(11,8,20,.4); z-index: 25; touch-action: none;
 }
+/* Task 61 — look/aim touch: arrastar no lado direito gira a câmera (yaw+pitch).
+   FICA ABAIXO do joystick/botões (z 25) e dos modais (z 40+): hit-test respeita
+   quem está por cima; o pad só recebe o toque nas áreas livres. */
+#lookPad {
+  position: fixed; right: 0; top: 0; width: 62%; height: 100%;
+  z-index: 24; touch-action: none;
+}
 #joyKnob {
   position: absolute; left: 50%; top: 50%; width: 46px; height: 46px;
   transform: translate(-50%,-50%); border-radius: 50%;

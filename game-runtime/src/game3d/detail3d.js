@@ -59,14 +59,39 @@ function discHitsCollider(px, pz, r, colliders, margin = MARGIN) {
   return false;
 }
 
+// ─── Fase 58 — VIAS CANÔNICAS POR MUNDO (cânon README "Mundos Oficiais") ───
+// Viação asfaltada existe APENAS nos mundos urbanos:
+//   • CIGKV — "Khaaos Ville", campo de instrução com setor "Urbano Denso";
+//   • W1 Barburhen — ambiente urbano pós-guerra (grid urbano irregular,
+//     "carros abandonados").
+// As descrições oficiais de W2 Priadus (selva/pântano), W3 Ckesalth (deserto)
+// e W4 Arukheea (ilha) NÃO citam estradas nem ruas — a rede urbana de Khaoos
+// Ville que vazava para esses mundos é DIVERGÊNCIA corrigida aqui. Este é o
+// ponto único de verdade: estradas, calçadas, faixas de pedestre, tráfego
+// (carros/vans) e props de beira de via desaparecem juntos nos mundos de
+// natureza, e o dressing natural/distorito volta a ocupar o solo.
+export const URBAN_WORLDS = Object.freeze(new Set(['CIGKV', 'Barburhen']));
+
+/**
+ * O mundo tem vias (estradas/ruas asfaltadas) segundo o cânon do README?
+ * Urbanos: CIGKV e Barburhen. Natureza (sem vias): Priadus, Ckesalth, Arukheea.
+ */
+export function hasCanonicalRoads(scenarioId) {
+  return URBAN_WORLDS.has(scenarioId);
+}
+
 /**
  * Estradas de Khaoos Ville: 4 radiais (praça central → distrito) + anel de perímetro.
  * Cada distrito recebe um "ponto de aproximação": o primeiro ponto (varrendo direções
  * giradas ao redor do centro) de onde a praça enxerga em linha reta livre de
  * construções. Assim nenhuma estrada termina dentro de um galpão.
+ * Fase 58 — mundos de natureza (Priadus/Ckesalth/Arukheea) NÃO geram vias:
+ * devolve [] (determinístico) e todo o pipeline consumidor (calçadas, faixas,
+ * tráfego, props de via, avoidance de dressing) entra em coerência de cânon.
  * @returns [{ x1, z1, x2, z2, width, kind: 'radial'|'ring' }]
  */
 export function roadSegments(layout, { width = 7.5 } = {}) {
+  if (!hasCanonicalRoads(layout.scenarioId)) return [];
   const colliders = layout.colliders;
   const outer = layout.districts.slice(0, 4); // 4 distritos externos; [4] é a praça central
   const starts = outer.map((d) => {
