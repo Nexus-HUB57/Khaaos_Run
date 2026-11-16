@@ -89,6 +89,9 @@ jobs:
       - name: Run official tests with coverage
         run: set -o pipefail; npm run coverage:official 2>&1 | tee test-unit.log
 
+      - name: Enforce official coverage threshold
+        run: npm run coverage:gate
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

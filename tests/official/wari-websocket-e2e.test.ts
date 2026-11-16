@@ -118,6 +118,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     grenade = { ...grenade, durability: String(Number(grenade.durability) - amount) };
     return grenade as any;
   };
+  storage.createItem = async (values) => ({ ...values, id: grenadeId + 1 } as any);
 
   const httpServer = createServer();
   let ownerSocket: WebSocket | undefined;
