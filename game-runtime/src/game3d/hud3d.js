@@ -79,9 +79,29 @@ export class HUD {
       globalThis.addEventListener?.('blur', releaseAll);
       document.addEventListener?.('visibilitychange', () => { if (document.hidden) releaseAll(); });
     }
-    // Task 61 — look/aim touch (pad direito): arrastar gira a câmera (yaw + pitch),
-    // a MESMA convenção/clamp do mousemove (main3d.initInput). Multi-touch seguro:
-    // pointerId próprio, independente do joystick (Free Fire style).
+    // Task 67 — slide-to-aim nos botões de COMBATE (fire/ads), padrão Free Fire:
+    // pressionar e ARRASTAR ajusta a mira mantendo a ação (tap puro segue
+    // disparando/mirando). O browser captura o toque implicitamente ao botão —
+    // os pointermove continuam chegando a ele durante o arrasto.
+    for (const ckey of ['fire', 'ads']) {
+      const cbtn = document.querySelector(`[data-key="${ckey}"]`);
+      if (!cbtn) continue;
+      let last = null;
+      cbtn.addEventListener('pointerdown', (e) => { last = { x: e.clientX, y: e.clientY }; });
+      cbtn.addEventListener('pointermove', (e) => {
+        if (!last) return;
+        const ddx = e.clientX - last.x, ddy = e.clientY - last.y;
+        if (!ddx && !ddy) return;
+        last = { x: e.clientX, y: e.clientY };
+        this.onLook?.(ddx, ddy);
+      });
+      const dropBtn = () => { last = null; };
+      cbtn.addEventListener('pointerup', dropBtn);
+      cbtn.addEventListener('pointercancel', dropBtn);
+    }
+    // Task 61 — look/aim touch (pad): arrastar qualquer área livre gira a
+    // câmera (yaw + pitch), a MESMA convenção/clamp do mousemove (main3d.initInput).
+    // Multi-touch seguro: pointerId próprio, independente do joystick.
     const pad = $('#lookPad');
     if (pad) {
       this.look = { active: false, id: null, lx: 0, ly: 0 };
