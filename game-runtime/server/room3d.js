@@ -104,6 +104,7 @@ export class MatchRoom3D {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
+    this.scenario = resolveScenario(scenarioId);
     // Recompensas KRC: callback único por partida com { matchId, reason,
     // winnerId, winnerName, results } (results = SOMENTE humanos, com id de
     // conexão — o servidor resolve userId). Falha no callback NUNCA propaga
