@@ -70,10 +70,20 @@ export class GameAudio {
   // barramento de saída de uma família de sons (fallback master p/ robustez)
   #bus(ch) { return this.buses?.[ch] ?? this.master; }
 
+  // Task 70 — cache por duração (ms): os 21 call sites usam poucas durações
+  // constantes; sem cache cada passo recriava buffer + loop Math.random.
+  #noiseCache = new Map();
   #noiseBuffer(dur = .5) {
-    const sr = this.ctx.sampleRate, buf = this.ctx.createBuffer(1, sr * dur, sr);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const key = Math.round(dur * 1000);
+    let buf = this.#noiseCache.get(key);
+    if (!buf) {
+      if (this.#noiseCache.size > 24) this.#noiseCache.clear(); // durações são constantes — cap defensivo
+      const sr = this.ctx.sampleRate;
+      buf = this.ctx.createBuffer(1, sr * dur, sr);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.#noiseCache.set(key, buf);
+    }
     return buf;
   }
   #env(gain, t0, attack, decay, peak = 1) {
