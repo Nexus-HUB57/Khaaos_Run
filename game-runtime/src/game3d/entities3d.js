@@ -25,6 +25,7 @@ import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic, my
 // parts/pivôs/rig facial PRESERVADA — o rig facial agora vive no kit.
 import { buildCanonicalHead } from './heads3d.js';
 export { FACIAL_EXPRESSIONS, FACE_JAW, createFaceRig } from './heads3d.js';
+import { validateEquippedEntityBudget } from './hero3d.js';
 // Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
 // (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
 import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
@@ -555,7 +556,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM, hairM });
 
   const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null, hairTail: acc?.hairTail?.length ? acc.hairTail : null, cape: acc?.cape ?? null };
-  parts.userData = { vestColor: vest }; // Fase 28 — tinge o gear com a cor da equipe
+  parts.userData = { vestColor: vest, root: g }; // root permite validar a entidade completa após equipar
   return { group: g, parts };
 }
 
@@ -1129,6 +1130,7 @@ export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opt
   model.magW = MAGW_LOCAL[weaponId] ?? MAGW_LOCAL.default;
   operativeGroup.userData.weaponRig = model;
   if (opParts) opParts.weaponRig = model; // animateOperative lê daqui por frame
+  operativeGroup.userData.equippedBudget = validateEquippedEntityBudget(operativeGroup);
   return model;
 }
 

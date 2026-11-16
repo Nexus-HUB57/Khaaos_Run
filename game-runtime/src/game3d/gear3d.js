@@ -14,6 +14,7 @@
 // semeado — zero Math.random). Em Node os meshes existem e podem ser
 // inspecionados (contagem de filhos, nomes, userData) nos testes.
 import * as THREE from 'three';
+import { validateEquippedEntityBudget } from './hero3d.js';
 
 // ---------------------------------------------------------------- const ----
 export const GEAR_LIMITS = Object.freeze({ vest: 4, helmet: 3, pack: 3 });
@@ -182,6 +183,9 @@ export function applyOperativeGear(parts, gear = {}) {
     if (kind === 'pack') mesh.position.set(0, .02, .02);
     anchor.add(mesh);
     out[kind] = mesh;
+  }
+  if (parts.userData?.root) {
+    parts.userData.equippedBudget = validateEquippedEntityBudget(parts.userData.root);
   }
   return out;
 }
