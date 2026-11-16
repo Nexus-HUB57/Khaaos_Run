@@ -133,31 +133,48 @@ function marksBarburhen(group, scene, scenario, rng, hazard) { // sem sobrevivê
   const rust = M('#7a4a2b', { metal: .4, rough: .7 });
   const counts = { coolingTowers: 0, smokestacks: 0, pipeBridges: 0 };
   // torres de resfriamento (cintura hiperbólica aproximada em 3 segmentos)
+  const towerSpecs = [
+    { r0: 7.5, r1: 5.6, h: 9, y: 4.5 },
+    { r0: 5.6, r1: 4.4, h: 7, y: 12.5 },
+    { r0: 4.4, r1: 5.9, h: 5, y: 18.5 },
+  ];
+  const towerMeshes = towerSpecs.map((sg) => new THREE.InstancedMesh(
+    new THREE.CylinderGeometry(sg.r1, sg.r0, sg.h, 18, 1, true), concrete, 2,
+  ));
+  const dummy = new THREE.Object3D();
   for (let i = 0; i < 2; i++) {
     const s = ringSpot(rng);
-    const segs = [
-      { r0: 7.5, r1: 5.6, h: 9, y: 4.5 },
-      { r0: 5.6, r1: 4.4, h: 7, y: 12.5 },
-      { r0: 4.4, r1: 5.9, h: 5, y: 18.5 },
-    ];
-    for (const sg of segs) {
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(sg.r1, sg.r0, sg.h, 18, 1, true), concrete);
-      seg.position.set(s.x, sg.y, s.z);
-      group.add(seg);
+    for (let j = 0; j < towerSpecs.length; j++) {
+      dummy.position.set(s.x, towerSpecs[j].y, s.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      towerMeshes[j].setMatrixAt(i, dummy.matrix);
     }
     counts.coolingTowers++;
+  }
+  for (const mesh of towerMeshes) {
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    group.add(mesh);
   }
   // chaminés com colunas de fumaça REAL (partículas pooled — Fase 17):
   // emissor contínuo por chaminé, empuxo negativo (sobe) + deriva de vento
   const emitters = [];
+  const stackMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.1, 1.7, 1, 12), concrete, 3);
+  const bandMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.14, 1.14, 1, 12), rust, 3);
   for (let i = 0; i < 3; i++) {
     const s = ringSpot(rng);
     const h = 22 + rng.next() * 10;
-    const stack = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.7, h, 12), concrete);
-    stack.position.set(s.x, h / 2, s.z);
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.14, 1.14, 1.2, 12), rust);
-    band.position.set(s.x, h - 2, s.z);
-    group.add(stack, band);
+    dummy.position.set(s.x, h / 2, s.z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, h, 1);
+    dummy.updateMatrix();
+    stackMesh.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(s.x, h - 2, s.z);
+    dummy.scale.set(1, 1.2, 1);
+    dummy.updateMatrix();
+    bandMesh.setMatrixAt(i, dummy.matrix);
     const emitter = new Emitter(particles(scene), {
       origin: { x: s.x, y: h + 1, z: s.z },
       rate: 5,
@@ -172,6 +189,11 @@ function marksBarburhen(group, scene, scenario, rng, hazard) { // sem sobrevivê
     emitters.push(emitter);
     counts.smokestacks++;
   }
+  stackMesh.instanceMatrix.needsUpdate = true;
+  bandMesh.instanceMatrix.needsUpdate = true;
+  stackMesh.computeBoundingSphere();
+  bandMesh.computeBoundingSphere();
+  group.add(stackMesh, bandMesh);
   // ponte de dutos entre dois suportes NO MESMO SETOR angular (o vão nunca
   // cruza a arena — o ponto médio fica no anel externo)
   const s1 = ringSpot(rng);
