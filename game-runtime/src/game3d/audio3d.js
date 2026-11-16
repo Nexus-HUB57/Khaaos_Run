@@ -1,8 +1,11 @@
 // Khaaos Run — Áudio procedural (WebAudio): tiros, impacto, recarga, zona, UI.
 // Nenhum arquivo externo — tudo sintetizado em tempo real.
 // Fase 19 — mixagem: master + barramentos sfx/world/ui (KR_AUDIO_*, audiomix.js).
+// Task 67 — identidade sonora dos mundos: camadas contínuas, fauna audível,
+// mar/fogo/vida urbana com ECO (reverb) e mix por fase do anel (ambience3d.js).
 import { DEFAULT_AUDIO_MIX, normalizeAudioMix } from './audiomix.js';
 import { footstepProfile, worldAudioProfile } from './worldAudioProfiles.js';
+import { AmbienceEngine } from './ambience3d.js';
 
 export class GameAudio {
   constructor() {
@@ -20,6 +23,10 @@ export class GameAudio {
     this.survivalNodes = {};   // kind → nós WebAudio p/ teardown com fade
     this.worldAmbience = { ...worldAudioProfile('CIGKV'), weather: 'clear', interior: false };
     this.ambientNodes = null;
+    // Task 67 — motor de ambiência por mundo (headless-safe: estado funciona
+    // sem AudioContext, grafo nasce no attach() durante o init).
+    this.ambience = new AmbienceEngine(this.worldAmbience.world);
+    this.zonePhase = { idx: 0, name: null };
   }
   init() {
     if (this.ctx) return;
@@ -38,6 +45,9 @@ export class GameAudio {
       g.connect(this.master);
       this.buses[ch] = g;
     }
+    // Task 67 — ambiência viva entra no barramento 'world' (com envio wet de
+    // SFX p/ o espaço do mundo — passos/tiros ecoam conforme o cenário).
+    this.ambience.attach(this.ctx, this.buses.world, this.buses.sfx);
     this.#startAmbient();
   }
   resume() { this.ctx?.resume?.(); }
@@ -74,12 +84,25 @@ export class GameAudio {
   /** Troca a assinatura acústica do mundo sem reinicializar o AudioContext. */
   setWorldAmbience(worldId = 'CIGKV', { weather = 'clear', interior = false } = {}) {
     this.worldAmbience = { ...worldAudioProfile(worldId), weather, interior: !!interior };
+    // Task 67 — o motor de ambiência (fauna/mar/fogo/urbano/reverb) segue a
+    // troca de mundo; em headless (sem ctx) o estado já fica registrado.
+    this.ambience?.setWorld(worldId, { weather, interior });
     if (this.ctx) {
       this.#stopAmbient();
       this.#startAmbient();
     }
     return { ...this.worldAmbience };
   }
+
+  // ---------- Task 67 — identidade sonora dos mundos (ambience3d.js) ----------
+  /** Fase canônica do anel (0..4 — safeZone.js) → crossfade das camadas. */
+  setZonePhase(idx = 0, name = null) {
+    this.zonePhase = { idx: Math.max(0, Math.min(4, Math.floor(idx))), name };
+    return this.ambience?.setPhase(this.zonePhase.idx);
+  }
+
+  /** Tick por frame: listener 3D, proximidade urbana e agenda de eventos. */
+  ambienceTick(dt = 0, pos = {}) { return this.ambience?.tick(dt, pos); }
 
   #stopAmbient() {
     if (!this.ambientNodes) return;
@@ -373,6 +396,9 @@ export class GameAudio {
     const g = this.ctx.createGain();
     this.#env(g, t, .004, cfg.decay, peak);
     src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
+    // Task 67 — o passo entra no ESPAÇO do mundo (eco urbano/cânion, sala,
+    // costa): envio wet calibrado por mundo no perfil de reverb do ambience3d.
+    if (this.ambience?.sfxWet) g.connect(this.ambience.sfxWet);
     src.start(t);
   }
 
