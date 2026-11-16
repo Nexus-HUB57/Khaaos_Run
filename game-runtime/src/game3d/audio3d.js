@@ -4,7 +4,8 @@
 // Task 67 — identidade sonora dos mundos: camadas contínuas, fauna audível,
 // mar/fogo/vida urbana com ECO (reverb) e mix por fase do anel (ambience3d.js).
 import { DEFAULT_AUDIO_MIX, normalizeAudioMix } from './audiomix.js';
-import { footstepProfile, worldAudioProfile } from './worldAudioProfiles.js';
+import { worldAudioProfile } from './worldAudioProfiles.js';
+import { stepVoice } from './footsteps3d.js'; // Task 69 — foley de passos (voz pura)
 import { AmbienceEngine } from './ambience3d.js';
 
 export class GameAudio {
@@ -380,26 +381,51 @@ export class GameAudio {
   // (não por timer) → o áudio é cirúrgico em relação ao visual. Alternância
   // L/R via filtro sutil (calcanhar esquerdo ~780 Hz, direito ~660 Hz).
   // intensity 0..1 (velocidade do ator), distance em m (remotos: atenuação).
-  step(intensity = .5, distance = 0, surface = this.worldAmbience.surface) {
+  // Task 69 — FOLEY de passos completo: a voz é calculada em footsteps3d.js
+  // (pura/determinística); aqui só a renderização, defensiva camada a camada:
+  // SCUFF (raspagem band-pass band→low) + THUMP (oscilador grave com pitch
+  // drop — o corpo do impacto que faltava) + PAN estéreo (striques reais L/R
+  // do jogador; bots espacializados). Mocks mínimos (F19) sem Oscillator/
+  // StereoPanner degradam a camada ausente e seguem no-op seguros.
+  step(intensity = .5, distance = 0, surface = this.worldAmbience.surface, { side = 'R', sprint = false, land = false, pan = null } = {}) {
     if (!this.ctx || !this.enabled) return;
+    const v = stepVoice({ intensity, side, surface, sprint, land, distance, pan });
     const t = this.ctx.currentTime;
-    this._stepSide = !this._stepSide;
-    const att = 1 / (1 + distance * distance * .012);      // falloff suave
-    const cfg = footstepProfile(surface);
-    const peak = Math.max(.015, (cfg.gain * (.45 + .75 * Math.min(1, intensity))) * att);
+    // UM panner por passo — scuff e thump são o MESMO impacto (pan idêntico);
+    // null quando o contexto não tem StereoPanner (mock F19 → bus direto).
+    const pn = this.ctx.createStereoPanner
+      ? this.ctx.createStereoPanner() : null;
+    if (pn) pn.pan.value = v.pan;
+    const out = (node) => {           // → pan (se houver) → barramento sfx + wet do mundo
+      node.connect(pn ?? this.#bus('sfx'));
+      if (pn) pn.connect(this.#bus('sfx'));
+      // Task 67 — o passo entra no ESPAÇO do mundo (eco urbano/cânion, sala,
+      // costa): envio wet calibrado por mundo no perfil de reverb do ambience3d.
+      if (this.ambience?.sfxWet) (pn ?? node).connect(this.ambience.sfxWet);
+      return pn;
+    };
+    // SCUFF
     const src = this.ctx.createBufferSource();
-    src.buffer = this.#noiseBuffer(cfg.noise);
+    src.buffer = this.#noiseBuffer(v.noiseAmt);
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass'; bp.Q.value = 1.1;
-    bp.frequency.setValueAtTime(cfg.band * (this._stepSide ? 1.05 : .92), t);
-    bp.frequency.exponentialRampToValueAtTime(cfg.low, t + cfg.decay);
+    bp.frequency.setValueAtTime(v.bandHz, t);
+    bp.frequency.exponentialRampToValueAtTime(v.bandEndHz, t + v.decay);
     const g = this.ctx.createGain();
-    this.#env(g, t, .004, cfg.decay, peak);
-    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
-    // Task 67 — o passo entra no ESPAÇO do mundo (eco urbano/cânion, sala,
-    // costa): envio wet calibrado por mundo no perfil de reverb do ambience3d.
-    if (this.ambience?.sfxWet) g.connect(this.ambience.sfxWet);
+    this.#env(g, t, .004, v.decay, Math.max(.015, v.peak));
+    src.connect(bp); bp.connect(g); out(g);
     src.start(t);
+    // THUMP — sem Oscillator no contexto (mock) o scuff sozinho segue tocando
+    const osc = this.ctx.createOscillator?.();
+    if (osc) {
+      const og = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(v.lowHz, t);
+      osc.frequency.exponentialRampToValueAtTime(v.lowEndHz, t + v.decay);
+      this.#env(og, t, .003, v.decay * .9, Math.max(.012, v.thumpPeak));
+      osc.connect(og); out(og);
+      osc.start(t); osc.stop(t + v.decay + .05);
+    }
   }
 
   // arremesso da granada (whoosh curto)
