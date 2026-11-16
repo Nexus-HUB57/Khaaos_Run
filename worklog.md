@@ -2805,6 +2805,17 @@ Work Log:
 - E2E NAVEGADOR REAL (vite dev + agent-browser): renderAudit dos 5 mundos OK — Barburhen chuva ácida dominante (RMS .164, sizzle agudo lowRatio .119), Arukheea fase tsunami ondas dominantes graves (.108/.726), Ckesalth o mais seco (mix .083, vento .054 maior que nos outros), Priadus esporos .12 + insetos agudíssimos (.128); gameplay Arukheea 20 s: AudioContext running, 6 camadas vivas, 11 eventos (5 gull, 2 waveCrest, 1 whaleMoan, 2 ratSqueak, 1 debris), urbanProx 0.997, listener ativo, fase canônica 'Maré Baixa 1' chegando do sim, crossfade manual p/ 'Tsunami Iminente 4' → waves 0.468; ZERO pageerrors
 
 Stage Summary:
+- Mira touch REAL funciona em qualquer área livre da tela (pad tela cheia), slide-to-aim no botão de fogo, botões/topbar 100% tocáveis — o avatar acompanha a direção da mira (yaw=olhar; alto/baixo via pitch)
+- Suíte 1248/0 + E2E touch-real 11/11 (padrão de ouro CDP com hit-testing) — fim dos falsos positivos de dispatchEvent sintético
+- gcodegames.top atualizada do candidate pré-Task 66 para o build desta task (deploy na sequência) — a plataforma que o usuário joga passa a ter o direcional completo
+
+Stage Summary (Task 68 — camada humana de locomoção, passos/corrida naturais):
+- O clip fase-travado garante pés sem patinar, mas sozinho é mecânico — nova camada ADITIVA pós-mixer em humanoid3d.js (humanGaitPose + poseHumanGait): PELVE viva (yaw para o lado do apoio ±.09 rad, rolagem lateral ±.045, ELEVAÇÃO no meio-de-apoio +.022→.036 m na corrida — nunca desce abaixo do bind, pés não enterram), CONTRA-ROTAÇÃO de ombros (spine1 1.4× a pelve, momento angular), POSTURA DE CORRIDA (tronco +.10 rad a partir de sn .75, cabeça compensa — olhar nível) e transferência de peso no IDLE (spine2 ±.018 rad, quadril ±.006) — tudo derivado da FASE da passada + relógio do ator: zero Math.random, zero deslocamento horizontal (invariante anti-patinação intacta)
+- Balanço de braços reforçado SÓ desarmado (com arma, weldWeaponToHand/poseWeaponReady comandam); agachado a camada pula (poseCrouch comanda o quadril); integração no animateHumanoid → jogador E todos os bots herdam
+- Testes: test/humanoid-human-gait-t68.test.js — 11 (contra-rotação exata, gates loc/arma, postura só na corrida, lift ≥ 0 em 48 fases com máximo no meio-de-apoio e zero no contato, determinismo, linearidade no blend, integração nos bones reais: pelve gira/ombros opostos/sway de idle/crouch pula/arma intocada) — suíte FULL 1259/0 fail; vite build OK
+- E2E no jogo real (scripts/e2e_human_gait.mjs, vista lateral congelada, leitura LOCAI dos bones — espaço-mundo é inútil com bind Tripo 90°): camada confirmada VIVA em jogo — hqy p2p .110, hqz p2p .128, sqy p2p .131 (≈1.4×), elevação p2p .0157 m, 29/37 amostras pelve↔ombros em oposição, idle p2p 0.0000; frames laterais mostram passada humana (calcanhar sobe, tronco inclina, braços dobram)
+
 - Os 5 mundos têm IDENTIDADE SONORA PRÓPRIA de nível sênior: fauna canônica audível e espacializada, mar de Arukheea com ondas que quebram, fogo/explosões/vento de duna no deserto, vida urbana com ECO (reverb procedural por mundo — primeiro ConvolverNode do jogo), mix que segue as fases canônicas do anel
 - Tudo 100% sintetizado (zero arquivos externos), determinístico (SeededRng) e auditável offline (renderAudit → números por camada); SFX de combate/UI intactos; mock mínimo F19 segue verde (attach defensivo)
 - 1261/0 verde (13 testes novos), E2E no navegador com métricas por mundo e gameplay ao vivo sem erros — pronto para review/merge
+

@@ -20,6 +20,7 @@ function acalmaBots(bots, posições, integridade) {
     if (p0) { b.x = p0.x; b.z = p0.z; }
     b.y = 0; b.vy = 0; b.onGround = true; b.dropPhase = null;
     b.trainOnboard = false;
+    b.zuShieldT = 0; // Task 68 — fixture = pós-protocolo SEM proteções transitórias
     const hp = integridade?.get(b.id);
     if (hp) { b.life = hp.life; b.armor = hp.armor; } // íntegro como nasceu
     if (b.ai) { b.ai.state = 'patrol'; b.ai.think = Math.max(b.ai.think ?? 0, 0.6); b.ai.lostT = 0; b.ai.stunTicks = 0; b.ai.stunT = 0; }
@@ -45,6 +46,7 @@ export function disembarcarSim(sim) {
   // da zona segura; os testes assumem o ator íntegro onde nasceu)
   sim.player.x = orig.x; sim.player.z = orig.z; sim.player.y = 0;
   sim.player.vy = 0; sim.player.onGround = true; sim.player.dropPhase = null;
+  sim.player.zuShieldT = 0; // Task 68 — fixture = pós-protocolo SEM proteções transitórias
   const life0 = sim.player.life, armor0 = sim.player.armor;
   // CHEGADA do protocolo: elapsed além de ARRIVAL desembarca todos no próximo
   // passo e encerra o grace (combate liberado p/ o teste)
@@ -65,19 +67,33 @@ export function disembarcarSala(room, id = 'p1') {
   if (!actor?.trainOnboard) return false;
   const orig = { x: actor.x, z: actor.z }; // spawn original do ator (pré-embarque)
   const posições = new Map(room.bots.map((b) => [b.id, { x: b.x, z: b.z }])); // spawns de origem
+  const posiçõesHumanos = new Map([...room.humans.entries()].map(([hid, h]) => [hid, { x: h.x, z: h.z }])); // Task 68
   const integridade = new Map(room.bots.map((b) => [b.id, { life: b.life, armor: b.armor }]));
-  room.trainStartedAtEpoch = Date.now() - 9000; // janela das portas (8–16 s)
+  const integridadeHumanos = new Map([...room.humans.entries()].map(([hid, h]) => [hid, { life: h.life, armor: h.armor }])); // Task 68
+  room.trainStartedAtEpoch = Date.now() - 9000; // janela das portas (8–61 s)
   room.tick(1 / 20);
   const jumped = room.doorJump(id);
   // jogador de volta ao SEU spawn original imediatamente (sem tick fora do anel
   // → sem dano ambiental nem enchurrada de eventos 'hurt' na fila)
   actor.x = orig.x; actor.z = orig.z; actor.y = 0;
   actor.vy = 0; actor.onGround = true; actor.dropPhase = null;
+  actor.zuShieldT = 0; // Task 68 — fixture = pós-protocolo SEM proteções transitórias
   const life0 = actor.life, armor0 = actor.armor;
   // CHEGADA do protocolo + fim do grace: desembarca todos no próximo tick
   room.trainStartedAtEpoch = Date.now() - 32100;
   room.combatLockedUntil = Date.now() - 1;
   room.tick(1 / 20);
+  // Task 68 — TODOS os humanos ficam livres do trem e SEM proteções transitórias
+  // (a chegada escalonada dos vagões desembarca com escudo de 15 s — o fixture
+  // devolve a arena recém-nascida: posições de origem, íntegros, desprotegidos)
+  for (const [hid, h] of room.humans) {
+    const p0 = posiçõesHumanos.get(hid);
+    if (p0) { h.x = p0.x; h.z = p0.z; }
+    h.y = 0; h.vy = 0; h.onGround = true; h.dropPhase = null;
+    h.trainOnboard = false; h.zuShieldT = 0;
+    const hp = integridadeHumanos.get(hid);
+    if (hp) { h.life = hp.life; h.armor = hp.armor; }
+  }
   acalmaBots(room.bots, posições, integridade);
   room._dmgLogAt?.clear(); // fixture não envenena a janela anti-spam de DAMAGE
   // o helper devolve o ator ÍNTEGO (bots podem ter disparado no 1º tick livre)
