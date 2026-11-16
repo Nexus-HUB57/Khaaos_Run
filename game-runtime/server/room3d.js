@@ -40,7 +40,7 @@ import { doorBoxCollider, footprintHas, localPointToWorld, windowBoxCollider } f
 import { TRAIN_INTRO_DURATION_MS } from '../src/shared/clock.js';
 // Task 53 — protocolo OFICIAL de entrada ZU: trem, portas, grace de 15 s e
 // trava de combate — SSOT compartilhada entre sim offline e autoridade online.
-import { ZU_TRAIN, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, combatUnlockEpoch, seedHashOf } from '../src/shared/zuTrain.js';
+import { ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, doorWindowOpen, wagonOfIndex, wagonSeatOfIndex, wagonStopMs, wagonJumpWindowOpen, trainRoute, safeJumpPose, platformSlotPose, combatUnlockEpoch, seedHashOf, ZU_ACCIDENTS } from '../src/shared/zuTrain.js';
 // Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
 const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
@@ -171,6 +171,7 @@ export class MatchRoom3D {
     this.trainStartedAtEpoch = null;
     this.combatLockedUntil = 0;
     this.trainRoutePts = null;
+    this.lastWagonArrived = -1; // Task 68 — chegada escalonada dos vagões (a cada 5 s)
     this.trainArrived = false;
     this.combatUnlockedAnnounced = false;
     this.acidTimer = 0;
@@ -529,6 +530,13 @@ export class MatchRoom3D {
         this.trainStartedAtEpoch = Date.now();
         this.combatLockedUntil = combatUnlockEpoch(this.trainStartedAtEpoch);
         this.trainRoutePts = trainRoute(this.world.playerSpawn, seedHashOf(this.seed));
+        // Task 68 — alocação canônica nos VAGÕES (10×10 = 100 operativos):
+        // humanos na ordem de entrada + bots na sequência. Escudo de pouso
+        // zerado no embarque (entra em vigor no pouso — salto/desembarque).
+        let zuIdx = 0;
+        for (const h of this.humans.values()) { h.wagon = wagonOfIndex(zuIdx); h.zuSeat = wagonSeatOfIndex(zuIdx); h.zuShieldT = 0; zuIdx++; }
+        for (const b of this.bots) { b.wagon = wagonOfIndex(zuIdx); b.zuSeat = wagonSeatOfIndex(zuIdx); b.zuShieldT = 0; zuIdx++; }
+        this.lastWagonArrived = -1;
         for (const h of this.humans.values()) h.trainOnboard = true;
         for (const b of this.bots) b.trainOnboard = true;
       }
@@ -546,6 +554,11 @@ export class MatchRoom3D {
           arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
           graceS: ZU_TRAIN.GRACE_S,
           combatLockedUntil: this.combatLockedUntil,
+          // Task 68 — contrato dos vagões (10×10, chegada a cada 5 s)
+          wagons: ZU_TRAIN.WAGONS,
+          wagonCapacity: ZU_TRAIN.WAGON_CAPACITY,
+          wagonGapMs: ZU_TRAIN.WAGON_GAP_MS,
+          lastWagonStopMs: LAST_WAGON_STOP_MS,
         } : {}),
       });
     }
@@ -553,7 +566,7 @@ export class MatchRoom3D {
     // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
     // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
     // join decidem tocar ou pular pelo elapsed).
-    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS, ...(this.combatLockedUntil ? { doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS, arrivalAtMs: ZU_TRAIN.ARRIVAL_MS, graceS: ZU_TRAIN.GRACE_S, combatLockedUntil: this.combatLockedUntil } : {}) };
+    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS, ...(this.combatLockedUntil ? { doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS, arrivalAtMs: ZU_TRAIN.ARRIVAL_MS, graceS: ZU_TRAIN.GRACE_S, combatLockedUntil: this.combatLockedUntil, wagons: ZU_TRAIN.WAGONS, wagonCapacity: ZU_TRAIN.WAGON_CAPACITY, wagonGapMs: ZU_TRAIN.WAGON_GAP_MS, lastWagonStopMs: LAST_WAGON_STOP_MS } : {}) };
     for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, entryProtocol: this.entryProtocol, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
@@ -650,6 +663,8 @@ export class MatchRoom3D {
     // liberado (chegada + 15 s): a rota/grace não consomem tempo de jogo.
     if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
     if (this.trainStartedAtEpoch) this.#stepTrainProtocol();
+    // Task 68 — decaimento do ESCUDO DE POUSO ZU (15 s para adentrar a zona)
+    for (const a of this.#actors()) if ((a.zuShieldT ?? 0) > 0) a.zuShieldT = Math.max(0, a.zuShieldT - dt);
 
     // --- zona segura (Fase 61/Task 65 — CÂNON DO MUNDO: 5 fases × 120 s com
     // nome, raio projetado da fração oficial e DPS OFICIAL; encolhimento
@@ -1772,8 +1787,16 @@ export class MatchRoom3D {
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
     // Task 53 — grace global do trem: NENHUM ataque entre operativos antes do
-    // desbloqueio (chegada + 15 s). Ambiental (ownerId null) segue canônico.
+    // desbloqueio (último vagão + 15 s). Ambiental (ownerId null) segue canônico.
     if (ownerId && this.#combatLocked()) return;
+    // Task 68 — A BORDO do trem: fora de alcance de ataques MESMO após o
+    // desbloqueio global (vagões tardios chegam até 61 s — quem não pode agir
+    // não pode ser penalizado; paridade 1:1 com sim3d).
+    if (actor.trainOnboard && ownerId) return;
+    // Task 68 — ESCUDO DE POUSO ZU (15 s): protegido de ATAQUES e da penalidade
+    // de estar FORA DA SAFE ZONE (ring) — 15 s para adentrá-la. Dano ambiental
+    // do mundo (acid/tsunami/spore/smoke) segue canônico.
+    if ((actor.zuShieldT ?? 0) > 0 && (ownerId || kind === 'ring')) return;
     if (actor.zexChannel) this.#cancelZexChannel(actor, 'damage');
     // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
     // redução de dano direto e blindagem temporária (soak antes da armadura fixa).
@@ -2055,8 +2078,10 @@ export class MatchRoom3D {
     return this.trainStartedAtEpoch === null ? null : Date.now() - this.trainStartedAtEpoch;
   }
 
-  // Task 53 — transições autoritativas do protocolo: saltos determinísticos dos
-  // bots (i % 3 === 0), chegada (desembarque obrigatório) e desbloqueio.
+  // Task 53/68 — transições autoritativas do protocolo: saltos CONTROLADOS
+  // determinísticos dos bots (i % 3 === 0, corredor seguro — prevenção de
+  // acidentes), chegada ESCALONADA dos vagões (a cada 5 s — desembarque
+  // obrigatório em slots anti-colisão) e desbloqueio (último vagão + 15 s).
   #stepTrainProtocol() {
     const elapsedMs = this.#trainElapsedMs();
     if (doorWindowOpen(elapsedMs)) {
@@ -2064,12 +2089,28 @@ export class MatchRoom3D {
         const b = this.bots[i];
         if (!b.alive || !b.trainOnboard || (i % 3) !== 0) continue;
         const jumpAt = ZU_TRAIN.DOOR_OPEN_MS + ((i * 431) % 2400);
-        if (elapsedMs >= jumpAt) this.#applyDoorJump(b, elapsedMs);
+        if (elapsedMs >= jumpAt && wagonJumpWindowOpen(elapsedMs, b.wagon ?? 0)) this.#applyDoorJump(b, elapsedMs);
       }
     }
-    if (!this.trainArrived && elapsedMs >= ZU_TRAIN.ARRIVAL_MS) {
+    // Task 68 — vagões chegam a cada 5 s: quem estiver a bordo do vagão w é
+    // OBRIGADO a desembarcar na plataforma (slots determinísticos) e recebe o
+    // escudo de pouso (15 s). trainArrived = ÚLTIMO vagão (compat Task 53).
+    while (this.lastWagonArrived + 1 < ZU_TRAIN.WAGONS && elapsedMs >= wagonStopMs(this.lastWagonArrived + 1)) {
+      const w = ++this.lastWagonArrived;
+      let disembarked = 0;
+      for (const a of this.#actors()) {
+        if (!a.alive || !a.trainOnboard || (a.wagon ?? 0) !== w) continue;
+        const slot = platformSlotPose(this.trainRoutePts, a.wagon ?? w, a.zuSeat ?? 0);
+        a.x = slot.x; a.z = slot.z; a.y = slot.y; a.yaw = slot.yaw;
+        a.vy = 0; a.onGround = true; a.dropPhase = null;
+        a.trainOnboard = false;
+        a.zuShieldT = ZU_TRAIN.GRACE_S;
+        disembarked++;
+      }
+      this.#emitAll('wagonArrived', { wagon: w, stopMs: wagonStopMs(w), disembarked, graceS: ZU_TRAIN.GRACE_S });
+    }
+    if (!this.trainArrived && this.lastWagonArrived >= ZU_TRAIN.WAGONS - 1) {
       this.trainArrived = true;
-      for (const a of this.#actors()) a.trainOnboard = false;
       this.#emitAll('trainArrived', { graceS: ZU_TRAIN.GRACE_S });
     }
     if (!this.combatUnlockedAnnounced && Date.now() >= this.combatLockedUntil) {
@@ -2078,17 +2119,23 @@ export class MatchRoom3D {
     }
   }
 
-  // Task 53 — salto de porta AUTORITATIVO (jogador via WS 'door_jump' ou bot
-  // determinístico): valida janela/a bordo e aplica a MESMA pose pura que o
-  // cliente prediz (trainDoorJumpPose — zero confiança no cliente).
+  // Task 53/68 — salto de porta AUTORITATIVO (jogador via WS 'door_jump' ou bot
+  // determinístico): valida janela DO PRÓPRIO VAGÃO (portas abertas e vagão
+  // ainda em rota) e aplica a MESMA pose pura que o cliente prediz
+  // (safeJumpPose — zero confiança no cliente). O salto antes da parada é
+  // CONTROLADO: corredor seguro + prevenção dos prováveis acidentes + escudo
+  // de pouso de 15 s (ataques + fora da Safe Zone).
   #applyDoorJump(actor, elapsedMs) {
     if (!actor.alive || !actor.trainOnboard || !this.trainRoutePts) return false;
     if (!doorWindowOpen(elapsedMs)) return false;
-    const pose = trainDoorJumpPose(elapsedMs, this.trainRoutePts);
+    if (!wagonJumpWindowOpen(elapsedMs, actor.wagon ?? 0)) return false; // vagão parou → desembarque obrigatório
+    const pose = safeJumpPose(elapsedMs, this.trainRoutePts, actor.wagon ?? 0);
     actor.x = pose.x; actor.z = pose.z; actor.y = pose.y; actor.yaw = pose.yaw;
     actor.vy = 0; actor.onGround = false; actor.dropPhase = 'chute';
     actor.trainOnboard = false;
-    this.#emitAll('doorJump', { id: actor.id, x: pose.x, z: pose.z, y: pose.y });
+    actor.zuShieldT = ZU_TRAIN.GRACE_S; // Task 68 — escudo de pouso (15 s)
+    this.#emitAll('doorJump', { id: actor.id, x: pose.x, z: pose.z, y: pose.y, wagon: actor.wagon ?? 0, early: true, shieldS: ZU_TRAIN.GRACE_S, prevented: ZU_ACCIDENTS });
+    this.#emitAll('zuEarlyJump', { id: actor.id, wagon: actor.wagon ?? 0, shieldS: ZU_TRAIN.GRACE_S, prevented: ZU_ACCIDENTS });
     return true;
   }
 
@@ -2138,6 +2185,13 @@ export class MatchRoom3D {
         doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
         arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
         graceS: ZU_TRAIN.GRACE_S,
+        // Task 68 — vagões (10×10, chegada a cada 5 s) + escudo de pouso DO PRÓPRIO jogador
+        wagons: ZU_TRAIN.WAGONS,
+        wagonCapacity: ZU_TRAIN.WAGON_CAPACITY,
+        wagonGapMs: ZU_TRAIN.WAGON_GAP_MS,
+        lastWagonStopMs: LAST_WAGON_STOP_MS,
+        wagon: self?.wagon ?? null,
+        shieldS: Math.round((self?.zuShieldT ?? 0) * 10) / 10,
       },
       events: forId ? this.drainEvents(forId) : [],
       online: true,
@@ -2208,6 +2262,8 @@ export class MatchRoom3D {
       patente: a.patente ?? null, officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
       // Fase 8 — identidade + habilidade (cooldown/duração em ticks @30Hz p/ HUD)
       operativeId: a.operativeId ?? null, temporaryArmor: a.temporaryArmor ?? 0,
+      // Task 68 — vagão do protocolo ZU + escudo de pouso (15 s p/ adentrar a zona)
+      wagon: a.wagon ?? null, zuShieldS: Math.round((a.zuShieldT ?? 0) * 10) / 10,
       abilityState: {
         cooldownTicks: Math.round((st.cooldownT ?? 0) * ABILITY_TICK_RATE),
         activeTicks: Math.round((st.activeT ?? 0) * ABILITY_TICK_RATE),
@@ -2229,6 +2285,8 @@ export class MatchRoom3D {
       officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
       // Fase 11 — patente no nametag dos remotos/bots
       patente: a.patente ?? null,
+      // Task 68 — vagão do protocolo ZU (rótulo/organização dos operativos)
+      wagon: a.wagon ?? null,
     };
   }
 

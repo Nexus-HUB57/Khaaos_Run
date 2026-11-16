@@ -33,7 +33,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
 // Task 53 — TREM OFICIAL DO ZU: viagem a bordo + SSOT do protocolo (fases/grace)
 import { TrainRide } from './trainRide3d.js';
-import { zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
+import { ZU_TRAIN, zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
 import { buildWorldLayout as getWorldLayoutForTrain } from './layout3d.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
@@ -891,39 +891,45 @@ export class Game3D {
     } catch { /* visual best-effort — o protocolo segue autoritativo */ }
   }
 
-  // Task 53 — fases do protocolo no HUD/rádio ZU (a bordo).
+  // Task 53/68 — fases do protocolo no HUD/rádio ZU (a bordo).
   #onTrainPhase(phase) {
     if (phase === 'embarque') this.hud.feed('ZU', 'EMBARQUE — todos os operativos a bordo. Portas fechando.', 'warn');
     else if (phase === 'em_rota') {
       this.hud.setMatchStatus('TREM EM ROTA // PORTAS FECHADAS');
-      this.hud.feed('ZU', 'Em rota ao Ring — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
+      this.hud.feed('ZU', 'Em rota à estação do mundo — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
     } else if (phase === 'portas') {
-      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTAR');
-      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta (entrada oficial). Seguir até o destino também é oficial.', 'warn');
+      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTO CONTROLADO');
+      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta ANTES do vagão parar: SALTO CONTROLADO com prevenção de acidentes (batida, descarrilamento, incêndio, colisão) + escudo de 15 s.', 'warn');
     }
   }
 
-  // Task 53 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  // Task 53/68 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  // Recusa = portas trancadas (prevenção de acidentes: sem salto em rota fechada).
   #requestDoorJump() {
     const p = this.sim.player;
     if (!p?.trainOnboard || this.ended) return;
     if (this.online) { this.net?.sendDoorJump?.(); return; }
     if (this.sim.doorJump?.()) {
       this.audio?.wind?.(true, 0.2);
-      this.hud.feed('ZU', 'Salto de porta executado — entrada oficial registrada no protocolo.', 'warn');
+      this.hud.feed('ZU', 'SALTO CONTROLADO — antes da parada do vagão. Acidentes prevenidos: batida, descarrilamento, incêndio, colisão. Escudo de pouso: 15 s.', 'warn');
+    } else {
+      this.hud.feed('ZU', 'PORTAS TRANCADAS — o intertravamento impede salto com o trem em rota fechada (prevenção de acidentes).', 'bad');
     }
   }
 
-  // Task 53 — handover da câmera (salto ou chegada) + limpeza do vagão.
+  // Task 53/68 — handover da câmera (salto ou chegada) + limpeza do vagão.
   #endTrainRide(reason) {
     if (!this.trainRide) return;
     this.trainRide.dispose();
     this.trainRide = null;
-    if (reason === 'arrived') this.hud.feed('ZU', 'CHEGADA — desembarque concluído no Ring.', 'warn');
+    if (reason === 'arrived') this.hud.feed('ZU', 'COMBOIO NA ESTAÇÃO — aguarde a parada do SEU vagão (chegada a cada 5 s) para o desembarque na plataforma.', 'warn');
   }
 
-  // Task 53 — HUD do protocolo por frame (countdown do grace + fases a bordo).
+  // Task 53/68 — HUD do protocolo por frame (countdown do grace + fases a bordo
+  // + vagão do jogador + ESCUDO DE POUSO: 15 s para adentrar a Safe Zone).
   updateTrainHud() {
+    const wagonOf = this.online ? (this._zuTrainView?.wagon ?? null) : (this.sim.player?.wagon ?? null);
+    const shieldS = this.online ? (this._zuTrainView?.shieldS ?? 0) : (this.sim.player?.zuShieldT ?? 0);
     const info = this.online
       ? this._zuTrainView ?? null
       : (Number.isFinite(this.sim.trainT) ? {
@@ -932,9 +938,22 @@ export class Game3D {
           combatLockedRemainingS: Math.max(0, this.sim.combatLockedUntil - this.sim.trainT),
         } : null);
     if (!info) return;
+    const wagonTag = wagonOf !== null && wagonOf !== undefined ? `VAGÃO ${Number(wagonOf) + 1}/${ZU_TRAIN.WAGONS}` : null;
+    // Task 68 — ESCUDO DE POUSO ativo tem prioridade (15 s para adentrar a zona)
+    if ((shieldS ?? 0) > 0) {
+      const s = Math.ceil(shieldS);
+      this.hud.setMatchStatus(`ESCUDO ZU ${s}s // ${wagonTag ? wagonTag + ' // ' : ''}ADENTRE A ZONA SEGURA`);
+      return;
+    }
+    // Task 68 — ainda a bordo durante o grace/combate: aguardando o próprio vagão
+    if (info.playerOnboard && (info.phase === 'grace' || info.phase === 'combate')) {
+      const tail = info.phase === 'grace' ? `COMBATE EM ${Math.ceil(info.combatLockedRemainingS ?? 0)}s` : 'COMBATE LIVRE NA PLATAFORMA';
+      this.hud.setMatchStatus(`${wagonTag ? wagonTag + ' // ' : ''}AGUARDANDO DESEMBARQUE // ${tail}`);
+      return;
+    }
     if (info.phase === 'grace') {
       const s = Math.ceil(info.combatLockedRemainingS ?? 0);
-      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s`);
+      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s${wagonTag ? ' // ' + wagonTag : ''}`);
     } else if (info.phase === 'combate' && !this._combatStatusSet) {
       this._combatStatusSet = true;
       this.hud.setMatchStatus('COMBATE LIVRE // RING');
@@ -1942,10 +1961,17 @@ export class Game3D {
           // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
           this.onMatchStartEvent?.(e);
           break;
-        // Task 53 — protocolo do trem: chegada e desbloqueio de combate (offline
-        // emite da sim; online chega pelos eventos da sala autoritativa).
+        // Task 53/68 — protocolo do trem: chegada escalonada dos vagões e
+        // desbloqueio de combate (offline emite da sim; online chega pelos
+        // eventos da sala autoritativa).
+        case 'wagonArrived':
+          this.hud.feed('ZU', `Vagão ${Number(e.wagon ?? 0) + 1} parou na estação — ${e.disembarked ?? 0} operativo(s) desembarcaram (escudo de pouso: ${e.graceS ?? 15}s).`, 'warn');
+          break;
+        case 'zuEarlyJump':
+          this.hud.feed('ZU', `SALTO CONTROLADO registrado (vagão ${Number(e.wagon ?? 0) + 1}) — prevenido: ${(e.prevented ?? []).join(', ')}. Adentre a Safe Zone em ${e.shieldS ?? 15}s.`, 'warn');
+          break;
         case 'trainArrived':
-          this.hud.feed('ZU', `CHEGADA — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
+          this.hud.feed('ZU', `ÚLTIMO VAGÃO na estação — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
           this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${e.graceS ?? 15}s`);
           break;
         case 'combatUnlocked':
@@ -1953,7 +1979,7 @@ export class Game3D {
           this.hud.setMatchStatus('COMBATE LIVRE // RING');
           break;
         case 'botDoorJump':
-          this.hud.feed('ZU', 'Operativo saltou pela porta na rota (entrada oficial).', '');
+          this.hud.feed('ZU', `Operativo do vagão ${Number(e.wagon ?? 0) + 1} executou SALTO CONTROLADO (prevenção de acidentes ativa).`, '');
           break;
         case 'hurt':
           if (e.kind === 'ring') {
