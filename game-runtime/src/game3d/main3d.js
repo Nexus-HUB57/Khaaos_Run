@@ -1996,6 +1996,9 @@ export class Game3D {
           // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
           // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
           // Fase 61 — a fase oficial do mundo é nomeada (cânon safeZone.js).
+          // Task 67 — a paisagem sonora segue a fase: pássaros esvaziam, pressão
+          // do anel cresce, mar de Arukheea engrossa para o tsunami (cânon).
+          this.audio.setZonePhase?.((e.pulse ?? 1) - 1, e.phaseName);
           const fase = e.phaseName ? ` Fase oficial: ${e.phaseName}.` : '';
           const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
           this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${fase}${destino}`, 'warn');
@@ -2437,6 +2440,19 @@ export class Game3D {
     }
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
+    // Task 67 — ambiência viva: listener 3D (posição do operativo + câmera),
+    // proximidade dos distritos (eco urbano, destroços, gritos) e agenda de
+    // fauna/mar/fogo. Custo O(distritos) por frame; no-op em headless.
+    if (this.audio?.ambienceTick) {
+      const pl = this.sim?.player;
+      const cam = this.camera?.position;
+      this.audio.ambienceTick(dt, {
+        x: pl?.x ?? cam?.x ?? 0,
+        z: pl?.z ?? cam?.z ?? 0,
+        yaw: this.input?.yaw ?? 0,
+        districts: this.scene?.userData?.layout?.districts,
+      });
+    }
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
     const marksAnim = this.scene.userData.worldMarks?.animators;
     if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
