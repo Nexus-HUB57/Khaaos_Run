@@ -86,13 +86,22 @@ export function trainRoute({ x, z }, seedHash) {
   return { x0: x + Math.cos(angle) * dist, z0: z + Math.sin(angle) * dist, x1: x, z1: z };
 }
 
-// Pose do trem na rota no instante elapsedMs: progressão suave 0→1 entre
-// EMBARQUE e ARRIVAL (ease-in-out — o trem acelera após o embarque e freia na chegada).
-export function trainPoseAt(elapsedMs, route) {
+// Preenche um buffer de pose para consumidores de alta frequência (renderer).
+// A matemática é a mesma de trainPoseAt; o buffer evita GC por frame no cliente.
+export function trainPoseAtInto(elapsedMs, route, out = {}) {
   const t = Math.min(Math.max(Number(elapsedMs) || 0, 0), ZU_TRAIN.ARRIVAL_MS);
   const raw = ZU_TRAIN.ARRIVAL_MS > 0 ? t / ZU_TRAIN.ARRIVAL_MS : 1;
   const k = raw < 0.5 ? 2 * raw * raw : 1 - (-2 * raw + 2) ** 2 / 2; // easeInOutQuad
-  return { x: route.x0 + (route.x1 - route.x0) * k, z: route.z0 + (route.z1 - route.z0) * k, progress: k };
+  out.x = route.x0 + (route.x1 - route.x0) * k;
+  out.z = route.z0 + (route.z1 - route.z0) * k;
+  out.progress = k;
+  return out;
+}
+
+// Pose do trem na rota no instante elapsedMs: progressão suave 0→1 entre
+// EMBARQUE e ARRIVAL (ease-in-out — o trem acelera após o embarque e freia na chegada).
+export function trainPoseAt(elapsedMs, route) {
+  return trainPoseAtInto(elapsedMs, route, {});
 }
 
 // Pose de SALTO DE PORTA no instante elapsedMs (pureza total — servidor valida
