@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uuid, varchar, index, uniqueIndex, check, bigserial } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uuid, varchar, index, uniqueIndex, check, bigserial, bigint, foreignKey } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -654,3 +654,268 @@ export const enrollmentSessions = pgTable("enrollment_sessions", {
 }));
 
 export type EnrollmentSessionRow = typeof enrollmentSessions.$inferSelect;
+
+// ─── Campaign / Special Incursion Event persistence ────────────────────────
+// Player IDs intentionally remain text without an auth.users FK: the game
+// supports multiple identity providers and synthetic UE player identities.
+export const cieCampaigns = pgTable("cie_campaigns", {
+  campaignId: varchar("campaign_id", { length: 64 }).primaryKey(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("ACTIVE"),
+  ruleVersion: varchar("rule_version", { length: 32 }).notNull().default("GDD-03A-03-v0.2"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  statusCheck: check("cie_campaigns_status_check", sql`${table.status} IN ('ACTIVE', 'COMPLETED', 'CANCELLED')`),
+}));
+
+export const cieCampaignPlayers = pgTable("cie_campaign_players", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull().references(() => cieCampaigns.campaignId, { onDelete: "cascade" }),
+  playerId: text("player_id").notNull(),
+  state: varchar("state", { length: 16 }).notNull(),
+  currentDay: integer("current_day").notNull().default(1),
+  returnUsed: boolean("return_used").notNull().default(false),
+  presenceExpiresAt: timestamp("presence_expires_at", { withTimezone: true }),
+  presenceUpdatedAt: timestamp("presence_updated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  campaignPlayerUnique: uniqueIndex("cie_campaign_players_campaign_player_uq").on(table.campaignId, table.playerId),
+  eligiblePresenceIdx: index("cie_campaign_players_presence_idx").on(table.campaignId, table.currentDay, table.state, table.presenceExpiresAt),
+  stateCheck: check("cie_campaign_players_state_check", sql`${table.state} IN ('SURVIVOR', 'ELIMINATED', 'COMPLETED')`),
+  dayCheck: check("cie_campaign_players_day_check", sql`${table.currentDay} BETWEEN 1 AND 7`),
+}));
+
+export const cieEvents = pgTable("cie_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull().references(() => cieCampaigns.campaignId, { onDelete: "cascade" }),
+  campaignDay: integer("campaign_day").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("ARMED"),
+  scheduledTriggerAt: timestamp("scheduled_trigger_at", { withTimezone: true }).notNull(),
+  retryUntilAt: timestamp("retry_until_at", { withTimezone: true }).notNull(),
+  nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
+  regularRingsResolved: boolean("regular_rings_resolved").notNull().default(false),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  registrationClosesAt: timestamp("registration_closes_at", { withTimezone: true }),
+  rosterLockedAt: timestamp("roster_locked_at", { withTimezone: true }),
+  seed: varchar("seed", { length: 128 }),
+  resultHash: varchar("result_hash", { length: 64 }),
+  ruleVersion: varchar("rule_version", { length: 32 }).notNull().default("GDD-03A-03-v0.2"),
+  failureReason: varchar("failure_reason", { length: 64 }),
+  roomId: varchar("room_id", { length: 128 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  campaignDayUnique: uniqueIndex("cie_events_campaign_day_uq").on(table.campaignId, table.campaignDay),
+  dueIdx: index("cie_events_due_idx").on(table.status, table.nextCheckAt),
+  statusCheck: check("cie_events_status_check", sql`${table.status} IN ('ARMED', 'REGISTRATION', 'LOCKED', 'IN_PROGRESS', 'RESOLVING', 'COMPLETED', 'EXPIRED', 'CANCELLED')`),
+  dayCheck: check("cie_events_day_check", sql`${table.campaignDay} BETWEEN 1 AND 6`),
+  retryAfterTrigger: check("cie_events_retry_after_trigger_check", sql`${table.retryUntilAt} >= ${table.scheduledTriggerAt}`),
+}));
+
+export const cieParticipants = pgTable("cie_participants", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  eventId: uuid("event_id").notNull().references(() => cieEvents.id, { onDelete: "cascade" }),
+  playerId: text("player_id").notNull(),
+  role: varchar("role", { length: 16 }).notNull(),
+  registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+  selected: boolean("selected").notNull().default(false),
+  presenceObservedAt: timestamp("presence_observed_at", { withTimezone: true }),
+  placement: integer("placement"),
+  aliveAtEnd: boolean("alive_at_end"),
+  returnSealAtFinish: boolean("return_seal_at_finish").notNull().default(false),
+  resolution: varchar("resolution", { length: 32 }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+}, (table) => ({
+  eventPlayerUnique: uniqueIndex("cie_participants_event_player_uq").on(table.eventId, table.playerId),
+  eventRoleIdx: index("cie_participants_event_role_idx").on(table.eventId, table.role, table.selected),
+  placementCheck: check("cie_participants_placement_check", sql`${table.placement} IS NULL OR ${table.placement} > 0`),
+  roleCheck: check("cie_participants_role_check", sql`${table.role} IN ('SURVIVOR', 'ELIMINATED')`),
+  resolutionCheck: check("cie_participants_resolution_check", sql`${table.resolution} IS NULL OR ${table.resolution} IN ('RETURN_NEXT_DAY', 'REMAINS_ELIMINATED', 'SURVIVOR_REMAINS_ACTIVE', 'SURVIVOR_ELIMINATED_IN_CIE')`),
+}));
+
+export const cieOutbox = pgTable("cie_outbox", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dedupeKey: varchar("dedupe_key", { length: 160 }).notNull().unique(),
+  eventId: uuid("event_id").notNull().references(() => cieEvents.id, { onDelete: "cascade" }),
+  playerId: text("player_id"),
+  eventType: varchar("event_type", { length: 32 }).notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pendingIdx: index("cie_outbox_pending_idx").on(table.status, table.availableAt),
+  statusCheck: check("cie_outbox_status_check", sql`${table.status} IN ('PENDING', 'DELIVERED', 'DEAD')`),
+  attemptsCheck: check("cie_outbox_attempts_check", sql`${table.attempts} >= 0`),
+}));
+
+export type CieCampaign = typeof cieCampaigns.$inferSelect;
+export type CieCampaignPlayer = typeof cieCampaignPlayers.$inferSelect;
+export type CieEvent = typeof cieEvents.$inferSelect;
+export type CieParticipant = typeof cieParticipants.$inferSelect;
+export type CieOutboxMessage = typeof cieOutbox.$inferSelect;
+
+// ─── Regular campaign intake / 100-player Ring persistence ──────────────────
+// These tables model regular campaign progression. CIE retains its own event
+// tables above; both reference the durable campaign identity in cie_campaigns.
+export const campaignPlayers = pgTable("campaign_players", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull().references(() => cieCampaigns.campaignId, { onDelete: "cascade" }),
+  playerId: text("player_id").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("READY"),
+  currentDay: integer("current_day").notNull().default(1),
+  attemptsUsedToday: integer("attempts_used_today").notNull().default(0),
+  activeMatchId: varchar("active_match_id", { length: 128 }),
+  ringProtectionUntil: timestamp("ring_protection_until", { withTimezone: true }),
+  presenceExpiresAt: timestamp("presence_expires_at", { withTimezone: true }),
+  returnUsed: boolean("return_used").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  campaignPlayerUnique: uniqueIndex("campaign_players_campaign_player_uq").on(table.campaignId, table.playerId),
+  rosterLookupIdx: index("campaign_players_roster_lookup_idx").on(table.campaignId, table.currentDay, table.status, table.ringProtectionUntil),
+  statusCheck: check("campaign_players_status_check", sql`${table.status} IN ('READY', 'IN_RING', 'ELIMINATED', 'COMPLETED')`),
+  dayCheck: check("campaign_players_day_check", sql`${table.currentDay} BETWEEN 1 AND 7`),
+  attemptsCheck: check("campaign_players_attempts_check", sql`${table.attemptsUsedToday} IN (0, 1)`),
+  activeMatchCheck: check("campaign_players_active_match_check", sql`(${table.status} = 'IN_RING' AND ${table.attemptsUsedToday} = 1 AND ${table.activeMatchId} IS NOT NULL) OR (${table.status} <> 'IN_RING' AND ${table.activeMatchId} IS NULL)`),
+}));
+
+export const campaignIntakes = pgTable("campaign_intakes", {
+  intakeId: uuid("intake_id").primaryKey().defaultRandom(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull().references(() => cieCampaigns.campaignId, { onDelete: "cascade" }),
+  campaignDay: integer("campaign_day").notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull(),
+  closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("OPEN"),
+  nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
+  drawSeed: varchar("draw_seed", { length: 128 }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  intakeContextUnique: uniqueIndex("campaign_intakes_intake_context_uq").on(table.intakeId, table.campaignId, table.campaignDay),
+  dueIdx: index("campaign_intakes_due_idx").on(table.status, table.nextCheckAt),
+  statusCheck: check("campaign_intakes_status_check", sql`${table.status} IN ('OPEN', 'WAITING_FOR_POOL', 'CLOSED', 'CANCELLED')`),
+  dayCheck: check("campaign_intakes_day_check", sql`${table.campaignDay} BETWEEN 1 AND 7`),
+  timeCheck: check("campaign_intakes_time_check", sql`${table.closesAt} > ${table.openedAt}`),
+  closedAtCheck: check("campaign_intakes_closed_at_check", sql`(${table.status} = 'CLOSED' AND ${table.closedAt} IS NOT NULL) OR (${table.status} <> 'CLOSED' AND ${table.closedAt} IS NULL)`),
+}));
+
+export const campaignIntakeSignups = pgTable("campaign_intake_signups", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  intakeId: uuid("intake_id").notNull(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull(),
+  campaignDay: integer("campaign_day").notNull(),
+  playerId: text("player_id").notNull(),
+  source: varchar("source", { length: 8 }).notNull().default("SIGNED"),
+  registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  intakePlayerUnique: uniqueIndex("campaign_intake_signups_intake_player_uq").on(table.intakeId, table.playerId),
+  dailyPlayerUnique: uniqueIndex("campaign_intake_signups_daily_player_uq").on(table.campaignId, table.campaignDay, table.playerId),
+  campaignPlayerIdx: index("campaign_intake_signups_campaign_idx").on(table.campaignId, table.campaignDay, table.intakeId),
+  intakeContextFk: foreignKey({
+    name: "campaign_intake_signups_intake_context_fk",
+    columns: [table.intakeId, table.campaignId, table.campaignDay],
+    foreignColumns: [campaignIntakes.intakeId, campaignIntakes.campaignId, campaignIntakes.campaignDay],
+  }).onDelete("cascade"),
+  campaignPlayerFk: foreignKey({
+    name: "campaign_intake_signups_campaign_player_fk",
+    columns: [table.campaignId, table.playerId],
+    foreignColumns: [campaignPlayers.campaignId, campaignPlayers.playerId],
+  }).onDelete("cascade"),
+  sourceCheck: check("campaign_intake_signups_source_check", sql`${table.source} IN ('SIGNED', 'RANDOM')`),
+  dayCheck: check("campaign_intake_signups_day_check", sql`${table.campaignDay} BETWEEN 1 AND 7`),
+}));
+
+export const campaignRings = pgTable("campaign_rings", {
+  ringId: uuid("ring_id").primaryKey().defaultRandom(),
+  intakeId: uuid("intake_id").notNull().unique().references(() => campaignIntakes.intakeId, { onDelete: "restrict" }),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull().references(() => cieCampaigns.campaignId, { onDelete: "cascade" }),
+  campaignDay: integer("campaign_day").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("PREPARING"),
+  drawSeed: varchar("draw_seed", { length: 128 }),
+  roomId: varchar("room_id", { length: 128 }),
+  finishReason: varchar("finish_reason", { length: 16 }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ringContextUnique: uniqueIndex("campaign_rings_ring_context_uq").on(table.ringId, table.campaignId, table.campaignDay),
+  roomUnique: uniqueIndex("campaign_rings_room_uq").on(table.roomId),
+  dueIdx: index("campaign_rings_status_idx").on(table.status, table.updatedAt),
+  statusCheck: check("campaign_rings_status_check", sql`${table.status} IN ('PREPARING', 'READY', 'IN_PROGRESS', 'FINISHED', 'CANCELLED')`),
+  dayCheck: check("campaign_rings_day_check", sql`${table.campaignDay} BETWEEN 1 AND 7`),
+  finishReasonCheck: check("campaign_rings_finish_reason_check", sql`${table.finishReason} IS NULL OR ${table.finishReason} IN ('LAST_SURVIVOR', 'TIME_LIMIT')`),
+  finishTimeCheck: check("campaign_rings_finish_time_check", sql`${table.finishedAt} IS NULL OR (${table.startedAt} IS NOT NULL AND ${table.finishedAt} >= ${table.startedAt})`),
+}));
+
+export const campaignRingPlayers = pgTable("campaign_ring_players", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ringId: uuid("ring_id").notNull(),
+  campaignId: varchar("campaign_id", { length: 64 }).notNull(),
+  campaignDay: integer("campaign_day").notNull(),
+  playerId: text("player_id").notNull(),
+  source: varchar("source", { length: 8 }).notNull(),
+  selectedAt: timestamp("selected_at", { withTimezone: true }).notNull().defaultNow(),
+  placement: integer("placement"),
+  aliveAtFinish: boolean("alive_at_finish"),
+  finalHealth: integer("final_health"),
+  accountXp: numeric("account_xp"),
+  battlesPlayed: integer("battles_played"),
+  lifetimeKills: integer("lifetime_kills"),
+  lifetimeDeaths: integer("lifetime_deaths"),
+  randomTieBreak: bigint("random_tie_break", { mode: "number" }),
+}, (table) => ({
+  ringPlayerUnique: uniqueIndex("campaign_ring_players_ring_player_uq").on(table.ringId, table.playerId),
+  dailyPlayerUnique: uniqueIndex("campaign_ring_players_campaign_day_player_uq").on(table.campaignId, table.campaignDay, table.playerId),
+  ringRosterIdx: index("campaign_ring_players_roster_idx").on(table.ringId, table.source, table.placement),
+  ringContextFk: foreignKey({
+    name: "campaign_ring_players_ring_context_fk",
+    columns: [table.ringId, table.campaignId, table.campaignDay],
+    foreignColumns: [campaignRings.ringId, campaignRings.campaignId, campaignRings.campaignDay],
+  }).onDelete("cascade"),
+  campaignPlayerFk: foreignKey({
+    name: "campaign_ring_players_campaign_player_fk",
+    columns: [table.campaignId, table.playerId],
+    foreignColumns: [campaignPlayers.campaignId, campaignPlayers.playerId],
+  }).onDelete("cascade"),
+  sourceCheck: check("campaign_ring_players_source_check", sql`${table.source} IN ('SIGNED', 'RANDOM')`),
+  dayCheck: check("campaign_ring_players_day_check", sql`${table.campaignDay} BETWEEN 1 AND 7`),
+  placementCheck: check("campaign_ring_players_placement_check", sql`${table.placement} IS NULL OR ${table.placement} > 0`),
+  randomTieBreakCheck: check("campaign_ring_players_tiebreak_check", sql`${table.randomTieBreak} IS NULL OR ${table.randomTieBreak} BETWEEN 0 AND 4294967295`),
+  metricsCheck: check("campaign_ring_players_metrics_check", sql`(${table.finalHealth} IS NULL OR ${table.finalHealth} >= 0) AND (${table.accountXp} IS NULL OR ${table.accountXp} >= 0) AND (${table.battlesPlayed} IS NULL OR ${table.battlesPlayed} >= 0) AND (${table.lifetimeKills} IS NULL OR ${table.lifetimeKills} >= 0) AND (${table.lifetimeDeaths} IS NULL OR ${table.lifetimeDeaths} >= 0)`),
+}));
+
+export const campaignOutbox = pgTable("campaign_outbox", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dedupeKey: varchar("dedupe_key", { length: 200 }).notNull().unique(),
+  eventType: varchar("event_type", { length: 64 }).notNull(),
+  aggregateId: varchar("aggregate_id", { length: 128 }).notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  claimToken: uuid("claim_token"),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  lastError: varchar("last_error", { length: 512 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pendingIdx: index("campaign_outbox_pending_idx").on(table.status, table.availableAt),
+  statusCheck: check("campaign_outbox_status_check", sql`${table.status} IN ('PENDING', 'PROCESSING', 'DELIVERED', 'DEAD')`),
+  attemptsCheck: check("campaign_outbox_attempts_check", sql`${table.attempts} >= 0`),
+  deliveredAtCheck: check("campaign_outbox_delivered_at_check", sql`(${table.status} = 'DELIVERED' AND ${table.deliveredAt} IS NOT NULL) OR (${table.status} <> 'DELIVERED' AND ${table.deliveredAt} IS NULL)`),
+  claimLeaseCheck: check("campaign_outbox_claim_lease_check", sql`(${table.status} = 'PROCESSING' AND ${table.claimToken} IS NOT NULL AND ${table.lockedUntil} IS NOT NULL) OR (${table.status} <> 'PROCESSING' AND ${table.claimToken} IS NULL AND ${table.lockedUntil} IS NULL)`),
+}));
+
+export type CampaignPlayerRow = typeof campaignPlayers.$inferSelect;
+export type CampaignIntakeRow = typeof campaignIntakes.$inferSelect;
+export type CampaignIntakeSignupRow = typeof campaignIntakeSignups.$inferSelect;
+export type CampaignRingRow = typeof campaignRings.$inferSelect;
+export type CampaignRingPlayerRow = typeof campaignRingPlayers.$inferSelect;
+export type CampaignOutboxRow = typeof campaignOutbox.$inferSelect;
