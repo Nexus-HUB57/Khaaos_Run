@@ -2,13 +2,13 @@
 
 ## Estado
 
-O asset gerado ainda não está disponível: a operação 3D exige 91 créditos e a conta possui 82. Nenhum crédito foi consumido e nenhum `.fbx` foi criado. O pipeline de integração já está preparado em `game-runtime/src/game3d/hero3d.js` e permanece opt-in; o personagem procedural continua sendo o fallback oficial.
+O arquivo `game-runtime/public/assets/models/operative_hero_base.fbx` não está presente. `loadHeroOperative()` não está conectado ao fluxo de combate; `createOperative()` permanece como personagem procedural ativo e fallback oficial. O Hero externo continua opt-in até passar o gate automatizado e as validações visuais, de animação e in-engine.
 
 ## Alinhamento com o documento canônico de modelagem
 
 Este pipeline segue o contrato de produção definido em `Epic Games/IMPLEMENTACAO_GRAFICA/KHAAOS_RUN_Modelagem_3D_Revisao_Tecnica.docx`, especialmente o fluxo **briefing aprovado → fonte DCC → validação → export intermediário → transformação por destino → validação pós-transformação → importação → validação in-engine → cook → teste em aparelho**. O `.blend` e as texturas de autoria continuam sendo a fonte-mestre; FBX/glTF são derivados versionados por `source_sha256`, receita, toolchain e perfil de destino.
 
-O documento canônico usa a escala de autoria como referência e recomenda budgets por erro projetado. Para o runtime Three.js atual, a ponte operacional é explícita: o hero DCC pode chegar a 120k triângulos, mas o asset de gameplay full permanece em **≤6.500 triângulos**, o proxy em **≤900** e a silhouette em **≤200**, com no máximo 12 draw calls no hero full. A escala ilustrativa do documento canônico (`24k → 12k → 6k → 3k`) é uma hipótese de produção e não substitui a medição do runtime; qualquer redução deve ser aprovada por silhueta, deformação, materiais, sockets e frame time.
+O documento canônico usa a escala de autoria como referência e recomenda budgets por erro projetado. Os limites são separados sem ambiguidade: a fonte Hero no DCC pode chegar a **120.000 triângulos** e não pode ser carregada diretamente no runtime; o FBX Hero isolado tem subteto de **6.500 triângulos e 12 draw calls**; o orçamento bloqueante de gameplay é **8.000 triângulos para a entidade third-person completa**, somando corpo, gear, arma, anexos, skin e overlay mítico. O proxy fica em **≤900** e a silhouette em **≤200**. A escala ilustrativa do documento canônico (`24k → 12k → 6k → 3k`) é uma hipótese de produção e não substitui a medição do runtime; qualquer redução deve ser aprovada por silhueta, deformação, materiais, sockets e frame time.
 
 ### Plano de implementação sincronizado — Operator Hero
 
@@ -31,7 +31,26 @@ O documento canônico usa a escala de autoria como referência e recomenda budge
 - Cabeça: uma malha facial contínua com loops de pálpebra, nariz, boca, mandíbula e queixo; expressão neutra para blendshapes.
 - Mãos: palma, quatro dedos e polegar separados, webbing e nós dos dedos; sem luvas-mitten ou dedos fundidos.
 - Pivôs canônicos: quadril em `y=0.84`; pescoço/cabeça em `y=1.68`.
-- Orçamento inicial: até 120k triângulos no hero full, proxy até 900 triângulos e no máximo 12 draw calls no full asset.
+- Budget por destino: fonte DCC ≤120.000 triângulos; FBX Hero isolado ≤6.500 triângulos e ≤12 draw calls; entidade third-person equipada completa ≤8.000 triângulos; proxy ≤900; silhouette ≤200. O teto de 120k não é um budget do asset carregado no jogo.
+
+### Validação bloqueante no runtime
+
+`validateHeroOperative()` em `game-runtime/src/game3d/hero3d.js` roda sobre o objeto parseado pelo `FBXLoader`, antes de normalizar ou aceitar o Hero, e aplica o subteto do mesh Hero de 6.500 triângulos/12 draw calls. `validateEquippedEntityBudget(root)` mede a raiz isolada de cada operativo depois de compor body + gear + weapon + attachments + skin/VFX, retorna `accepted=false` se passar de 8.000 e grava métrica atual em `userData.equippedBudget` nos caminhos de `applyOperativeGear()`/`attachWeapon()`. O bloqueio preventivo de regressões é o audit CI, que usa os mesmos budgets e falha se qualquer envelope de loadout exceder o total:
+
+- soma triângulos por índice/posição e `drawRange`, incluindo toda geometria serializada no root mesmo quando um mesh está oculto; calcula draw calls por mesh/material group;
+- exige geometria e materiais válidos, ao menos um `SkinnedMesh`, `skinIndex`/`skinWeight` coerentes, índices dentro do skeleton, até quatro influências não nulas por vértice e soma de pesos `1 ± 0,02`;
+- exige bones de pivô `Hips/Hip/Pelvis` em `y=0,84 ± 0,10 m` e `Neck/Head` em `y=1,68 ± 0,10 m`, além de bounding box vertical `1,80 ± 0,10 m`;
+- rejeita o FBX se ultrapassar 6.500 triângulos ou 12 draw calls; para a entidade completa, sinaliza qualquer estado que exceda 8.000 triângulos visíveis. As métricas do FBX e os códigos de rejeição ficam disponíveis por `getLastHeroAssetValidation()`; falha de carga ou rejeição resolve `null`, preservando o fallback procedural.
+
+O gate runtime não prova topologia quad de origem, anatomia/identidade humana, limpeza de deformação, cobertura de LOD, licença das referências nem desempenho no Unreal. Esses itens seguem obrigatórios na revisão da fonte DCC, no teste visual e na validação in-engine descritos abaixo. O teto de quatro influências é uma verificação automática genérica; o limite mais estrito de duas influências em acessórios deformáveis requer classificação e validação no DCC.
+
+## Auditoria de orçamento procedural e loadouts
+
+O audit reproduzível `game-runtime/scripts/audit-character-triangle-budget.mjs` mede as malhas produzidas pelos factories reais, os 33 IDs CANON, os dois estados de capacete-base e todos os estados de colete/capacete/mochila: **5.280 cenários de body/gear**. Também varre **9.120 estados** das nove armas e anexos, mais a envoltória equipada de **47.520 combinações** que combina cada body/gear com o estado de maior contagem de cada arma.
+
+Resultado: **0/47.520** combinações equipadas excedem o teto principal de 8.000 triângulos. O máximo é `OP_MALE_VANGUARD` com colete Nv4, capacete Nv3, sem capacete-base/mochila e a M4 em seu estado de maior geometria: **7.536 triângulos**, margem de 464 (**6,16%** sobre o pico medido). O limite de 8.000 é um teto redondo com reserva controlada para acessórios futuros, não uma meta de consumo; qualquer regressão acima dele falha no CI. O FBX Hero continua com subteto isolado de 6.500. As prioridades por peça medidas no código: silenciador comum (208 triângulos/6 draw calls), Mira 4x comum (156/6), overlay mítico estágio 4 (176/9); no gear, capacete Nv3 (276/6) e colete Nv4 (144/12). Draw calls são uma oportunidade de otimização separada; ainda não há teto total de GPU aprovado.
+
+Os acessórios identitários pertencem a `createOperative()`, gear dinâmico entra por `applyOperativeGear()` e arma/anexos por `attachWeapon()`. O contrato agora mede os três juntos. A [auditoria completa por operativo, peça e loadout](reports/OPERATIVE_TRIANGLE_BUDGET_2026-11-16.md) inclui a priorização de otimizações e os CSVs reproduzíveis.
 
 ## Realismo humano e identidade
 
