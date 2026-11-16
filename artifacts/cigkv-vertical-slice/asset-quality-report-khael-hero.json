@@ -1,0 +1,80 @@
+{
+  "schema": "khaaos.cigkv.character-asset-quality-report/v1",
+  "engineless": true,
+  "scope": "source_mesh_quality_not_ue5_acceptance",
+  "manifest": "Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json",
+  "assets": [
+    {
+      "slot": "CIGKV_HUMAN_HERO_M01",
+      "source": "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01_RIGGED.glb",
+      "exists": true,
+      "warnings": [],
+      "errors": [],
+      "sha256": "34ed644943ec76a1236ba77dbfe42699a01444bc903d4325885fabfe1e72164b",
+      "metrics": {
+        "format": "glb",
+        "bytes": 4620388,
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 25910,
+        "triangles": 18432,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 1,
+        "animations": 0,
+        "uv_sets": 1,
+        "nodes": 25,
+        "joints": 23
+      },
+      "quality_class": "production_candidate"
+    },
+    {
+      "slot": "CIGKV_ZHEERS_NONHUMAN_M01",
+      "source": "mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae",
+      "exists": true,
+      "warnings": [
+        "proxy_or_low_detail_mesh_below_5000_vertices",
+        "proxy_or_low_detail_mesh_below_5000_triangles",
+        "no_materials_declared",
+        "no_skeletal_skin_detected",
+        "no_embedded_or_declared_texture_images"
+      ],
+      "errors": [],
+      "sha256": "781b40efb7c2ea29777324da7a98679ed872a2f5a6a55fc786eb4eee44ad01f7",
+      "metrics": {
+        "format": "dae",
+        "bytes": 25975,
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 3,
+        "triangles": 192,
+        "materials": 0,
+        "textures": 0,
+        "images": 0,
+        "skins": 0,
+        "animations": 0,
+        "uv_sets": 1,
+        "joints": 0
+      },
+      "quality_class": "proxy_source"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "blocked": 0,
+    "proxy_source": 1,
+    "production_candidate": 1,
+    "warnings": 5
+  },
+  "limitations": [
+    "não mede silhueta, deformação, clipping, foot sliding, shader response ou GPU",
+    "não cria .uasset/.umap",
+    "aceite final requer Blender e UE5.8 licenciado"
+  ],
+  "next_actions": [
+    "substituir proxies por meshes hero com identidade canônica",
+    "normalizar e exportar FBX com skinning/UV/materials",
+    "validar retarget, sockets e screenshots no runner UE5.8"
+  ]
+}

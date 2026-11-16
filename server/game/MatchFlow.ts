@@ -25,7 +25,7 @@ import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvival
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
 import { DBNO_CONTRACT } from "@shared/dbno";
-import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "@shared/worlds";
+import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS, KHAAOS_WORLDS, type WorldId } from "@shared/worlds";
 import { worldKillerLabel } from "@shared/worldKillers";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -103,13 +103,35 @@ export const DEFAULT_WORLD_PIPELINE = [
 // ─── Match Ring Phase Config ────────────────────────────────────────────────
 
 const RING_PHASE_DURATION_SECONDS = WORLD_MATCH_DURATION_SECONDS / 5;
-const RING_PHASES = [
-  { radiusStart: 800, radiusEnd: 500, durationS: RING_PHASE_DURATION_SECONDS, damagePerTick: 1  },
-  { radiusStart: 500, radiusEnd: 300, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 3  },
-  { radiusStart: 300, radiusEnd: 150, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 5  },
-  { radiusStart: 150, radiusEnd: 50,  durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 10 },
-  { radiusStart: 50,  radiusEnd: 0,   durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 25 },
-];
+/**
+ * Fase 61 — ZONA SEGURA NO CÂNON DE CADA MUNDO (fim do schedule genérico):
+ * os raios e dps vêm de `shared/worlds.ts` safeZonePhases (SSOT) — a mesma
+ * especificação do cliente (game-runtime/src/game3d/safeZone.js). Cada fase
+ * encolhe CONTINUAMENTE do raio oficial anterior ao raio oficial da fase.
+ */
+interface WorldRingPhase {
+  phaseIndex: number;
+  phaseName: string;
+  radiusStart: number;
+  radiusEnd: number;
+  durationSeconds: number;
+  damagePerSecond: number;
+}
+const CANON_WORLD_IDS: WorldId[] = ["CIGKV", "Barburhen", "Priadus", "Ckesalth", "Arukheea"];
+function ringPhasesForWorld(worldId: string): WorldRingPhase[] {
+  const id = (CANON_WORLD_IDS.find((w) => w.toLowerCase() === worldId.toLowerCase()) ?? "CIGKV") as WorldId;
+  const phases = KHAAOS_WORLDS[id].safeZonePhases;
+  return phases.map((p, i) => ({
+    phaseIndex: p.phaseIndex,
+    phaseName: p.phaseName,
+    radiusStart: i === 0 ? p.radiusMeters : phases[i - 1].radiusMeters,
+    radiusEnd: p.radiusMeters,
+    durationSeconds: p.durationSeconds,
+    damagePerSecond: p.damagePerSecond,
+  }));
+}
+/** Fase 61 — o schedule genérico legado foi aposentado: TODO mundo do
+ *  pipeline canônico usa ringPhasesForWorld() (cânon de shared/worlds.ts). */
 
 // ─── MatchFlow Class ────────────────────────────────────────────────────────
 
@@ -144,13 +166,13 @@ export class MatchFlow {
     this.spectatorPipeline = spectatorPipeline ?? null;
     this.discordBot = discordBot ?? null;
 
-    // Initialize match state
+    // Initialize match state — Fase 61: raio inicial do CÂNON do mundo
     const worlds: MatchWorld[] = this.config.worldPipeline.map((w) => ({
       worldId: w.worldId,
       worldName: w.worldName,
       capacity: w.capacity,
       currentPhase: 0,
-      currentRadius: RING_PHASES[0].radiusStart,
+      currentRadius: ringPhasesForWorld(w.worldId)[0].radiusStart,
       damagePerTick: 0,
       isShrinking: false,
     }));
@@ -283,23 +305,26 @@ export class MatchFlow {
 
   /**
    * Process ring shrinking for the current world.
+   * Fase 61 — fases do CÂNON do mundo (shared/worlds.ts safeZonePhases):
+   * nome oficial, raios oficiais (encolhimento contínuo) e dps oficial.
    */
   private processRingTick(world: MatchWorld): void {
-    const phaseIdx = Math.min(world.currentPhase, RING_PHASES.length - 1);
-    const phaseConfig = RING_PHASES[phaseIdx];
+    const worldPhases = ringPhasesForWorld(world.worldId);
+    const phaseIdx = Math.min(world.currentPhase, worldPhases.length - 1);
+    const phaseConfig = worldPhases[phaseIdx];
 
     if (world.currentRadius > phaseConfig.radiusEnd) {
       // Shrink ring
-      const shrinkPerTick = (phaseConfig.radiusStart - phaseConfig.radiusEnd) / (phaseConfig.durationS);
+      const shrinkPerTick = (phaseConfig.radiusStart - phaseConfig.radiusEnd) / (phaseConfig.durationSeconds);
       world.currentRadius = Math.max(phaseConfig.radiusEnd, world.currentRadius - shrinkPerTick);
       world.isShrinking = true;
-      world.damagePerTick = phaseConfig.damagePerTick;
+      world.damagePerTick = phaseConfig.damagePerSecond;
     } else {
       // Phase complete, advance to next phase
-      if (world.currentPhase < RING_PHASES.length - 1) {
+      if (world.currentPhase < worldPhases.length - 1) {
         world.currentPhase++;
         world.isShrinking = false;
-        this.logEvent("RING_PHASE_ADVANCE", { worldId: world.worldId, newPhase: world.currentPhase });
+        this.logEvent("RING_PHASE_ADVANCE", { worldId: world.worldId, newPhase: world.currentPhase, phaseName: worldPhases[world.currentPhase].phaseName });
 
         // Notify Discord
         this.discordBot?.sendRingPhase(world.worldId, world.currentPhase, world.damagePerTick);

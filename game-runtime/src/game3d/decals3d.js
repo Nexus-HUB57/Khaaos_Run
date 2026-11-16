@@ -64,14 +64,14 @@ export function decalLODDecision(dist, current = 'full', th = DECAL_LOD_TIERS.hi
 // deathFall (Fase 12): rotX positivo = tomba de costas (+z local), rotZ
 // positivo = tomba p/ −x local. Logo a direção LOCAL de queda é
 // (−sin(angle), +cos(angle)) em (x, z). O root do modelo usa
-// rotation.y = yaw + π (main3d.syncEntities), e a rotação R_y(θ) leva
+// rotation.y = yaw (main3d.syncEntities, convenção Task 62 — modelo olha −z
+// local = direção de mira), e a rotação R_y(θ) leva
 // (lx, lz) → (lx·cosθ + lz·sinθ, −lx·sinθ + lz·cosθ).
 export function fallDirectionWorld({ angle = 0, yaw = 0 } = {}) {
   const a = Number.isFinite(angle) ? angle : 0;
   const y = Number.isFinite(yaw) ? yaw : 0;
   const lx = -Math.sin(a), lz = Math.cos(a);
-  const th = y + Math.PI;
-  const cos = Math.cos(th), sin = Math.sin(th);
+  const cos = Math.cos(y), sin = Math.sin(y);
   return { x: lx * cos + lz * sin, z: -lx * sin + lz * cos };
 }
 

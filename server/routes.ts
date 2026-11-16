@@ -41,6 +41,8 @@ import { recordEnrollmentFeeLedger } from "./game/enrollmentLedger";
 import { createEnrollmentFeeGatewayFromEnv, createEnrollmentFeePaymentService, isEnrollmentFeeEvent } from "./payments/enrollmentFeePayment";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
+import { cieScheduler } from "./game/cieScheduler";
+import { startCampaignOutboxWorker } from "./game/campaignOutboxRuntime";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -55,6 +57,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);
   registerApiRoutes(app, { recoverPendingCouncils: true });
+  await cieScheduler.start();
+  await startCampaignOutboxWorker();
   return httpServer;
 }
 

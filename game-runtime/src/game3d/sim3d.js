@@ -24,12 +24,15 @@ import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './o
 import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
 // Fase 30/31/32 — anexos generalizados, skins míticas por arma e raridade dos anexos
 import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS, mythicSkinFor, attachmentRarityFor } from './attachments3d.js';
-import { ZU_TRAIN, COMBAT_UNLOCK_MS, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, seedHashOf } from '../shared/zuTrain.js'; // Task 53 — protocolo oficial de entrada ZU
+import { ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, doorWindowOpen, wagonOfIndex, wagonSeatOfIndex, wagonStopMs, wagonJumpWindowOpen, trainRoute, safeJumpPose, platformSlotPose, seedHashOf, ZU_ACCIDENTS } from '../shared/zuTrain.js'; // Task 53/68 — protocolo oficial de entrada ZU (vagões + salto controlado + escudo)
+import { scheduleFor, phaseStateAt, centerDrift } from './safeZone.js'; // Fase 61 — zona segura no cânon de cada mundo
 import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
 export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
+// Fase 61 — PULSE_INTERVAL aposentado pelo cânon de zona segura por mundo
+// (safeZone.js: 5 fases × 120 s — mantido só por compatibilidade de import).
 export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (igual ao da sala online)
 
 // Fase 25 — portas funcionais/destrutíveis: MESMOS números na sim offline,
@@ -608,6 +611,8 @@ export class KhaaosSim3D {
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
+    // Fase 61 — schedule canônico da zona segura DO MUNDO (5 × 120 s)
+    this.zone = scheduleFor(this.scenario.id); this.zoneElapsed = 0;
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.sporeTimer = 0; this.sporeRemaining = 0; this.sporeActive = false;
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
@@ -617,6 +622,7 @@ export class KhaaosSim3D {
     // trava global de combate (chegada + 15 s). `trainT === null` = entrada
     // sem trem (portal/legacy) — nenhum gate ativo.
     this.trainT = null; this.trainRoutePts = null; this.trainArrived = false;
+    this.lastWagonArrived = -1; // Task 68 — chegada escalonada dos vagões (a cada 5 s)
     this.combatLockedUntil = 0; this.combatUnlockedAnnounced = false;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
@@ -625,7 +631,8 @@ export class KhaaosSim3D {
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
-    this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
+    // Fase 61 — dps/phaseName do cânon alimentados por frame pelo schedule
+    this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0, phaseName: '', dps: 1 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
     // Fase 7 — esquadrões determinísticos: jogador lidera o sq-1 (3 aliados)
@@ -849,6 +856,18 @@ export class KhaaosSim3D {
         this.player.trainOnboard = true;
         for (const b of this.bots) b.trainOnboard = true;
         this.combatLockedUntil = COMBAT_UNLOCK_MS / 1000;
+        // Task 68 — alocação canônica nos VAGÕES (10×10 = 100 operativos):
+        // jogador é o índice 0, bots seguem na ordem de spawn. Escudo de pouso
+        // zerado no embarque (só entra em vigor no pouso — salto/desembarque).
+        this.player.wagon = wagonOfIndex(0);
+        this.player.zuSeat = wagonSeatOfIndex(0);
+        this.player.zuShieldT = 0;
+        for (let i = 0; i < this.bots.length; i++) {
+          this.bots[i].wagon = wagonOfIndex(i + 1);
+          this.bots[i].zuSeat = wagonSeatOfIndex(i + 1);
+          this.bots[i].zuShieldT = 0;
+        }
+        this.lastWagonArrived = -1;
       }
       this.emit('zuIngress', {
         protocol: this.zuIngress.eventProtocol,
@@ -864,6 +883,11 @@ export class KhaaosSim3D {
           arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
           graceS: ZU_TRAIN.GRACE_S,
           combatLockedAfterS: COMBAT_UNLOCK_MS / 1000,
+          // Task 68 — contrato dos vagões (10×10, chegada a cada 5 s)
+          wagons: ZU_TRAIN.WAGONS,
+          wagonCapacity: ZU_TRAIN.WAGON_CAPACITY,
+          wagonGapMs: ZU_TRAIN.WAGON_GAP_MS,
+          lastWagonStopMs: LAST_WAGON_STOP_MS,
         } : {}),
       });
     }
@@ -945,10 +969,12 @@ export class KhaaosSim3D {
     } else if (ability.effect === 'temporaryArmor') {
       p.temporaryArmor = params.armor;
     } else if (ability.effect === 'ringRead' || ability.effect === 'ringForecast') {
-      details.nextPulseSeconds = Math.max(0, PULSE_INTERVAL - this.pulseTimer);
-      details.targetRadius = this.ring.radius > 42
-        ? Math.max(42, 168 - (this.ring.pulse + 1) * 30)
-        : this.ring.radius;
+      // Fase 61 — leitura no cânon: segundos até a PRÓXIMA FASE oficial + raio-alvo dela
+      const zNow = phaseStateAt(this.zone, this.zoneElapsed);
+      const next = this.zone[Math.min(this.zone.length - 1, (zNow?.index ?? 0) + 1)];
+      const nextIn = next ? Math.max(0, next.startAt - this.zoneElapsed) : 0;
+      details.nextPulseSeconds = nextIn;
+      details.targetRadius = zNow ? (this.ring.radius > (next?.radius ?? 42) ? (next?.radius ?? this.ring.radius) : this.ring.radius) : this.ring.radius;
     } else if (ability.effect === 'terminalScan') {
       const terminal = this.terminals.filter((item) => item.active)
         .sort((a, b) => dist2d(p.x, p.z, a.x, a.z) - dist2d(p.x, p.z, b.x, b.z))[0];
@@ -983,33 +1009,39 @@ export class KhaaosSim3D {
     // contar APÓS o desbloqueio — protocolo oficial do ZU).
     if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
     if (this.trainT !== null) { this.trainT += dt; this.#stepTrainProtocol(); }
+    this.#stepZuShields(dt); // Task 68 — decaimento do escudo de pouso (15 s)
     this.#advanceAbility();
     if (input.ability && !this.player.trainOnboard) this.#activateAbility();
 
-    // --- zona segura ---
-    if (!this.#combatLocked()) this.pulseTimer += dt;
-    if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
-      this.pulseTimer = 0;
-      this.ring.pulse++;
-      this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
-      // Fase 42 — README (Mundos W1–W4): o anel FECHA SOBRE o setor canônico de
-      // cada mundo (W1 Parque / W2 Templo / W3 Vila Sombria / W4 Prisão). O centro
-      // deriva em passos determinísticos: 25% do caminho por pulso (100% no 4º).
-      const fin = this.scenario.ringFinal;
-      if (fin) {
-        const k = Math.min(1, this.ring.pulse / 4);
-        this.ring.x = fin.x * k;
-        this.ring.z = fin.z * k;
+    // --- zona segura (Fase 61 — CÂNON DO MUNDO: 5 fases × 120 s com nome,
+    // raio projetado da fração oficial e dps oficial; encolhimento CONTÍNUO
+    // dentro da fase e centro derivando ao setor canônico ringFinal).
+    // Como o relógio da partida, o schedule só corre com o COMBATE LIBERADO
+    // (Task 53 — rota/portas/grace não consomem zona nem pulso do Ring) ---
+    if (!this.#combatLocked()) {
+      this.zoneElapsed += dt;
+      const zone = phaseStateAt(this.zone, this.zoneElapsed);
+      if (zone) {
+        if (zone.index !== this.ring.pulse - 1) {
+          this.ring.pulse = zone.index + 1;
+          const drift = centerDrift(this.scenario, zone.index);
+          if (drift) { this.ring.x = drift.x; this.ring.z = drift.z; }
+          this.emit('pulse', { pulse: this.ring.pulse, target: zone.radiusTo, phaseName: zone.name, dps: zone.dps, finalName: this.scenario.ringFinal?.name ?? null });
+        }
+        this.ring.radius = zone.radius;      // diminui sem saltos (smoothstep)
+        this.ring.target = zone.radiusTo;
+        this.ring.phaseName = zone.name;
+        this.ring.dps = zone.dps;
       }
-      this.emit('pulse', { pulse: this.ring.pulse, target: this.ring.target, finalName: fin?.name ?? null });
     }
-    if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
     // Task 53 — a bordo do trem dos Rings: imune ao ring (o "Cinto" da entrada
     // ZU protege quem não pode se mover; quem salta pela porta volta a responder
     // ao anel). Paridade 1:1 com room3d (dano de ring server-side).
     if (p.alive && !p.trainOnboard && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
-      this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
+      // Fase 61 — DPS OFICIAL da fase canônica do mundo (1→40; sem multiplicador
+      // legado — o contraste entre mundos já vem do cânon safeZone.js)
+      this.#hurtPlayer((this.ring.dps || 1) * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     // Fase 42 — sobrevivência dirigida pela CONFIGURAÇÃO do mundo (scenarios.js),
@@ -1901,8 +1933,16 @@ export class KhaaosSim3D {
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
     // Task 53 — grace global do trem: NENHUM ataque entre operativos antes do
-    // desbloqueio (chegada + 15 s). Dano ambiental (ownerId null) segue canônico.
+    // desbloqueio (último vagão + 15 s). Dano ambiental (ownerId null) segue canônico.
     if (ownerId && this.#combatLocked()) return;
+    // Task 68 — A BORDO do trem: fora de alcance de ataques MESMO após o
+    // desbloqueio global (vagões tardios chegam até 61 s; penalizar quem não
+    // pode agir é armadilha, não mecânica — paridade 1:1 com room3d).
+    if (bot.trainOnboard && ownerId) return;
+    // Task 68 — ESCUDO DE POUSO ZU (15 s): quem pousou está protegido de ATAQUES
+    // e da penalidade de estar FORA DA SAFE ZONE (ring) — 15 s para adentrá-la.
+    // Dano ambiental do mundo (acid/tsunami/spore/smoke) segue canônico.
+    if ((bot.zuShieldT ?? 0) > 0 && (ownerId || kind === 'ring')) return;
     if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (ownerId) bot.lastHitBy = ownerId;
@@ -1933,6 +1973,12 @@ export class KhaaosSim3D {
     if (!p.alive) return;
     // Task 53 — grace global do trem (mesmo contrato do #damageBot)
     if (ownerId && this.#combatLocked()) return;
+    // Task 68 — A BORDO: fora de alcance de ataques mesmo após o desbloqueio
+    // (vagões tardios até 61 s — quem não pode agir não pode ser penalizado).
+    if (p.trainOnboard && ownerId) return;
+    // Task 68 — ESCUDO DE POUSO ZU (15 s): protegido de ataques E da penalidade
+    // de estar fora da Safe Zone (ring) — tempo de adentrar a zona.
+    if ((p.zuShieldT ?? 0) > 0 && (ownerId || kind === 'ring')) return;
     if (dmg > 0 && p.zexChannel) this.#cancelZexChannel(p, 'damage');
     const ability = getOperativeAbility(p.operativeId);
     if (kind === 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'ringResistance') {
@@ -2373,23 +2419,39 @@ export class KhaaosSim3D {
     return this.trainT !== null && this.trainT < this.combatLockedUntil;
   }
 
-  // Task 53 — salto de porta do jogador (entrada oficial): só a bordo e dentro
-  // da janela [DOOR_OPEN, ARRIVAL). Pose IDÊNTICA à validada pelo servidor
-  // (trainDoorJumpPose — pureza compartilhada).
+  // Task 53/68 — salto de porta do jogador (entrada oficial): só a bordo e
+  // dentro da janela do PRÓPRIO vagão (portas abertas e vagão ainda em rota).
+  // O salto ANTES da parada do vagão é CONTROLADO pelo protocolo: pose no
+  // corredor seguro (safeJumpPose — pureza compartilhada com o servidor),
+  // PREVENÇÃO dos prováveis acidentes (batida, descarrilamento, incêndio,
+  // colisão) e ESCUDO DE POUSO de 15 s (ataques + fora da Safe Zone).
   doorJump() {
     const p = this.player;
     if (!this.started || this.over || !p.alive || !p.trainOnboard) return false;
     if (this.trainT === null || !doorWindowOpen(this.trainT * 1000)) return false;
-    const pose = trainDoorJumpPose(this.trainT * 1000, this.trainRoutePts);
+    if (!wagonJumpWindowOpen(this.trainT * 1000, p.wagon ?? 0)) return false; // vagão parou → desembarque obrigatório
+    const pose = safeJumpPose(this.trainT * 1000, this.trainRoutePts, p.wagon ?? 0);
     p.x = pose.x; p.z = pose.z; p.y = pose.y; p.yaw = pose.yaw; p.pitch = 0;
     p.vy = 0; p.onGround = false; p.dropPhase = 'chute'; // pouso canônico da Fase 4
     p.trainOnboard = false;
-    this.emit('doorJump', { x: p.x, z: p.z, y: p.y });
+    p.zuShieldT = ZU_TRAIN.GRACE_S; // Task 68 — escudo de pouso (15 s para adentrar a zona)
+    this.emit('doorJump', { x: p.x, z: p.z, y: p.y, wagon: p.wagon ?? 0, early: true, shieldS: ZU_TRAIN.GRACE_S, prevented: ZU_ACCIDENTS });
+    this.emit('zuEarlyJump', { id: p.id, wagon: p.wagon ?? 0, shieldS: ZU_TRAIN.GRACE_S, prevented: ZU_ACCIDENTS });
     return true;
   }
 
-  // Task 53 — transições do protocolo: saltos determinísticos dos bots, chegada
-  // (desembarque obrigatório) e desbloqueio de combate (chegada + 15 s).
+  // Task 68 — decaimento do ESCUDO DE POUSO (15 s): conta em tempo de partida
+  // (a bordo ou não — quem pousou dentro da zona também carrega o escudo de
+  // ataques; o de zona só tem efeito fora do anel).
+  #stepZuShields(dt) {
+    if ((this.player.zuShieldT ?? 0) > 0) this.player.zuShieldT = Math.max(0, this.player.zuShieldT - dt);
+    for (const b of this.bots) if ((b.zuShieldT ?? 0) > 0) b.zuShieldT = Math.max(0, b.zuShieldT - dt);
+  }
+
+  // Task 53/68 — transições do protocolo: saltos controlados determinísticos
+  // dos bots, chegada ESCALONADA dos vagões (a cada 5 s — desembarque
+  // obrigatório daquele vagão em slots anti-colisão da plataforma) e
+  // desbloqueio de combate (último vagão + 15 s).
   #stepTrainProtocol() {
     const elapsedMs = this.trainT * 1000;
     if (doorWindowOpen(elapsedMs)) {
@@ -2397,21 +2459,38 @@ export class KhaaosSim3D {
         const b = this.bots[i];
         if (!b.alive || !b.trainOnboard || (i % 3) !== 0) continue;
         const jumpAt = ZU_TRAIN.DOOR_OPEN_MS + ((i * 431) % 2400);
-        if (elapsedMs >= jumpAt) {
-          const pose = trainDoorJumpPose(elapsedMs, this.trainRoutePts);
+        if (elapsedMs >= jumpAt && wagonJumpWindowOpen(elapsedMs, b.wagon ?? 0)) {
+          const pose = safeJumpPose(elapsedMs, this.trainRoutePts, b.wagon ?? 0);
           b.x = pose.x; b.z = pose.z; b.y = pose.y; b.yaw = pose.yaw;
           b.vy = 0; b.onGround = false; b.dropPhase = 'chute';
           b.trainOnboard = false;
+          b.zuShieldT = ZU_TRAIN.GRACE_S; // Task 68 — escudo de pouso do salto controlado
           b.dropTarget = { x: pose.x + Math.cos(b.yaw) * 6, z: pose.z + Math.sin(b.yaw) * 6 };
-          this.emit('botDoorJump', { id: b.id, x: b.x, z: b.z });
+          this.emit('botDoorJump', { id: b.id, x: b.x, z: b.z, wagon: b.wagon ?? 0, early: true, prevented: ZU_ACCIDENTS });
         }
       }
     }
-    if (!this.trainArrived && elapsedMs >= ZU_TRAIN.ARRIVAL_MS) {
+    // Task 68 — vagões chegam a cada 5 s: quem estiver a bordo do vagão w é
+    // OBRIGADO a desembarcar na plataforma (slots determinísticos — 100
+    // operativos pousam sem sobreposição) e recebe o escudo de pouso (15 s).
+    while (this.lastWagonArrived + 1 < ZU_TRAIN.WAGONS && elapsedMs >= wagonStopMs(this.lastWagonArrived + 1)) {
+      const w = ++this.lastWagonArrived;
+      let disembarked = 0;
+      const land = (a) => {
+        const slot = platformSlotPose(this.trainRoutePts, a.wagon ?? w, a.zuSeat ?? 0);
+        a.x = slot.x; a.z = slot.z; a.y = slot.y; a.yaw = slot.yaw;
+        a.vy = 0; a.onGround = true; a.dropPhase = null;
+        a.trainOnboard = false;
+        a.zuShieldT = ZU_TRAIN.GRACE_S;
+        disembarked++;
+      };
+      if (this.player.alive && this.player.trainOnboard && (this.player.wagon ?? 0) === w) land(this.player);
+      for (const b of this.bots) if (b.alive && b.trainOnboard && (b.wagon ?? 0) === w) land(b);
+      this.emit('wagonArrived', { wagon: w, stopMs: wagonStopMs(w), disembarked, graceS: ZU_TRAIN.GRACE_S });
+    }
+    if (!this.trainArrived && this.lastWagonArrived >= ZU_TRAIN.WAGONS - 1) {
       this.trainArrived = true;
-      this.player.trainOnboard = false;
-      for (const b of this.bots) b.trainOnboard = false;
-      this.emit('trainArrived', { x: this.world.playerSpawn.x, z: this.world.playerSpawn.z });
+      this.emit('trainArrived', { x: this.world.playerSpawn.x, z: this.world.playerSpawn.z, graceS: ZU_TRAIN.GRACE_S });
     }
     if (!this.combatUnlockedAnnounced && this.trainT >= this.combatLockedUntil) {
       this.combatUnlockedAnnounced = true;
@@ -2426,6 +2505,10 @@ export class KhaaosSim3D {
         phase: zuTrainPhase(this.trainT * 1000), elapsedS: this.trainT,
         playerOnboard: !!this.player.trainOnboard, doorOpen: doorWindowOpen(this.trainT * 1000),
         arrived: this.trainArrived, combatLockedRemainingS: Math.max(0, this.combatLockedUntil - this.trainT),
+        // Task 68 — vagões (10×10, chegada a cada 5 s) + escudo de pouso do jogador
+        wagons: ZU_TRAIN.WAGONS, wagonCapacity: ZU_TRAIN.WAGON_CAPACITY, wagonGapMs: ZU_TRAIN.WAGON_GAP_MS,
+        lastWagonStopMs: LAST_WAGON_STOP_MS, wagon: this.player.wagon ?? null,
+        shieldS: Math.round((this.player.zuShieldT ?? 0) * 10) / 10,
       } : null,
       survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.sporeActive || this.smokeActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.sporeRemaining || this.smokeRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring }, player: structuredClone(this.player),

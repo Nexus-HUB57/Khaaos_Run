@@ -6,10 +6,16 @@ import { MatchRoom3D, KILL_XP, KILL_KRC, EXTRACT_XP } from '../server/room3d.js'
 import { validateInput3D } from '../server/antiCheat.js';
 import { chooseRoom } from '../server/matchmaking.js';
 import { MatchRoom } from '../server/room.js';
-import { PULSE_INTERVAL, WEAPONS3D, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { WEAPONS3D, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { scheduleFor } from '../src/game3d/safeZone.js'; // Task 65 — cânon de zona
 import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
+
+// Task 65 — helpers de zona no CÂNON (mesmos do squad3d.test.js)
+const COLLAPSE_PHASE = (dps = 20) => [{ index: 4, name: 'Colapso (teste)', radius: 0, radiusFrom: 0, dps, startAt: 0, endAt: 1e9 }];
+const forceRingKill = (room, dps = 20) => { room.zone = COLLAPSE_PHASE(dps); room.zoneElapsed = 0; };
+const restoreZone = (room) => { room.zone = scheduleFor(room.scenario.id); room.zoneElapsed = 0; };
 
 const blankInput = (over = {}) => ({
   seq: 1, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false,
@@ -140,9 +146,9 @@ test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
   const p = room.humans.get('p1');
   p.x = 195; p.z = 0; // fora do anel inicial (170)
   const r0 = room.ring.radius;
-  room.pulseTimer = PULSE_INTERVAL - 0.001;
+  room.zoneElapsed = 119.999; // Task 65 — cruza a fronteira da fase 1 (120 s canônicos)
   room.tick(DT);
-  assert.equal(room.ring.pulse, 1);
+  assert.equal(room.ring.pulse, 2); // Task 65 — pulso = Nº DA FASE canônica (1-based: fase 1 → pulso 2)
   assert.ok(room.ring.target < r0);
   const life0 = p.life;
   for (let i = 0; i < 40; i++) { room.input('p1', blankInput({ seq: i + 1 })); room.tick(DT); }
@@ -271,7 +277,7 @@ test('room3d: dano recebido cancela canal ZEX sem conceder XP', () => {
   room.tick(DT);
   assert.ok(p.zexChannel);
   const xp0 = p.xp;
-  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   room.tick(DT);
   assert.equal(p.zexChannel, null);
   assert.equal(t.active, true);
@@ -300,7 +306,7 @@ test('room3d: MP-ZEX-07 nocaute cancela o canal, libera o terminal e outro jogad
   // dano letal determinístico: vida fixada em 1 e ring DESLOCADO (raio 0 não
   // fere quem está exatamente no centro — dist > radius), nocauteia em ~5 ticks
   p1.life = 1;
-  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
   assert.ok(p1.knocked, 'nocaute aconteceu (squad, não morte)');
   assert.equal(p1.zexChannel, null, 'nocaute cancela a canalização');
@@ -316,7 +322,7 @@ test('room3d: MP-ZEX-07 nocaute cancela o canal, libera o terminal e outro jogad
   assert.equal(knocks[0].reason, 'damage');
 
   // afasta o ring e o retake: outro jogador assume sem reiniciar a sala
-  room.ring.radius = 500;
+  restoreZone(room); // fase 0 — raio 170 protege o retake durante o canal
   p2.x = t.x; p2.z = t.z;
   room.input('p2', blankInput({ seq: 1, interact: true }));
   room.tick(DT);
@@ -343,7 +349,7 @@ test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal
   assert.ok(p1.zexChannel);
 
   p1.life = 1; // dano letal determinístico (ver teste do nocaute)
-  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  forceRingKill(room); // Task 65 — colapso canônico (raio 0 fere qualquer ator)
   for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
   assert.ok(p1.knocked);
   // Dano adicional não antecipa o prazo fixo de recuperação de sete segundos.

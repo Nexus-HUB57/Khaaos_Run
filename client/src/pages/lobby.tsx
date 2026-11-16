@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
+import { getOperativeAvatarOption, getOperativeAvatarRuntime } from "@shared/operative-avatar-catalog";
 
 export default function LobbyPage() {
   const { user } = useAuth();
@@ -230,7 +230,11 @@ export default function LobbyPage() {
               <Radio className="w-3 h-3" /> OPERATIVOS NA SALA
             </h2>
             <div className="space-y-2">
-              {players.map((p) => (
+              {players.map((p) => {
+                const runtimeAvatar = p.avatar ?? getOperativeAvatarRuntime(p.selectedOperativeId);
+                const operative = getOperativeAvatarOption(runtimeAvatar.id);
+                const realisticPath = runtimeAvatar.realisticAvatarPath ?? operative.realisticAvatarPath;
+                return (
                 <div
                   key={p.userId}
                   className={cn(
@@ -242,8 +246,11 @@ export default function LobbyPage() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <img
-                      src={p.avatar?.avatarPath ?? getOperativeAvatarOption(p.selectedOperativeId).avatarPath}
-                      alt={`Avatar ${p.avatar?.codename ?? getOperativeAvatarOption(p.selectedOperativeId).codename}`}
+                      src={realisticPath ?? operative.avatarPath}
+                      onError={(event) => {
+                        if (realisticPath) event.currentTarget.src = operative.avatarPath;
+                      }}
+                      alt={`Avatar ${operative.codename}`}
                       className="h-10 w-10 shrink-0 rounded border border-cyan-500/30 object-cover"
                     />
                     {p.isHost && <Crown className="w-4 h-4 text-amber-400 shrink-0" />}
@@ -255,7 +262,7 @@ export default function LobbyPage() {
                         )}
                       </span>
                       <span className="block text-[9px] font-mono text-cyan-300 truncate">
-                        {p.avatar?.codename ?? getOperativeAvatarOption(p.selectedOperativeId).codename} · ELO {p.rating ?? 1000}
+                        {operative.codename} · ELO {p.rating ?? 1000}
                       </span>
                     </div>
                     {!p.isConnected && (
@@ -284,7 +291,8 @@ export default function LobbyPage() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </CyberCard>
 

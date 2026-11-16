@@ -9,8 +9,13 @@ import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (me
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
+import { botPan } from './footsteps3d.js'; // Task 69 — pan espacial dos passos dos bots
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
+import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
+import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
+import { resolveIdentityLook, poolBodyForIdentity, identityForBot, dressHumanoid } from './humanoidCosmetics3d.js'; // Fase 60 — identidade humana dos 33 avatares
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
@@ -29,7 +34,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
 // Task 53 — TREM OFICIAL DO ZU: viagem a bordo + SSOT do protocolo (fases/grace)
 import { TrainRide } from './trainRide3d.js';
-import { zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
+import { ZU_TRAIN, zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
 import { buildWorldLayout as getWorldLayoutForTrain } from './layout3d.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
@@ -54,6 +59,19 @@ export class Game3D {
     const urlParams = new URLSearchParams(location.search);
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
+    // Fase 56 — avatar GLB real no corpo do herói (?avatar=<id> da biblioteca).
+    // Contrato do pipeline: QUALQUER falha de carga mantém o corpo procedural.
+    this.avatarOverrideId = avatarById(urlParams.get('avatar') ?? '')?.id ?? null;
+    // Fase 57 — corpo humano realista como PADRÃO (jogador + bots + remotos).
+    // ?avatar=legacy|off|0|none mantém o corpo procedural antigo (escape hatch);
+    // ?avatar=<id do pool> escolhe o rig do herói; sem parâmetro → determinístico.
+    this.avatarParam = (urlParams.get('avatar') ?? '').trim();
+    this.humanoidDisabled = LEGACY_BODY_IDS.includes(this.avatarParam.toLowerCase());
+    this.humanoidPlayer = null;        // corpo GLB do herói (attach assíncrono)
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+    this.avatarShowcase = null;        // vitrine de rigs no menu
+    this.avatarShowcaseMixer = null;
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
     // Fase 35 — settings gráficas do jogador (KR_GFX_*): override manual de tier
     // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
@@ -91,7 +109,11 @@ export class Game3D {
     this.online = !!net;
     this.pendingSlot = 0;
     this.netAccumulator = 0;
-    this.viewMode = new URLSearchParams(location.search).get('view') === 'tps' ? 'tps' : 'fps';
+    this.viewMode = resolveViewMode({
+      param: new URLSearchParams(location.search).get('view'),
+      stored: (() => { try { return localStorage.getItem(VIEW_STORAGE_KEY); } catch { return null; } })(),
+      fallback: 'tps', // Task 62 — default: avatar à frente do console
+    });
     this.cameraSway = 0;
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
@@ -122,6 +144,15 @@ export class Game3D {
       onReplayExport: () => this.exportReplay(),
     });
     this.hud.audio = this.audio;
+    this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
+    // Task 61 — look/aim touch: o pad direito entrega Δpixels; aqui vira yaw/pitch
+    // com a MESMA convenção, sensibilidade e clamp do mousemove (initInput) —
+    // incluindo a razão de ADS (~0.52×) e a sensibilidade do painel KR_GFX.
+    this.hud.onLook = (dxPx, dyPx) => {
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
+      this.input.yaw -= dxPx * sens;
+      this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch - dyPx * sens));
+    };
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
@@ -329,7 +360,9 @@ export class Game3D {
     // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
     const lpExposure = scene.userData?.lighting?.exposure;
     if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
-    this.ringWall = createRingWall();
+    // Task 64 — a parede do anel MATERIALIZA o hazard canônico do cenário
+    // (energia CIGKV, chuva ácida W1, esporos W2, fumaça W3, tsunami W4).
+    this.ringWall = createRingWall(this.scenario.id);
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {
       // Fase 18 — partículas de combate no pool compartilhado da cena
@@ -364,6 +397,7 @@ export class Game3D {
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
     this.playerOp.group.visible = this.viewMode !== 'fps';
+    this.#applyAvatarOverride(); // Fase 56 — corpo GLB real se ?avatar= válido; senão procedural
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
@@ -387,6 +421,7 @@ export class Game3D {
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
+        this.#attachHumanoidForBot(this.botOps.get(b.id), b.op || b.id); // Fase 57 + Task 64 — corpo real com IDENTIDADE: mesmo operativo → mesmo avatar
       });
     }
     // loot
@@ -414,6 +449,9 @@ export class Game3D {
     if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
     const selectionStatus = document.querySelector('#contentSelectionStatus');
     if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. A habilidade individual é acionada com Q; o modo online ainda não a sincroniza.';
+    // Fase 56 — vitrine de avatares GLB no menu (rigs reais, animação ao vivo)
+    const avatarBarHost = document.querySelector('.content-selection');
+    if (avatarBarHost) this.#initAvatarVitrine(avatarBarHost);
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
@@ -459,6 +497,7 @@ export class Game3D {
         : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      this.#applyAvatarOverride(); // Fase 56 — recoloca o corpo GLB no novo playerOp
       this.firstPersonRig?.traverse((node) => {
         // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
         if (node.isMesh && node.userData?.tintable && node.material?.color) node.material.color.set(operative.colors.primary);
@@ -540,12 +579,25 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
+    // Task 59 (sessão 56) — FIX-RAIZ do "personagem quadrado/sem corpo": o rig
+    // de 1ª pessoa (braços orgânicos + arma) é FILHO DA CÂMERA, e a câmera
+    // nunca foi add() à cena — filhos de nó fora do grafo NUNCA renderizam. O
+    // jogador via só a mira flutuando (zero corpo) desde sempre.
+    this.scene.add(this.camera);
+    // Task 59 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
+    // curto (~3 m) — ilumina só braços/arma (o sol da cena bate nas costas do
+    // rig e o deixava uma silhueta preta ilegível).
+    const vmLight = new THREE.PointLight('#fff2df', .9, 3.2, 2);
+    vmLight.position.set(.1, -.05, -.15);
+    this.camera.add(vmLight);
     if (this.firstPersonRig) {
       this.camera.add(this.firstPersonRig);
       this.firstPersonWeapon = createWeaponModel(this.sim.player.weapon);
       this.firstPersonRig.add(this.firstPersonWeapon.group);
-      this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-      this.firstPersonWeapon.group.rotation.x = -.08;
+      // Task 59 — viewmodel canônico: arma à DIREITA da mira e angulada p/ dentro
+      // (antes: x=0 — a arma de costas cobria a mira no centro da tela)
+      this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+      this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
     }
     this.camKick = 0; // recuo visual do disparo (só câmera, não afeta a mira)
     this.initPost();
@@ -596,6 +648,8 @@ export class Game3D {
       // Fase 40 — mapa tático em tela cheia (toggle; a partida NUNCA pausa)
       if (k === TACTICAL_HOTKEY && !e.repeat) this.hud?.toggleMap();
       if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
+      // Task 62 — alternância 1ª/3ª pessoa (V)
+      if (k === 'v' && !e.repeat) this.toggleView();
       // Fase 5 — espectador: troca o operativo acompanhado
       if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
       if (k === 'arrowright' && !e.repeat) this.spectateCycle(1);
@@ -609,10 +663,183 @@ export class Game3D {
 
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
 
+  // ---------- Task 62 — alternância de câmera (1ª pessoa ↔ avatar à frente) ----------
+  // Tecla V + botão ◉ VISTA do HUD. Persistida em localStorage (kr_view_mode);
+  // ?view= da URL tem prioridade apenas na abertura (resolveViewMode).
+  toggleView() {
+    this.setViewMode(this.viewMode === 'fps' ? 'tps' : 'fps');
+  }
+
+  setViewMode(mode) {
+    if (mode !== 'fps' && mode !== 'tps' || mode === this.viewMode) return;
+    this.viewMode = mode;
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* storage privado */ }
+    // visibilidade: em 1ª pessoa o corpo do jogador dorme (o rig FP assume);
+    // em 3ª pessoa o operativo volta com a arma presa nas mãos.
+    if (this.playerOp?.group) this.playerOp.group.visible = mode !== 'fps';
+    if (this.firstPersonRig) this.firstPersonRig.visible = mode === 'fps';
+    if (mode === 'tps') { this.camRig.curDist = 4.4; this.camRig.curEye = 1.62; } // re-enquadra
+    this.hud?.viewToast?.(mode === 'fps' ? 'CÂMERA // PRIMEIRA PESSOA' : 'CÂMERA // AVATAR À FRENTE (3ª PESSOA)');
+  }
+
   // ---------- fluxo ----------
+  // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
+  // Contrato (hero3d/avatars3d): asset OPCIONAL — qualquer falha mantém o
+  // corpo procedural de createOperative(); nada aqui pode quebrar o boot.
+  #removeAvatarModel() {
+    if (this.avatarRoot?.parent) this.avatarRoot.parent.remove(this.avatarRoot);
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+  }
+
+  #setProceduralBodyVisible(visible) {
+    const g = this.playerOp?.group;
+    if (!g) return;
+    const keep = new Set();
+    const wr = g.userData?.weaponRig?.group; // arma continua viva sobre o corpo GLB
+    if (wr) wr.traverse((o) => keep.add(o));
+    const shadow = this.playerOp?.parts?.shadow; // sombra de contato canônica
+    if (shadow) shadow.traverse((o) => keep.add(o));
+    g.traverse((o) => {
+      if (o === this.avatarRoot || keep.has(o) || o.userData?.avatarAsset) return;
+      if (o.isMesh || o.isSkinnedMesh) o.visible = visible;
+    });
+  }
+
+  async #applyAvatarOverride() {
+    // Fase 57 — corpo humano realista do HERÓI. O GLB é o corpo PADRÃO:
+    // sem ?avatar= → determinístico pelo operativo; ?avatar=<id pool> → escolha
+    // explícita; ?avatar=legacy|off|0|none → corpo procedural antigo (escape
+    // hatch); QUALQUER falha de load/rig → procedural assume (doutrina hero3d).
+    // Fase 60 — o corpo agora é CORRETO POR SEXO DA IDENTIDADE (SK_Gwen →
+    // rigs femininos) e recebe a VESTIMENTA/ACESSÓRIOS do catálogo dos 33
+    // (headgear, colete, mochila, ombreiras e faixa de facção nos bones).
+    this.humanoidPlayer = null;
+    if (this.humanoidDisabled) { this.#setProceduralBodyVisible(true); return; }
+    const g = this.playerOp?.group;
+    if (!g) return;
+    const identityId = this.selectedOperative?.id ?? 'player';
+    const override = this.avatarOverrideId ?? this.avatarParam;
+    const id = override
+      ? resolveGameplayAvatar(override, identityId)
+      : poolBodyForIdentity(identityId); // Fase 60 — corpo por identidade
+    if (!id) { this.#setProceduralBodyVisible(true); return; } // estático/inválido: procedural
+    const body = await createHumanoidBody({ avatarId: id });
+    if (!body || this.playerOp?.group !== g) { this.#setProceduralBodyVisible(true); return; } // troca de operativo durante o load
+    attachHumanoidToOperative(this.playerOp, body);
+    // Fase 60 — vestimenta/acessórios da identidade no corpo real (override
+    // explícito de pool usa o look do próprio operativo quando existir).
+    const look = resolveIdentityLook(identityId);
+    this.humanoidPlayerSex = look.sex;
+    dressHumanoid(body, look);
+    syncHumanoidGear(body, this.playerOp.parts); // Task 64 — capacete/colete/mochila nos bones reais
+    this.humanoidPlayer = body;
+  }
+
+  // Fase 57 — corpo humano realista nos ATORES REMOTOS/bots (attach único,
+  // assíncrono e idempotente: o GLB vive no tier DETALHADO do LOD, então o
+  // proxy/silhueta seguem governando a distância automaticamente).
+  async #attachHumanoidForBot(entry, seed) {
+    if (this.humanoidDisabled || !entry?.op?.detailGroup || entry.humanoid !== undefined) return;
+    entry.humanoid = null; // reserva: evita attach duplo durante o load
+    // Fase 60 — bots vestem o ROSTER CANÔNICO (33 identidades): corpo por sexo
+    // da identidade + uniforme/acessórios do catálogo; determinístico por seed.
+    const identityId = identityForBot(seed);
+    const look = resolveIdentityLook(identityId);
+    const body = await createHumanoidBody({ avatarId: poolBodyForIdentity(identityId) });
+    if (!body || !entry.op?.detailGroup) return; // ator saiu durante o load → GC
+    attachHumanoidToOperative({ group: entry.op.detailGroup, parts: entry.op.detailParts }, body);
+    dressHumanoid(body, look);
+    entry.humanoidSex = look.sex;
+    syncHumanoidGear(body, entry.op.detailParts ?? entry.op.parts); // Task 64 — gear nos bones do remoto
+    entry.humanoid = body;
+  }
+
+  #initAvatarVitrine(host) {
+    const bar = document.createElement('div');
+    bar.className = 'avatar-glb-bar';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'AVATARES GLB // RIGS REAIS (FASE 56)';
+    const strip = document.createElement('div');
+    strip.className = 'avatar-glb-strip';
+    for (const a of AVATAR_GLB_LIBRARY) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'avatar-glb-chip';
+      chip.dataset.avatarId = a.id;
+      chip.textContent = `${a.tier === 'animated' ? '▶ ' : a.tier === 'rigged' ? '◆ ' : '○ '}${a.id}`;
+      chip.title = `Pré-visualizar ${a.id} (${a.tier === 'animated' ? 'animação embutida' : a.tier === 'rigged' ? 'rig real' : 'estático'})`;
+      chip.addEventListener('click', () => this.#showAvatarShowcase(a.id, chip));
+      strip.appendChild(chip);
+    }
+    const hint = document.createElement('small');
+    hint.className = 'avatar-glb-hint';
+    hint.id = 'avatarGlbHint';
+    hint.textContent = 'Clique para pré-visualizar girando · para JOGAR com o corpo real: ?avatar=<id>';
+    bar.append(label, strip, hint);
+    host.appendChild(bar);
+  }
+
+  async #showAvatarShowcase(id, chip = null) {
+    const a = await loadAvatarGlb(id);
+    if (!a?.root) {
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `avatar ${id} indisponível — o corpo procedural segue no jogo`;
+      return;
+    }
+    this.#removeAvatarShowcase();
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    a.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = false; o.receiveShadow = false; } }); // vitrine não suja sombra do mundo
+    // palco próprio: container giratório com key/fill lights + pedestal — o
+    // menu é noturno e o GLB não pode depender das luzes do mundo para ler
+    const stage = new THREE.Group();
+    stage.name = 'avatar_glb_stage';
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(.85, .95, .06, 28),
+      new THREE.MeshStandardMaterial({ color: 0x1a1420, roughness: .8, metalness: .3, emissive: 0x2a1f33, emissiveIntensity: .35 }),
+    );
+    pedestal.position.y = .03;
+    stage.add(pedestal);
+    const key = new THREE.DirectionalLight(0xfff2dd, 2.4); key.position.set(1.8, 3.4, 2.2); stage.add(key);
+    const fill = new THREE.DirectionalLight(0x7d9dff, .9); fill.position.set(-2.2, 1.6, 1.4); stage.add(fill);
+    const rim = new THREE.DirectionalLight(0xffd27d, 1.2); rim.position.set(0, 2.2, -2.6); stage.add(rim);
+    stage.add(a.root);
+    a.root.position.y = .06; // sobre o pedestal
+    this.avatarShowcase = stage;
+    this.scene.add(stage);
+    // palco: na frente da câmera do menu e DESLOCADO À DIREITA (fora do painel
+    // DOM — o rig fica visível na área livre da tela), pés ~0.9 m abaixo do olho
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const pos = this.camera.position.clone().add(dir.multiplyScalar(3.0)).add(right.multiplyScalar(1.35));
+    pos.y -= 0.92;
+    stage.position.copy(pos); // o PALCO viaja para frente da câmera (a.root vive dentro dele)
+    if (a.clips?.length) {
+      this.avatarShowcaseMixer = new THREE.AnimationMixer(a.root);
+      this.avatarShowcaseMixer.clipAction(a.clips[0]).play();
+    }
+    if (chip) {
+      for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `pré-visualizando ${id} — para jogar com este corpo: ?avatar=${id}`;
+    }
+  }
+
+  #removeAvatarShowcase() {
+    if (this.avatarShowcase?.parent) this.scene.remove(this.avatarShowcase);
+    this.avatarShowcase = null;
+    this.avatarShowcaseMixer = null;
+    for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+  }
+
   startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
+    this.#removeAvatarShowcase(); // Fase 56 — vitrine de rigs sai quando a partida começa
     this.damageNumbers?.clear(); // Fase 27 — partida nova, tela limpa
     this.zuOpen = false;
     this.hud.hideZu();
@@ -665,39 +892,45 @@ export class Game3D {
     } catch { /* visual best-effort — o protocolo segue autoritativo */ }
   }
 
-  // Task 53 — fases do protocolo no HUD/rádio ZU (a bordo).
+  // Task 53/68 — fases do protocolo no HUD/rádio ZU (a bordo).
   #onTrainPhase(phase) {
     if (phase === 'embarque') this.hud.feed('ZU', 'EMBARQUE — todos os operativos a bordo. Portas fechando.', 'warn');
     else if (phase === 'em_rota') {
       this.hud.setMatchStatus('TREM EM ROTA // PORTAS FECHADAS');
-      this.hud.feed('ZU', 'Em rota ao Ring — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
+      this.hud.feed('ZU', 'Em rota à estação do mundo — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
     } else if (phase === 'portas') {
-      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTAR');
-      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta (entrada oficial). Seguir até o destino também é oficial.', 'warn');
+      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTO CONTROLADO');
+      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta ANTES do vagão parar: SALTO CONTROLADO com prevenção de acidentes (batida, descarrilamento, incêndio, colisão) + escudo de 15 s.', 'warn');
     }
   }
 
-  // Task 53 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  // Task 53/68 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  // Recusa = portas trancadas (prevenção de acidentes: sem salto em rota fechada).
   #requestDoorJump() {
     const p = this.sim.player;
     if (!p?.trainOnboard || this.ended) return;
     if (this.online) { this.net?.sendDoorJump?.(); return; }
     if (this.sim.doorJump?.()) {
       this.audio?.wind?.(true, 0.2);
-      this.hud.feed('ZU', 'Salto de porta executado — entrada oficial registrada no protocolo.', 'warn');
+      this.hud.feed('ZU', 'SALTO CONTROLADO — antes da parada do vagão. Acidentes prevenidos: batida, descarrilamento, incêndio, colisão. Escudo de pouso: 15 s.', 'warn');
+    } else {
+      this.hud.feed('ZU', 'PORTAS TRANCADAS — o intertravamento impede salto com o trem em rota fechada (prevenção de acidentes).', 'bad');
     }
   }
 
-  // Task 53 — handover da câmera (salto ou chegada) + limpeza do vagão.
+  // Task 53/68 — handover da câmera (salto ou chegada) + limpeza do vagão.
   #endTrainRide(reason) {
     if (!this.trainRide) return;
     this.trainRide.dispose();
     this.trainRide = null;
-    if (reason === 'arrived') this.hud.feed('ZU', 'CHEGADA — desembarque concluído no Ring.', 'warn');
+    if (reason === 'arrived') this.hud.feed('ZU', 'COMBOIO NA ESTAÇÃO — aguarde a parada do SEU vagão (chegada a cada 5 s) para o desembarque na plataforma.', 'warn');
   }
 
-  // Task 53 — HUD do protocolo por frame (countdown do grace + fases a bordo).
+  // Task 53/68 — HUD do protocolo por frame (countdown do grace + fases a bordo
+  // + vagão do jogador + ESCUDO DE POUSO: 15 s para adentrar a Safe Zone).
   updateTrainHud() {
+    const wagonOf = this.online ? (this._zuTrainView?.wagon ?? null) : (this.sim.player?.wagon ?? null);
+    const shieldS = this.online ? (this._zuTrainView?.shieldS ?? 0) : (this.sim.player?.zuShieldT ?? 0);
     const info = this.online
       ? this._zuTrainView ?? null
       : (Number.isFinite(this.sim.trainT) ? {
@@ -706,9 +939,22 @@ export class Game3D {
           combatLockedRemainingS: Math.max(0, this.sim.combatLockedUntil - this.sim.trainT),
         } : null);
     if (!info) return;
+    const wagonTag = wagonOf !== null && wagonOf !== undefined ? `VAGÃO ${Number(wagonOf) + 1}/${ZU_TRAIN.WAGONS}` : null;
+    // Task 68 — ESCUDO DE POUSO ativo tem prioridade (15 s para adentrar a zona)
+    if ((shieldS ?? 0) > 0) {
+      const s = Math.ceil(shieldS);
+      this.hud.setMatchStatus(`ESCUDO ZU ${s}s // ${wagonTag ? wagonTag + ' // ' : ''}ADENTRE A ZONA SEGURA`);
+      return;
+    }
+    // Task 68 — ainda a bordo durante o grace/combate: aguardando o próprio vagão
+    if (info.playerOnboard && (info.phase === 'grace' || info.phase === 'combate')) {
+      const tail = info.phase === 'grace' ? `COMBATE EM ${Math.ceil(info.combatLockedRemainingS ?? 0)}s` : 'COMBATE LIVRE NA PLATAFORMA';
+      this.hud.setMatchStatus(`${wagonTag ? wagonTag + ' // ' : ''}AGUARDANDO DESEMBARQUE // ${tail}`);
+      return;
+    }
     if (info.phase === 'grace') {
       const s = Math.ceil(info.combatLockedRemainingS ?? 0);
-      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s`);
+      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s${wagonTag ? ' // ' + wagonTag : ''}`);
     } else if (info.phase === 'combate' && !this._combatStatusSet) {
       this._combatStatusSet = true;
       this.hud.setMatchStatus('COMBATE LIVRE // RING');
@@ -920,6 +1166,10 @@ export class Game3D {
       if (cache === sig) continue;
       parts.userData.gearSig = sig;
       applyOperativeGear(parts, a.gear);
+      // Task 64 — pickup/troca de nível DURANTE a partida: o gear renasce nos
+      // anchors procedurais; o corpo GLB (se presente) re-adota na hora.
+      if (a.id === 'player') { if (this.humanoidPlayer) syncHumanoidGear(this.humanoidPlayer, parts); }
+      else { const h = this.botOps.get(a.id)?.humanoid; if (h) syncHumanoidGear(h, parts); }
     }
   }
 
@@ -1055,7 +1305,7 @@ export class Game3D {
     const p = s.player;
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
-    pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
+    pg.rotation.y = p.yaw; // Task 62 — modelo olha −Z local = direção de mira (fim do avatar de costas)
     if (!p.alive) {
       // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
       let dfx = this.deathFX.get('player');
@@ -1088,17 +1338,45 @@ export class Game3D {
     this._gait ??= newGait();
     advanceGait(this._gait, { x: p.x, z: p.z, dt });
     if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
-      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
+      // Task 69 — o strike REAL manda no estéreo (L π/2 → esquerda, R 3π/2 →
+      // direita) e o sprint muda o caráter da voz (mais grave/presente/longa).
+      for (const strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface, { side: strike, sprint: !!p.sprinting });
     }
     const airborne = !!p.dropPhase;
-    animateOperative(this.playerOp.parts, {
+    // Task 69 — POUSO: o mesmo evento que a camada visual absorve (Task 64)
+    // dispara o impacto pesado — quem cai, soa. Uma vez por transição.
+    if (this._prevAirborne && !airborne && p.alive && !p.knocked && this.audio) {
+      this.audio.step(1.05, 0, this.audio.worldAmbience.surface, { land: true, side: 'R' });
+    }
+    this._prevAirborne = airborne;
+    // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA: sprintK com CONSTANTE DE
+    // TEMPO PRÓPRIA por ator (peso do corpo — banda instantânea de speedNorm
+    // atravessava em ~1 frame na frenagem exponencial); ADS/crouch/fire
+    // erguem na hora (hint false).
+    const skT = (!p.alive || p.knocked || p.ads || p.crouching || !p.sprinting) ? 0 : 1;
+    this._sk ??= 0;
+    this._sk += (skT - this._sk) * (1 - Math.exp(-(skT > this._sk ? 5.5 : 7) * dt));
+    if (this._sk < 1e-4) this._sk = 0;
+    // Task 59 — DIP DE POUSO: pico de vy na transição ar→chão vira absorção
+    // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
+    this._dip ??= { v: 0, wasGround: !!p.onGround, fallV: 0 };
+    const groundedNow = !!p.onGround;
+    const wasGroundBefore = this._dip.wasGround; // Task 65 — borda ar→chão ANTES da mutação (onLand nunca disparava: wasGround já tinha sido sobrescrito)
+    if (groundedNow && !this._dip.wasGround) this._dip.v = Math.min(.12, Math.max(0, -(this._dip.fallV ?? 0)) * .016);
+    this._dip.wasGround = groundedNow;
+    this._dip.fallV = groundedNow ? 0 : (p.vy ?? 0);
+    this._dip.v *= Math.exp(-dt * 6.5);
+    const pFx = animateOperative(this.playerOp.parts, {
       t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
-      pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+      pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
+      sprintK: this._sk, // Task 59 — low-ready do sprint (suavizado por ator)
     });
+    // Task 62 — o low-ready da arma no sprint é resolvido DENTRO de
+    // animateOperative (solda punho↔grip por frame); sem pose externa.
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
@@ -1106,6 +1384,10 @@ export class Game3D {
       this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
+    // Fase 56 — mixers dos avatares GLB (herói com corpo real + vitrine do menu)
+    if (this.avatarMixer) this.avatarMixer.update(dt);
+    if (this.avatarShowcaseMixer) this.avatarShowcaseMixer.update(dt);
+    if (this.avatarShowcase) this.avatarShowcase.rotation.y += dt * 0.6;
     // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
     // Fase 30 — anexos dos 4 sockets + estágio evolutivo mítico também reconstroem
     // Fase 32 — skin mítica POR ARMA (cor/fit do catálogo) + raridade dos anexos
@@ -1125,8 +1407,48 @@ export class Game3D {
         this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
         this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin, { attachments: p.weaponAttachments ?? [], attachmentRarities: p.attachmentRarities ?? [], mythicStage: pStage, mythicColor: pSkinDef?.aura });
         this.firstPersonRig.add(this.firstPersonWeapon.group);
-        this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-        this.firstPersonWeapon.group.rotation.x = -.08;
+        this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+        this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
+      }
+    }
+    // Fase 57 — corpo humano REAL do herói (3ª pessoa): locomoção fase-travada
+    // pela passada predita (gait.js), mira/rastejo/agachamento/queda + arma
+    // SOLDADA na mão direita do rig real. Em 1ª pessoa o grupo dorme (o rig FP
+    // assume) — a visibilidade já é herdada de playerOp.group.visible.
+    if (this.humanoidPlayer) {
+      // Task 64 — lean de curva: vel angular do yaw (EWMA interna no rig),
+      // clampada no animateHumanoid (mouse rápido nunca derruba o corpo).
+      const yawVel = Number.isFinite(this._playerPrevYaw) && dt > 0
+        ? Math.atan2(Math.sin(p.yaw - this._playerPrevYaw), Math.cos(p.yaw - this._playerPrevYaw)) / dt
+        : 0;
+      this._playerPrevYaw = p.yaw;
+      // Fase 60 — camada humana: lean pela aceleração real, cabeça segue a
+      // câmera (yaw relativo ao corpo), low-ready armado e squash de pouso.
+      // Task 65 — speedNorm CONTÍNUO pela passada (gait.js, F42) — o binário
+      // .8/1.2 fazia o blend idle↔walk↔run pular em degraus.
+      const hsn = Math.max(p.moving ? .12 : 0, this._gait.speed);
+      this._hsn ??= 0;
+      const hAccel = Math.max(-1, Math.min(1, (hsn - this._hsn) / Math.max(1e-3, dt * 6)));
+      this._hsn = hsn;
+      let headYaw = 0;
+      if (this._camDir) {
+        const camYaw = Math.atan2(-this._camDir.x, -this._camDir.z); // convenção −Z local (Task 62)
+        let rel = camYaw - p.yaw;
+        rel = ((rel + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        headYaw = headYawClamp(rel);
+      }
+      animateHumanoid(this.humanoidPlayer, {
+        t: this.animT, phase: this._gait.phase, speedNorm: hsn,
+        pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+        knocked: !!p.knocked, air: airborne ? Math.max(0, p.y) : 0, leanVel: yawVel,
+        accel: hAccel, yaw: headYaw, armed: !!(p.alive && this.playerWeapon),
+        sex: this.humanoidPlayerSex ?? null, onLand: groundedNow && !wasGroundBefore,
+        dt, // Task 65 — dt REAL do frame (idle respira na velocidade renderizada)
+      });
+      if (this.playerWeapon && p.alive && !p.knocked && !airborne) {
+        weldWeaponToHand(this.humanoidPlayer, this.playerWeapon);
+        poseLeftHandSupport(this.humanoidPlayer, this.playerWeapon); // Task 64 — empunhadura de 2 mãos
+        poseWeaponReady(this.humanoidPlayer, { speedNorm: hsn, ads: p.ads }); // Task 64 — arma erguida (low-ready/ADS)
       }
     }
     // bots
@@ -1161,6 +1483,7 @@ export class Game3D {
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
+        this.#attachHumanoidForBot(entry, b.op || (b.officer ? `OCE_${b.id}` : b.id)); // Fase 57 + Task 64 — identidade do operativo (oficial mantém fallback OCE_)
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
         entry.name.material.map.dispose();
@@ -1204,6 +1527,11 @@ export class Game3D {
         // Fase 13 — congelada fora do frustum (rotação da raiz continua: barata)
         const dparts = entry.op.activeParts();
         if (dparts && !entry.frozen) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
+        // Fase 57 — corpo humano REAL caído: relaxa uma única vez (assenta);
+        // a rotação de queda vive na RAIZ do LOD (herdada pelo GLB filho).
+        if (entry.humanoid && entry.op.level === 'full' && !entry.frozen) {
+          animateHumanoid(entry.humanoid, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true });
+        }
         continue;
       }
       g.userData.deadVisible = false;
@@ -1211,7 +1539,7 @@ export class Game3D {
       g.visible = true;
       g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
-      g.rotation.y = b.yaw + Math.PI;
+      g.rotation.y = b.yaw; // Task 62 — mesma convenção do jogador (modelo olha −Z local)
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
@@ -1228,11 +1556,40 @@ export class Game3D {
         entry.gait ??= newGait();
         advanceGait(entry.gait, { x: b.x, z: b.z, dt });
         const gsn = Math.max(b.moving ? .12 : 0, entry.gait.speed);
-        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+        // Task 59 — low-ready dos remotos: só oficiais sprintam (hook); estado
+        // por ator com a mesma constante de tempo do jogador.
+        const bSkT = (b.sprinting && !b.ads && !b.crouching) ? 1 : 0;
+        entry.sk ??= 0;
+        entry.sk += (bSkT - entry.sk) * (1 - Math.exp(-(bSkT > entry.sk ? 5.5 : 7) * dt));
+        if (entry.sk < 1e-4) entry.sk = 0;
+        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
+        // Fase 57 — corpo humano REAL do ator remoto: locomoção fase-travada
+        // (mesma fase do gait.js), rastejo/queda/agachamento + arma na mão.
+        if (entry.humanoid && entry.op.level === 'full') {
+          // Task 64 — lean dos remotos: yaw do snapshot vira vel angular (wrap-safe)
+          const bYawVel = Number.isFinite(entry.prevYaw) && dt > 0
+            ? Math.atan2(Math.sin(b.yaw - entry.prevYaw), Math.cos(b.yaw - entry.prevYaw)) / dt
+            : 0;
+          entry.prevYaw = b.yaw;
+          entry._hSn ??= 0; // Fase 60 — lean do bot pela aceleração real da passada
+          const bAccel = Math.max(-1, Math.min(1, (gsn - entry._hSn) / Math.max(1e-3, dt * 6)));
+          entry._hSn = gsn;
+          animateHumanoid(entry.humanoid, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, leanVel: bYawVel, accel: bAccel, armed: !!entry.op.group.userData?.weaponRig, sex: entry.humanoidSex ?? null, dt });
+          const bwr = entry.op.group.userData?.weaponRig;
+          if (bwr && !b.knocked && !b.dropPhase) {
+            weldWeaponToHand(entry.humanoid, bwr);
+            poseLeftHandSupport(entry.humanoid, bwr); // Task 64 — 2 mãos também nos remotos
+            poseWeaponReady(entry.humanoid, { speedNorm: gsn, ads: !!b.ads }); // Task 64 — arma erguida
+          }
+        }
+        // Task 62 — arma acompanha o low-ready dentro do animateOperative
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
-            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
+            // Task 69 — passos dos BOTES espacializados: pan pela projeção do
+            // bot no eixo direito do ouvinte (hear a flank!), strikes reais L/R.
+            const pan = botPan({ bx: b.x, bz: b.z, lx: cam.x, lz: cam.z, yaw: p.yaw });
+            for (const strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface, { side: strike, pan, sprint: !!b.sprinting });
           }
         }
       }
@@ -1279,6 +1636,11 @@ export class Game3D {
         u.fogDensity.value = this.scene.fog.density ?? 0.0035;
       }
     }
+    // Task 65 — dedo-duro: fauna reage à PRESSÃO DO RING (1 − raio/170):
+    // conforme a zona fecha, ratos correm mais, enxames crescem e jacarés/
+    // tubarões patrulham mais rápido (visual; dano continua na sim/servidor).
+    this.scene.userData.fauna?.setAgitation?.(
+      Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170)));
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
@@ -1318,14 +1680,41 @@ export class Game3D {
       this.camera.position.lerp(eye, Math.min(1, dt * 18));
       this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
       this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
+      // Task 59 — câmera VIVA: bob vertical (contrato Fase 5) + balanço lateral
+      // ELÍPTICO em espaço local da câmera + dip de pouso vindo do syncEntities.
       const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
-      this.camera.position.y += bob;
+      const dip = this._dip?.v ?? 0;
+      const bobX = (p.alive && !p.dropPhase && p.moving) ? Math.cos(this.cameraSway * .5) * (p.sprinting ? .014 : .006) : 0;
+      this.camera.position.y += bob - dip;
+      this.camera.translateX(bobX);
       this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
-      this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
+      this.firstPersonRig.position.y += (bob - dip * .6 - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
       this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
       // Fase 10 — mãos articuladas: grip + indicador no gatilho + micro-vida;
       // flinch da própria câmera quando o jogador é atingido (roll + recuo)
       poseFirstPersonHands(this.firstPersonRig, { curl: .8 + this.camKick * 2.2, trigger: this.input.fire ? 1 : 0, breathe: Math.sin(this.animT * 2.1) * .03 });
+      // Task 59 — SPRINT em 1ª pessoa: arma e braços abaixam (low-ready) e
+      // voltam à mira ao atirar/mirar; pose ABSOLUTA a partir da base gravada
+      // no rig (sem drift acumulado entre frames).
+      const sprintRaw = (!p.ads && !this.input.fire) ? (this._sk ?? 0) : 0;
+      this.fpsSprintK = (this.fpsSprintK ?? 0) + (sprintRaw - (this.fpsSprintK ?? 0)) * Math.min(1, dt * 10);
+      const skF = this.fpsSprintK;
+      const arms = this.firstPersonRig.userData.arms;
+      if (arms) {
+        const bL = arms.armL.userData.base, bR = arms.armR.userData.base;
+        arms.armL.rotation.x = bL.x + skF * .3;
+        arms.armR.rotation.x = bR.x + skF * .34;
+        arms.armR.rotation.y = bR.y - skF * .18;
+        arms.armL.rotation.y = bL.y + skF * .1;
+      }
+      if (this.firstPersonWeapon) {
+        const wg = this.firstPersonWeapon.group;
+        const wb = (wg.userData.sprintBase ??= { rx: wg.rotation.x, py: wg.position.y, pz: wg.position.z });
+        wg.rotation.x = wb.rx - skF * .42;
+        wg.rotation.y = skF * .26;
+        wg.position.y = wb.py - skF * .07;
+        wg.position.z = wb.pz + skF * .05;
+      }
       const hf = this.hitFX.get('player');
       if (hf) {
         const env = (hf.age < .06 ? hf.age / .06 : Math.exp(-(hf.age - .06) / .17)) * hf.power;
@@ -1345,7 +1734,12 @@ export class Game3D {
       this.sun.target.position.set(p.x, 0, p.z);
       return;
     }
-    const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
+    // Task 66 — fim do recuo de câmera no sprint: o enquadramento fica
+    // ESTÁVEL em movimento (dist e FOV constantes andando/correndo). O
+    // pullback 4.4→5.0 + zoom-out 62→68 liam como a câmera "fugindo" do
+    // avatar a cada arrancada — a sensação de velocidade agora vem do
+    // low-ready (Task 59) e do FOV de slide, não de recorte de câmera.
+    const targetDist = p.ads ? 2.2 : 4.4;
     rig.curDist += (targetDist - rig.curDist) * Math.min(1, dt * 8);
     // altura do olhar: agachado ~1.15m / deslizando ~0.92m (Fase 5 + movimento avançado)
     const eyeH = p.sliding ? 0.92 : (p.crouching ? 1.15 : 1.62);
@@ -1392,7 +1786,8 @@ export class Game3D {
     }
     // FOV dinâmico
     const zoomTps = p.attachStats?.adsZoom ?? 1;  // Fase 30 — Mira 4x aproxima
-    const targetFov = p.ads ? 42 * zoomTps : (p.sprinting ? 68 : 62);
+    // Task 66 — FOV fixo em locomoção TPS (sprint não faz zoom-out)
+    const targetFov = p.ads ? 42 * zoomTps : 62;
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
     this.camera.updateProjectionMatrix();
     // sol acompanha (sombras)
@@ -1578,10 +1973,17 @@ export class Game3D {
           // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
           this.onMatchStartEvent?.(e);
           break;
-        // Task 53 — protocolo do trem: chegada e desbloqueio de combate (offline
-        // emite da sim; online chega pelos eventos da sala autoritativa).
+        // Task 53/68 — protocolo do trem: chegada escalonada dos vagões e
+        // desbloqueio de combate (offline emite da sim; online chega pelos
+        // eventos da sala autoritativa).
+        case 'wagonArrived':
+          this.hud.feed('ZU', `Vagão ${Number(e.wagon ?? 0) + 1} parou na estação — ${e.disembarked ?? 0} operativo(s) desembarcaram (escudo de pouso: ${e.graceS ?? 15}s).`, 'warn');
+          break;
+        case 'zuEarlyJump':
+          this.hud.feed('ZU', `SALTO CONTROLADO registrado (vagão ${Number(e.wagon ?? 0) + 1}) — prevenido: ${(e.prevented ?? []).join(', ')}. Adentre a Safe Zone em ${e.shieldS ?? 15}s.`, 'warn');
+          break;
         case 'trainArrived':
-          this.hud.feed('ZU', `CHEGADA — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
+          this.hud.feed('ZU', `ÚLTIMO VAGÃO na estação — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
           this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${e.graceS ?? 15}s`);
           break;
         case 'combatUnlocked':
@@ -1589,7 +1991,7 @@ export class Game3D {
           this.hud.setMatchStatus('COMBATE LIVRE // RING');
           break;
         case 'botDoorJump':
-          this.hud.feed('ZU', 'Operativo saltou pela porta na rota (entrada oficial).', '');
+          this.hud.feed('ZU', `Operativo do vagão ${Number(e.wagon ?? 0) + 1} executou SALTO CONTROLADO (prevenção de acidentes ativa).`, '');
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1605,8 +2007,13 @@ export class Game3D {
         case 'pulse': {
           // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
           // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          // Fase 61 — a fase oficial do mundo é nomeada (cânon safeZone.js).
+          // Task 67 — a paisagem sonora segue a fase: pássaros esvaziam, pressão
+          // do anel cresce, mar de Arukheea engrossa para o tsunami (cânon).
+          this.audio.setZonePhase?.((e.pulse ?? 1) - 1, e.phaseName);
+          const fase = e.phaseName ? ` Fase oficial: ${e.phaseName}.` : '';
           const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${fase}${destino}`, 'warn');
           this.audio.ringWarn();
           break;
         }
@@ -1865,14 +2272,14 @@ export class Game3D {
 
   // ---------- Fase 10 — reação de impacto ----------
   // Converte o ponto de impacto (mundo) em ângulo no espaço LOCAL do modelo
-  // desfeito o rotation.y real do grupo (yaw + π): 0 = frente do modelo,
-  // +π/2 = lado +x do modelo, π = costas. Registra flinch só para atores vivos.
+  // desfeito o rotation.y real do grupo (= yaw desde a Task 62): 0 = frente do
+  // modelo, +π/2 = lado +x do modelo, π = costas. Registra flinch só para vivos.
   #registerHit(victimId, e) {
     const s = this.sim;
     const actor = victimId === 'player' ? s.player : (s.bots ?? []).find((b) => b.id === victimId);
     if (!actor || !actor.alive) return;
     const dx = e.x - actor.x, dz = e.z - actor.z;
-    const th = actor.yaw + Math.PI;
+    const th = actor.yaw;
     const cos = Math.cos(th), sin = Math.sin(th);
     const lx = dx * cos - dz * sin;  // mundo → local (inverso de rotation.y)
     const lz = dx * sin + dz * cos;
@@ -2045,12 +2452,30 @@ export class Game3D {
     }
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
+    // Task 67 — ambiência viva: listener 3D (posição do operativo + câmera),
+    // proximidade dos distritos (eco urbano, destroços, gritos) e agenda de
+    // fauna/mar/fogo. Custo O(distritos) por frame; no-op em headless.
+    if (this.audio?.ambienceTick) {
+      const pl = this.sim?.player;
+      const cam = this.camera?.position;
+      this.audio.ambienceTick(dt, {
+        x: pl?.x ?? cam?.x ?? 0,
+        z: pl?.z ?? cam?.z ?? 0,
+        yaw: this.input?.yaw ?? 0,
+        districts: this.scene?.userData?.layout?.districts,
+      });
+    }
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
     const marksAnim = this.scene.userData.worldMarks?.animators;
     if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Task 65 — fauna canônica: patrulha dos jacarés/tubarões, bandas de
+    // gaivotas, corrida dos ratos e enxames do dedo-duro (mesma cadência dos
+    // animators do dressing/worldmarks)
+    const faunaAnim = this.scene.userData.fauna?.animators;
+    if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

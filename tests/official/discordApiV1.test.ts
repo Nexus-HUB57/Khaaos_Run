@@ -65,6 +65,25 @@ process.env.DISCORD_WEBHOOK_SERVER_STATUS = "https://discord.com/api/webhooks/66
 // ═══════════════════════════════════════════════════════════════
 
 describe("API Key Guard", () => {
+  it("fails closed when no API key is configured", async () => {
+    const originalKhaasosKey = process.env.KHAASOS_API_KEY;
+    const originalDiscordKey = process.env.DISCORD_BOT_API_KEY;
+    delete process.env.KHAASOS_API_KEY;
+    delete process.env.DISCORD_BOT_API_KEY;
+
+    try {
+      const app = createTestApp();
+      const res = await supertest(app).get("/api/v1/server/status").set("X-API-Key", "any-value");
+      assert.equal(res.status, 503);
+      assert.deepEqual(res.body, { error: "API key not configured", code: "API_KEY_NOT_CONFIGURED" });
+    } finally {
+      if (originalKhaasosKey === undefined) delete process.env.KHAASOS_API_KEY;
+      else process.env.KHAASOS_API_KEY = originalKhaasosKey;
+      if (originalDiscordKey === undefined) delete process.env.DISCORD_BOT_API_KEY;
+      else process.env.DISCORD_BOT_API_KEY = originalDiscordKey;
+    }
+  });
+
   it("rejects requests without X-API-Key when key is configured", async () => {
     const app = createTestApp();
     const res = await supertest(app).get("/api/v1/server/status");

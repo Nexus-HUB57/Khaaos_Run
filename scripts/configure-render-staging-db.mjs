@@ -11,6 +11,7 @@ function requiredEnv(name) {
 const apiKey = requiredEnv("RENDER_API_KEY");
 const serviceId = requiredEnv("RENDER_SERVICE_ID");
 const postgresId = requiredEnv("RENDER_POSTGRES_ID");
+const keyValueId = requiredEnv("RENDER_KEYVALUE_ID");
 const headers = {
   Accept: "application/json",
   Authorization: `Bearer ${apiKey}`,
@@ -44,6 +45,16 @@ if (
   throw new Error("Render did not return a valid internal Postgres URL.");
 }
 
+const keyValueResponse = await renderRequest(
+  `/key-value/${encodeURIComponent(keyValueId)}/connection-info`,
+);
+const keyValueInfo = await keyValueResponse.json();
+const redisUrl = keyValueInfo.internalConnectionString;
+
+if (typeof redisUrl !== "string" || !/^rediss?:\/\//i.test(redisUrl)) {
+  throw new Error("Render did not return a valid internal Key Value URL.");
+}
+
 const serviceConfigResponse = await renderRequest(
   `/services/${encodeURIComponent(serviceId)}`,
   {
@@ -53,6 +64,7 @@ const serviceConfigResponse = await renderRequest(
         envSpecificDetails: {
           buildCommand:
             "npm ci --include=dev --no-audit --no-fund && npm run build && node scripts/write-render-health.mjs",
+          startCommand: "npm start",
         },
         healthCheckPath: "/readyz",
       },
@@ -72,9 +84,14 @@ async function setEnvironmentVariable(key, value) {
   await response.arrayBuffer();
 }
 
+await setEnvironmentVariable("NODE_ENV", "production");
+await setEnvironmentVariable("KRC_CHECKOUT_ENABLED", "false");
+await setEnvironmentVariable("REDIS_URL", redisUrl);
+await setEnvironmentVariable("REDIS_REQUIRED", "true");
+await setEnvironmentVariable("REDIS_NAMESPACE", "khaaos");
 await setEnvironmentVariable("DATABASE_URL", databaseUrl);
 await setEnvironmentVariable("RUN_DB_MIGRATIONS", "true");
 
 console.log(
-  "Configured the staging build, health check, private DATABASE_URL, and one-time migration gate. Check Render deploy status before starting another deploy.",
+  "Configured the staging web build/start/health, private Postgres and Key Value URLs, and one-time migration gate. Check Render deploy status before starting another deploy.",
 );

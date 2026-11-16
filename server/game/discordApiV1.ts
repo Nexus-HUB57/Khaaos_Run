@@ -37,8 +37,11 @@ function apiKeyGuard(req: any, res: any, next: any): void {
   const apiKey = req.headers["x-api-key"];
   const validKey = process.env.KHAASOS_API_KEY || process.env.DISCORD_BOT_API_KEY;
 
-  // If no API key configured, allow all (dev mode)
-  if (!validKey) return next();
+  // Fail closed: never expose the integration API when runtime auth is missing.
+  if (!validKey) {
+    res.status(503).json({ error: "API key not configured", code: "API_KEY_NOT_CONFIGURED" });
+    return;
+  }
 
   if (!apiKey || apiKey !== validKey) {
     res.status(401).json({ error: "Unauthorized", code: 50014 });

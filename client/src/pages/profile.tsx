@@ -76,7 +76,14 @@ export default function Profile() {
           >
             <div className="absolute top-0 left-0 w-3 h-3 border-l-2 border-t-2 border-accent/60" />
             <div className="absolute bottom-0 right-0 w-3 h-3 border-r-2 border-b-2 border-accent/60" />
-            <img src={selectedAvatar.avatarPath} alt={`Avatar de ${selectedAvatar.codename}`} className="h-full w-full object-cover" />
+            <img
+              src={selectedAvatar.realisticAvatarPath ?? selectedAvatar.avatarPath}
+              onError={(event) => {
+                if (selectedAvatar.realisticAvatarPath) event.currentTarget.src = selectedAvatar.avatarPath;
+              }}
+              alt={`Avatar de ${selectedAvatar.codename}`}
+              className="h-full w-full object-cover"
+            />
             <span className="absolute bottom-0 w-full bg-black/80 px-1 py-1 text-center text-[9px] font-mono text-accent tracking-widest">
               {selectedAvatar.codename}
             </span>
@@ -164,7 +171,15 @@ export default function Profile() {
                     : "border-border/40 bg-black/30 hover:border-primary/60"
                 }`}
               >
-                <img src={operative.avatarPath} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-white/10 object-cover" />
+                <img
+                  src={operative.realisticAvatarPath ?? operative.avatarPath}
+                  onError={(event) => {
+                    if (operative.realisticAvatarPath) event.currentTarget.src = operative.avatarPath;
+                  }}
+                  alt=""
+                  loading="lazy"
+                  className="h-12 w-12 shrink-0 rounded border border-white/10 object-cover"
+                />
                 <span className="min-w-0">
                   <span className="block truncate font-display text-xs font-bold">{operative.codename}</span>
                   <span className="block truncate font-mono text-[9px] text-muted-foreground">{operative.rank} · {branchLabel}</span>

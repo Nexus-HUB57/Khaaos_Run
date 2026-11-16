@@ -1,0 +1,10 @@
+{
+  "schema": "khaaos.avatar-candidate-audit/v1",
+  "characters": [
+    {
+      "slot": "SORAYA_HADD_RIGGED_5000_TRI_REVIEW_ONLY",
+      "source": "artifacts/avatar-candidates/soraya-hadd/CHR_Huran_Female_Soraya_rigged_5000tri.glb",
+      "source_sha256": "5ac3c809eb5b7577f7b25afd544cbef12004a6e8a8dceeafe258650bc7ab9e07"
+    }
+  ]
+}
