@@ -147,6 +147,10 @@ O [guia de migração para NVIDIA e mock local](docs/CIGKV_GPU_MIGRATION_AND_MOC
 
 O [workflow Brev GPU](docs/CIGKV_BREV_GPU_PROVISIONING.md) foi preparado com dry-run padrão, secret `BREV_API_KEY` e provisionamento manual explícito. `provision=true` pode gerar cobrança e deve ser usado somente após revisar GPU, disponibilidade, créditos e custo.
 
+A [validação da tentativa NVIDIA L4](docs/CIGKV_BREV_L4_PROVISION_VALIDATION.md) registra o resultado `0/1 instances` por erro HTTP 500 do backend Brev e a validação local end to end com mock de 24 casos.
+
+O [modelo de chamado para o suporte Brev](docs/CIGKV_BREV_SUPPORT_TICKET_L4.md) reúne a organização, timestamp, configuração L4, comandos, evidências e perguntas de causa raiz sem incluir credenciais.
+
 ## Performance UE5.8 e FPS Live Action
 
 O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:
