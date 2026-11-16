@@ -46,7 +46,11 @@ import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
-import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
+import {
+  getOperativeAvatarOption,
+  getOperativeAvatarRuntime,
+  type OperativeAvatarRuntime,
+} from "@shared/operative-avatar-catalog";
 import { PermanentCampaignOutboxError, type CampaignRoomProvisionRequest } from "./campaignOutboxWorker";
 import { ciePostgresRepository } from "./cieRepository.postgres";
 import { resolveCampaignRing, type CampaignRingResolution, type RingFinishReason } from "./campaignProgression";
