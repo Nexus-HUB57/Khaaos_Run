@@ -149,6 +149,80 @@ export function strideCadenceScale(sex) {
   return String(sex ?? 'M').toUpperCase() === 'F' ? 1.06 : 1;
 }
 
+// Task 68 — CAMADA HUMANA DE LOCOMOÇÃO (passos e corrida com aspecto natural):
+// o clip fase-travado garante pés sem patinar, mas sozinho é mecânico —
+// humanos giram a PELVE sobre a perna de apoio, CONTRA-RODAM os ombros
+// (momento angular), elevam no meio-de-apoio, inclinam o tronco na corrida
+// e transferem peso quando parados. Tudo derivado da FASE DA PASSADA (gait.js)
+// + relógio t — zero Math.random, zero deslocamento horizontal (a invariante
+// anti-patinação fica intacta: só rotação e elevação vertical).
+export const HUMAN_GAIT = Object.freeze({
+  hipsYawAmp: .09,       // rad — pelve gira para o lado do apoio
+  hipsRollAmp: .045,     // rad — queda lateral sobre a perna de apoio
+  hipsLiftAmp: .022,     // m  — elevação no meio-de-apoio (nunca desce do bind)
+  hipsLiftRun: .014,     // m  — extra no regime de corrida (voo)
+  counterGain: 1.4,      // ombros contra-rodam ~1.4× a pelve
+  armSwingAmp: .10,      // rad — reforço do balanço de braços (SÓ desarmado)
+  runLeanAmp: .10,       // rad — inclinação de cruzeiro do tronco na corrida
+  runLeanFrom: .75,      // speedNorm onde a postura de corrida começa
+  runHeadComp: .06,      // rad — cabeça compensa (olhar permanece nível)
+  idleSwayAmp: .018,     // rad — transferência de peso parado (tronco)
+  idleHipsAmp: .006,     // rad — quadril acompanha sutil
+  varyAmp: .04,          // modulação de amplitude ciclo a ciclo (vida)
+});
+
+/** Matemática PURA da camada humana (testável sem THREE). Entradas:
+ * phase (rad da passada), sn (speedNorm), t (relógio do ator), locomotion
+ * (peso blended walk+run, 0..1), armed (arma soldada → braços pertencem ao grip).
+ * Retorna os deltas em semântica do corpo (y=yaw, z=roll, x=pitch; metros p/ lift). */
+export function humanGaitPose({ phase = 0, sn = 0, t = 0, locomotion = 0, armed = false } = {}) {
+  const ph = Number.isFinite(phase) ? phase : 0;
+  const S = Math.max(0, Math.min(1.25, Number.isFinite(sn) ? sn : 0));
+  const T = Number.isFinite(t) ? t : 0;
+  const loc = Math.max(0, Math.min(1, Number.isFinite(locomotion) ? locomotion : 0));
+  const vary = 1 + HUMAN_GAIT.varyAmp * Math.sin(ph * .5 + T * .1);   // vida ciclo a ciclo
+  const hipsYaw = HUMAN_GAIT.hipsYawAmp * Math.sin(ph) * loc * vary;
+  const hipsRoll = HUMAN_GAIT.hipsRollAmp * Math.sin(ph - Math.PI / 2) * loc * vary;
+  const runK = Math.max(0, Math.min(1, (S - HUMAN_GAIT.runLeanFrom) / .5)); // 0 walk → 1 sprint pleno
+  const runGate = Math.min(1, loc / .5);                              // postura só em locomoção real
+  const liftAmp = HUMAN_GAIT.hipsLiftAmp + HUMAN_GAIT.hipsLiftRun * runK;
+  // máxima no meio-de-apoio (fase 0/π), zero nos contatos de calcanhar (π/2, 3π/2):
+  // o corpo SOBE sobre o apoio e nunca afunda abaixo do bind (pés nunca enterram).
+  const hipsLift = liftAmp * (0.5 + 0.5 * Math.cos(2 * ph)) * loc;
+  // `|| 0` normaliza −0 (produto por loc=0) — contratos de igualdade estrita
+  return {
+    hipsYaw: hipsYaw || 0,
+    hipsRoll: hipsRoll || 0,
+    hipsLift: hipsLift || 0,
+    spineYaw: (-hipsYaw * HUMAN_GAIT.counterGain) || 0,     // ombros em oposição à pelve
+    runLean: (HUMAN_GAIT.runLeanAmp * runK * runGate) || 0,
+    runHeadComp: (-HUMAN_GAIT.runHeadComp * runK * runGate) || 0,
+    // balanço reforçado em oposição às pernas (braço esquerdo ↔ perna direita);
+    // desarmado apenas — com arma, weldWeaponToHand/poseWeaponReady comandam.
+    armSwingL: armed ? 0 : (-HUMAN_GAIT.armSwingAmp * Math.sin(ph) * loc) || 0,
+    armSwingR: armed ? 0 : (HUMAN_GAIT.armSwingAmp * Math.sin(ph) * loc) || 0,
+    idleSway: ((1 - loc) * HUMAN_GAIT.idleSwayAmp * Math.sin(T * .55)) || 0,
+    idleHips: ((1 - loc) * HUMAN_GAIT.idleHipsAmp * Math.sin(T * .4)) || 0,
+  };
+}
+
+/** Aplica a camada humana sobre o pose do mixer (aditivo, após lean de aceleração). */
+export function poseHumanGait(entry, pose) {
+  if (!entry?.bones || !pose) return entry;
+  const b = entry.bones;
+  if (pose.hipsYaw) applyAddRot(entry, 'hips', 'y', pose.hipsYaw);
+  if (pose.hipsRoll) applyAddRot(entry, 'hips', 'z', pose.hipsRoll);
+  if (pose.hipsLift > 0 && b.hips?.position) b.hips.position.add(addRootVec(entry, 'hips', 0, pose.hipsLift, 0));
+  if (pose.spineYaw) applyAddRot(entry, 'spine1', 'y', pose.spineYaw);
+  if (pose.runLean) applyAddRot(entry, 'spine1', 'x', pose.runLean);
+  if (pose.runHeadComp) applyAddRot(entry, 'head', 'x', pose.runHeadComp);
+  if (pose.armSwingL) applyAddRot(entry, 'leftarm', 'x', pose.armSwingL);
+  if (pose.armSwingR) applyAddRot(entry, 'rightarm', 'x', pose.armSwingR);
+  if (pose.idleSway) applyAddRot(entry, 'spine2', 'z', pose.idleSway);
+  if (pose.idleHips) applyAddRot(entry, 'hips', 'z', pose.idleHips);
+  return entry;
+}
+
 // Rest pose capturada na criação (quaternion/position de cada bone) — a morte
 // relaxa para ela e a ressurreição restaura, determinístico.
 function captureRest(bones) {
@@ -673,6 +747,15 @@ export function animateHumanoid(entry, {
     applyAddRot(entry, 'spine1', 'x', -lean * .7);     // arrancada adianta o tronco
     applyAddRot(entry, 'spine2', 'x', -lean * .5);
     applyAddRot(entry, 'head', 'x', lean * .4);        // olhos compensam
+  }
+  // Task 68 — camada humana de locomoção (fase-travada, determinística):
+  // pelve/ombros/postura/idle. Agachado o poseCrouch comanda o quadril — pula.
+  if (!crouch) {
+    poseHumanGait(entry, humanGaitPose({
+      phase: PH, sn, t,
+      locomotion: (entry.w.walk ?? 0) + (entry.w.run ?? 0),
+      armed: !!armed,
+    }));
   }
   const hy = headYawClamp(yaw);                        // cabeça acompanha a mira em YAW
   if (hy) applyAddRot(entry, 'head', 'y', hy);

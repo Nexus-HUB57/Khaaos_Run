@@ -60,13 +60,15 @@ body[data-aura-season='primavera'] #auraVignette { opacity: .58; } /* estação 
 
 /* ---------- topbar ---------- */
 .topbar3d {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 26; /* Task 67 — acima do lookPad (24): MIX/GFX/MAPA voltam a ser tocáveis no mobile (container pe:none deixa o resto do strip olhar passar) */
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px;
   background: linear-gradient(180deg, rgba(11,8,20,.85), transparent);
   pointer-events: none;
 }
-.topbar3d > * { pointer-events: auto; }
+/* Task 67 — pe:auto só em CONTROLES reais: `.topbar3d > *` (caixas de pills/
+   grupos flex, muito maiores que o visual) engolia a mira no topo do mobile */
+.topbar3d button, .topbar3d input, .topbar3d select { pointer-events: auto; }
 .brand { display: flex; gap: 10px; align-items: center; }
 .brand-mark {
   width: 38px; height: 38px; display: grid; place-items: center;
@@ -481,7 +483,8 @@ body.locked .controls-hint { opacity: .25; }
 .classic-link {
   position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
   color: var(--muted); font-size: 10px; letter-spacing: 2px; text-decoration: none;
-  font-family: var(--font-mono); z-index: 16; opacity: .6;
+  z-index: 26; /* Task 67 — acima do lookPad (tela cheia): link segue tocável no mobile */
+  font-family: var(--font-mono); opacity: .6;
 }
 .classic-link:hover { color: var(--cyan); opacity: 1; }
 
@@ -497,11 +500,13 @@ body.locked .controls-hint { opacity: .25; }
   border: 2px solid rgba(200,255,61,.3); border-radius: 50%;
   background: rgba(11,8,20,.4); z-index: 25; touch-action: none;
 }
-/* Task 61 — look/aim touch: arrastar no lado direito gira a câmera (yaw+pitch).
-   FICA ABAIXO do joystick/botões (z 25) e dos modais (z 40+): hit-test respeita
-   quem está por cima; o pad só recebe o toque nas áreas livres. */
+/* Task 61/67 — look/aim touch: arrastar QUALQUER área livre gira a câmera
+   (yaw+pitch). TELA CHEIA (padrão Free Fire: mira em qualquer ponto, não só a
+   metade direita). FICA ABAIXO do joystick/botões (z 25), topbar (z 26) e
+   modais (z 40+): hit-test respeita quem está por cima; o pad recebe o toque
+   em todo o resto. */
 #lookPad {
-  position: fixed; right: 0; top: 0; width: 62%; height: 100%;
+  position: fixed; inset: 0;
   z-index: 24; touch-action: none;
 }
 #joyKnob {
@@ -512,11 +517,18 @@ body.locked .controls-hint { opacity: .25; }
 .touch-actions {
   position: fixed; right: 18px; bottom: 86px; z-index: 25;
   display: grid; grid-template-columns: repeat(2, 64px); gap: 12px;
+  /* Task 67 — o CONTAINER não pode pegar hit-test: o box inteiro do grid
+     (vãos entre botões + bordas) ficava ACIMA do lookPad (z 24) e engolia
+     os toques de mira num retângulo ~140×382 no meio do lado direito —
+     no celular o avatar "só andava para frente". Só os botões (redondos)
+     capturam toque; o resto do box deixa passar para o lookPad. */
+  pointer-events: none;
 }
 .tbtn {
   width: 64px; height: 64px; border-radius: 50%;
   background: rgba(11,8,20,.55); border: 1px solid var(--panel-border);
   color: var(--text); font-size: 18px; font-family: var(--font-mono);
+  pointer-events: auto; /* Task 67 — botões seguem capturando toque */
 }
 .tbtn.small { width: 46px; height: 46px; font-size: 14px; justify-self: end; }
 .tbtn.fire {
