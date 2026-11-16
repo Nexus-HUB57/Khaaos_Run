@@ -12,6 +12,7 @@ import { createOperative, createFirstPersonRig, createWeaponModel, animateOperat
 import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { botPan } from './footsteps3d.js'; // Task 69 — pan espacial dos passos dos bots
+import { CULL, cullRadiusFor, propagateNoCull, cullDecide } from './cull3d.js'; // Task 70 — culling por distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
@@ -364,6 +365,7 @@ export class Game3D {
     // (energia CIGKV, chuva ácida W1, esporos W2, fumaça W3, tsunami W4).
     this.ringWall = createRingWall(this.scenario.id);
     scene.add(this.ringWall);
+    propagateNoCull(this.ringWall); // Task 70 — fronteira do arena nunca some
     this.effects = new Effects(scene, {
       // Fase 18 — partículas de combate no pool compartilhado da cena
       // (1 draw call p/ TODO o FX: marcos + sobrevivências + combate).
@@ -396,6 +398,7 @@ export class Game3D {
     // jogador (Fase 7 — variant do operativo define acessórios determinísticos)
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
+    propagateNoCull(this.playerOp.group); // Task 70 — avatar do jogador isento
     this.playerOp.group.visible = this.viewMode !== 'fps';
     this.#applyAvatarOverride(); // Fase 56 — corpo GLB real se ?avatar= válido; senão procedural
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
@@ -419,6 +422,7 @@ export class Game3D {
           { tier: this.quality }
         );
         this.scene.add(op.group);
+        propagateNoCull(op.group); // Task 70 — bot isento (personagem é gameplay)
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
         this.#attachHumanoidForBot(this.botOps.get(b.id), b.op || b.id); // Fase 57 + Task 64 — corpo real com IDENTIDADE: mesmo operativo → mesmo avatar
@@ -497,6 +501,7 @@ export class Game3D {
         : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      propagateNoCull(this.playerOp.group); // Task 70 — re-spawn do avatar re-isenta
       this.#applyAvatarOverride(); // Fase 56 — recoloca o corpo GLB no novo playerOp
       this.firstPersonRig?.traverse((node) => {
         // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
@@ -584,6 +589,7 @@ export class Game3D {
     // nunca foi add() à cena — filhos de nó fora do grafo NUNCA renderizam. O
     // jogador via só a mira flutuando (zero corpo) desde sempre.
     this.scene.add(this.camera);
+    propagateNoCull(this.camera); // Task 70 — viewmodel/arma presos à câmera
     // Task 59 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
     // curto (~3 m) — ilumina só braços/arma (o sol da cena bate nas costas do
     // rig e o deixava uma silhueta preta ilegível).
@@ -706,6 +712,29 @@ export class Game3D {
     });
   }
 
+  // Task 70 — passe de culling por distância: raio por tipo (props 110 m,
+  // shells 320 m, grama 90 m; céu/montanhas isentos por altura ≥ 18 m) com
+  // histerese de 8 m contra pop na fronteira. Raízes tagged noCull (avatares,
+  // loot, em-voo, palco, fronteira, câmera) são simplesmente ignoradas.
+  // Custo: traverse O(n) a 4 Hz — barato contra 1100 submits/frame.
+  #cullPass() {
+    if (!this.camera || !this.scene) return;
+    const cam = this.camera.position;
+    const wp = new this.camera.position.constructor();
+    this.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const u = o.userData;
+      if (u.noCull) return;                                  // raiz isenta
+      if (u._v0 === undefined) u._v0 = o.visible;            // visibilidade base do jogo
+      if (!u._v0) return;                                    // nunca força o que o jogo esconde
+      o.getWorldPosition(wp);
+      const radius = cullRadiusFor({ name: o.parent?.name || o.name || '', worldY: wp.y });
+      if (radius == null) { o.visible = true; return; }      // céu/montanhas: SEMPRE
+      const dist = Math.hypot(wp.x - cam.x, wp.y - cam.y, wp.z - cam.z);
+      o.visible = cullDecide({ dist, radius, baseVisible: true, hidden: !o.visible });
+    });
+  }
+
   async #applyAvatarOverride() {
     // Fase 57 — corpo humano realista do HERÓI. O GLB é o corpo PADRÃO:
     // sem ?avatar= → determinístico pelo operativo; ?avatar=<id pool> → escolha
@@ -809,6 +838,7 @@ export class Game3D {
     a.root.position.y = .06; // sobre o pedestal
     this.avatarShowcase = stage;
     this.scene.add(stage);
+    propagateNoCull(stage); // Task 70 — palco do menu nunca some
     // palco: na frente da câmera do menu e DESLOCADO À DIREITA (fora do painel
     // DOM — o rig fica visível na área livre da tela), pés ~0.9 m abaixo do olho
     const dir = new THREE.Vector3();
@@ -1133,6 +1163,7 @@ export class Game3D {
         const yOff = groundKinds.includes(item.kind) ? 0 : item.y - .45;
         mesh.position.set(item.x, yOff, item.z);
         this.scene.add(mesh);
+        propagateNoCull(mesh); // Task 70 — loot é gameplay (não compete com o passe)
         this.lootMeshes.set(item.id, mesh);
         // Fase 28 — a caixa de airdrop DESCE de paraquedas (34 m de altitude)
         if (item.kind === 'supplyDrop' && !item.landedT) {
@@ -1230,7 +1261,7 @@ export class Game3D {
     for (const g of grenades) {
       activeG.add(g.id);
       let mesh = this.grenadeMeshes.get(g.id);
-      if (!mesh) { mesh = createFragMesh(); this.scene.add(mesh); this.grenadeMeshes.set(g.id, mesh); }
+      if (!mesh) { mesh = createFragMesh(); this.scene.add(mesh); propagateNoCull(mesh); this.grenadeMeshes.set(g.id, mesh); } // Task 70 — em voo
       mesh.position.set(g.x, g.y, g.z);
       mesh.rotation.x += dt * 9; mesh.rotation.z += dt * 7; // tombo em voo
       const led = mesh.userData.led;
@@ -1251,6 +1282,7 @@ export class Game3D {
         // animação de deploy: cresce do chão
         mesh.userData.spawnT = 0;
         this.scene.add(mesh);
+        propagateNoCull(mesh); // Task 70 — gloo wall é gameplay
         this.wallMeshes.set(w.id, mesh);
         this.effects.glooPuff(new THREE.Vector3(w.x, 0, w.z));
       }
@@ -1478,6 +1510,7 @@ export class Game3D {
           { tier: this.quality }
         );
         this.scene.add(op.group);
+        propagateNoCull(op.group); // Task 70 — bot isento (personagem é gameplay)
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
@@ -2411,6 +2444,10 @@ export class Game3D {
     requestAnimationFrame(this.loop);
     const dt = Math.min(.1, this.clock.getDelta());
     this.animT += dt;
+    // Task 70 — passe de culling por distância (4 Hz): o perfil mostrou 89% dos
+    // meshes além de 80 m mantendo submit a cada frame (cena draw-call bound).
+    this._cullT = (this._cullT ?? 0) + dt * 1000; // ms — CULL.passMs é em ms
+    if (this._cullT >= CULL.passMs) { this._cullT = 0; this.#cullPass(); }
     this.updatePerf(dt); // Fase 35 — DRS + auto-tier + telemetria (laço fechado de performance)
 
     // passo fixo da simulação
