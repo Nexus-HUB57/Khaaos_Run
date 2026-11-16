@@ -156,3 +156,120 @@ test('veículos do trem seguem a cabeça com offsets preservados (fila sincroniz
   assert.ok(intro.trainLength > 4 * 11, 'comprimento total coerente');
   intro.dispose();
 });
+
+// ---------- Fase 34 (P0) — anatomia de TREM DE PASSAGEIROS (formato canônico Zu) ----------
+test('nariz aerodinâmico: elipsoide escalado + para-brisa curvo (fim da cunha facetada)', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  const loco = intro.cars[0];
+  const spheres = [];
+  loco.traverse((o) => { if (o.isMesh && o.geometry.type === 'SphereGeometry') spheres.push(o); });
+  assert.ok(spheres.some((m) => m.scale.x > 1.5 && m.scale.z >= 1.3), 'nariz é elipsoide (raios 2.35/1.75/1.5)');
+  assert.ok(spheres.some((m) => m.geometry.parameters.phiLength < 1.5), 'para-brisa é calota esférica parcial');
+  intro.dispose();
+});
+
+test('salão de passageiros em TODOS os vagões: janelas individuais, portas de folha dupla, luminosos', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  for (const wagon of intro.cars.slice(1)) {
+    let windows = 0, leaves = 0, lamps = 0;
+    wagon.traverse((o) => {
+      if (!o.isMesh || o.geometry.type !== 'BoxGeometry') return;
+      const p = o.geometry.parameters;
+      if (p.depth <= .1 && p.height > .6 && p.height < 1.0 && p.width < .9) windows++;
+      if (p.depth <= .1 && p.height > 1.5 && p.height < 2.0 && p.width < .8) leaves++;
+      if (p.depth <= .1 && p.height <= .12 && p.width <= .3) lamps++;
+    });
+    assert.ok(windows >= 10, `janelas individuais nos 2 lados (${windows})`);
+    assert.ok(leaves >= 8, `folhas de porta nos 2 lados (${leaves})`);
+    assert.ok(lamps >= 4, `luminosos de porta (${lamps})`);
+  }
+  intro.dispose();
+});
+
+test('teto curvo: calota cilíndrica deitada sobre a carroceria de cada veículo', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  for (const car of intro.cars) {
+    const caps = [];
+    car.traverse((o) => {
+      if (o.isMesh && o.geometry.type === 'CylinderGeometry') {
+        const p = o.geometry.parameters;
+        if (p.radiusTop === p.radiusBottom && p.radiusTop > 1.2 && Math.abs(Math.abs(o.rotation.z) - Math.PI / 2) < .01) caps.push(o);
+      }
+    });
+    assert.equal(caps.length, 1, `calota do teto (${caps.length})`);
+  }
+  intro.dispose();
+});
+
+test('pantógrafo articulado no vagão central (e apenas nele)', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  const thinBars = (car) => {
+    let n = 0;
+    car.traverse((o) => {
+      if (o.isMesh && o.geometry.type === 'BoxGeometry') {
+        const p = o.geometry.parameters;
+        if (p.height <= .07 && p.width >= 1) n++;
+      }
+    });
+    return n;
+  };
+  assert.ok(thinBars(intro.cars[2]) >= 3, 'braços + faixa de contato do pantógrafo');
+  assert.equal(thinBars(intro.cars[1]), 0, 'vagão anterior não tem pantógrafo');
+  assert.equal(thinBars(intro.cars[3]), 0, 'vagão final não tem pantógrafo');
+  intro.dispose();
+});
+
+test('gangues entre veículos: fole com nervuras + collars nas pontas livres', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  let bellows = 0, ribs = 0, collars = 0;
+  for (const car of intro.cars) {
+    car.traverse((o) => {
+      if (!o.isMesh || o.geometry.type !== 'BoxGeometry') return;
+      const p = o.geometry.parameters;
+      if (p.height > 1.3 && p.height < 1.7 && p.depth > 1.9 && p.width > 1.8) bellows++;
+      if (p.height > 1.3 && p.height < 1.7 && p.width <= .2) ribs++;
+      if (p.height > 1.3 && p.height < 1.7 && p.width > .4 && p.width <= .6) collars++;
+    });
+  }
+  assert.ok(bellows >= 3, `fole nas 3 junções (${bellows})`);
+  assert.ok(ribs >= 6, `nervuras do fole (${ribs})`);
+  assert.ok(collars >= 3, `collars nas pontas livres (${collars})`);
+  intro.dispose();
+});
+
+test('lituraria canônica: faixa âmbar contínua + stripe ácido nas DUAS faces de cada veículo', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  let amber = 0, acid = 0;
+  for (const car of intro.cars) {
+    car.traverse((o) => {
+      if (!o.isMesh || o.geometry.type !== 'BoxGeometry') return;
+      const hex = o.material?.emissive?.getHexString?.();
+      const p = o.geometry.parameters;
+      if (p.width >= 8 && p.height <= .2 && p.depth <= .1) {
+        if (hex === '4a3405') amber++;
+        if (hex === 'ffd75e') acid++;
+      }
+    });
+  }
+  assert.ok(amber >= 8, `faixa âmbar nas 2 faces × 4 veículos (${amber})`);
+  assert.ok(acid >= 8, `stripe ácido nas 2 faces × 4 veículos (${acid})`);
+  intro.dispose();
+});
+
+test('orientação canônica do trem: nariz aponta para o SENTIDO DO MOVIMENTO', () => {
+  const right = new TrainIntro({ scene: mkScene(), spawn: { x: 60, z: 100 }, skippable: false });
+  const left = new TrainIntro({ scene: mkScene(), spawn: { x: -60, z: 100 }, skippable: false });
+  assert.equal(right.dir, 1);
+  assert.equal(right.cars[0].userData.yaw0, Math.PI, 'dir=1 → carro-cabine gira (nariz para +X)');
+  assert.equal(left.dir, -1);
+  assert.equal(left.cars[0].userData.yaw0, 0, 'dir=-1 → nariz nativo (−X)');
+  right.update(.5);
+  assert.ok(Math.abs(right.cars[0].rotation.y - Math.PI) < 1e-9, 'yaw do nariz sobrevive ao update');
+  right.dispose(); left.dispose();
+});
