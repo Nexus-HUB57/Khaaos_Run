@@ -49,6 +49,24 @@ test('identidade por mundo: cada cenário materializa seus marcos assinatura', (
   }
 });
 
+test('Barburhen: torres e chaminés usam lotes instanciados sem alterar o catálogo', () => {
+  const { scene } = buildScene(4242, 'Barburhen', null, 'high');
+  const marks = scene.userData.worldMarks;
+  const instanced = [];
+  scene.traverse((o) => {
+    if (!o.isInstancedMesh) return;
+    let p = o, underMarks = false;
+    while (p) {
+      if (p.name?.startsWith('world-marks')) { underMarks = true; break; }
+      p = p.parent;
+    }
+    if (underMarks) instanced.push(o);
+  });
+  assert.deepEqual(marks.counts, { coolingTowers: 2, smokestacks: 3, pipeBridges: 1 });
+  assert.equal(instanced.length, 5, '3 lotes de torre + corpo/faixa de chaminé');
+  assert.equal(instanced.reduce((sum, mesh) => sum + mesh.count, 0), 12, 'instâncias visuais preservadas');
+});
+
 test('Priadus: a água é um ANEL no horizonte — a arena permanece seca', () => {
   const { scene } = buildScene(9, 'Priadus', null, 'high');
   const water = scene.getObjectByName('priadus-water-ring');
@@ -73,7 +91,26 @@ test('marcos FORA da área jogável (anel ≥190 m) — zero impacto em gameplay
     scene.updateMatrixWorld(true);
     let checked = 0;
     scene.traverse((o) => {
-      if (!o.isMesh || o.isInstancedMesh) return;              // origem do instanced é o 0 (sem sentido p/ bounds)
+      if (!o.isMesh) return;
+      if (o.isInstancedMesh) {
+        let p = o, under = false, anchor = false;
+        while (p) {
+          if (p.name === 'anchor-pylons') anchor = true;
+          if (p.name?.startsWith('world-marks')) { under = true; break; }
+          p = p.parent;
+        }
+        if (!under || anchor) return;
+        const matrix = new THREE.Matrix4();
+        const wp = new THREE.Vector3();
+        for (let i = 0; i < o.count; i++) {
+          o.getMatrixAt(i, matrix);
+          wp.setFromMatrixPosition(matrix).applyMatrix4(o.matrixWorld);
+          const r = Math.hypot(wp.x, wp.z);
+          assert.ok(r >= 190, `${id}: instância em r=${r.toFixed(1)}m fora da área (≥190)`);
+          checked++;
+        }
+        return;
+      }
       if (o.name === 'priadus-water-ring') return;             // anel centrado na origem (por definição)
       if (o.name === 'arukheea-sea-ring') return;              // F43 — mar de Arukheea, anel na origem (por definição)
       if (o.name === 'barburhen-pipe-bridge') return;          // vão ENTRE pilares do anel

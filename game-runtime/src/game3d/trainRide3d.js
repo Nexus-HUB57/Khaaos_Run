@@ -13,7 +13,7 @@
 // O vagão corre sobre um viaduto elevado (~4,2 m) — por isso o salto de porta
 // nasce a JUMP_HEIGHT (5,5 m) e pousa pelo contrato canônico 'chute' da Fase 4.
 import * as THREE from 'three';
-import { ZU_TRAIN, zuTrainPhase, doorWindowOpen, trainPoseAt, trainDoorJumpPose } from '../shared/zuTrain.js';
+import { ZU_TRAIN, zuTrainPhase, doorWindowOpen, trainPoseAtInto, trainDoorJumpPose } from '../shared/zuTrain.js';
 
 const FLOOR_Y = 4.2;          // piso do vagão no viaduto (m)
 const EYE_Y = 1.5;            // altura do olhar dentro do vagão
@@ -32,6 +32,12 @@ function box(w, h, d, color, { x = 0, y = 0, z = 0, metal = 0.55, rough = 0.55, 
 export class TrainRide {
   constructor({ scene, route, startAt = 0, onJump = null, onDone = null, onPhase = null } = {}) {
     this.scene = scene; this.route = route;
+    const dx = route.x1 - route.x0, dz = route.z1 - route.z0;
+    const len = Math.hypot(dx, dz) || 1;
+    this.routeFrame = Object.freeze({ dx, dz, len, ux: dx / len, uz: dz / len, rx: -dz / len, rz: dx / len, heading: -Math.atan2(dz, dx) });
+    this.pose = { x: route.x0, z: route.z0, progress: 0 };
+    this.cameraEye = new THREE.Vector3();
+    this.cameraLook = new THREE.Vector3();
     this.elapsedMs = Math.max(0, Number(startAt) || 0) * 1000;
     this.onJump = onJump; this.onDone = onDone; this.onPhase = onPhase;
     this.done = false; this.phase = null; this.doorOpenT = 0; // 0 fechada → 1 aberta
@@ -111,11 +117,9 @@ export class TrainRide {
     this.doorL.position.x = DOOR_X0 + DOOR_W / 4 - slide;
     this.doorR.position.x = DOOR_X0 + 3 * DOOR_W / 4 + slide;
     // pose pura compartilhada (idêntica à autoridade) + balanço de via
-    const pose = trainPoseAt(this.elapsedMs, this.route);
-    const dx = this.route.x1 - this.route.x0, dz = this.route.z1 - this.route.z0;
-    const len = Math.hypot(dx, dz) || 1;
+    const pose = trainPoseAtInto(this.elapsedMs, this.route, this.pose);
     this.group.position.set(pose.x, 0, pose.z);
-    this.group.rotation.y = -Math.atan2(dz, dx); // +X local alinha com a rota
+    this.group.rotation.y = this.routeFrame.heading; // +X local alinha com a rota
     this.sway = Math.sin(this.elapsedMs / 1000 * 2.2) * 0.022 + Math.sin(this.elapsedMs / 1000 * 5.1) * 0.008;
     // chegada: pequeno assentamento e handover da câmera
     if (this.elapsedMs >= ZU_TRAIN.ARRIVAL_MS + 900) this.end('arrived');
@@ -123,22 +127,18 @@ export class TrainRide {
 
   cameraPose(camera) {
     // câmera na porta (lado +Z local = lateral SSOT do salto): vê a rota e o Ring
-    const pose = trainPoseAt(this.elapsedMs, this.route);
-    const dx = this.route.x1 - this.route.x0, dz = this.route.z1 - this.route.z0;
-    const len = Math.hypot(dx, dz) || 1;
-    const ux = dx / len, uz = dz / len;
-    const rx = -uz, rz = ux; // lateral da porta (MESMA fórmula da SSOT)
+    const pose = trainPoseAtInto(this.elapsedMs, this.route, this.pose);
+    const { ux, uz, rx, rz } = this.routeFrame; // lateral da porta (MESMA fórmula da SSOT)
     const localX = this.phase === 'portas' ? DOOR_X0 + DOOR_W / 2 : -2.6; // na janela: junto à porta
-    const eye = new THREE.Vector3(
+    this.cameraEye.set(
       pose.x + ux * localX + rx * 0.95,
       FLOOR_Y + EYE_Y + (this.sway ?? 0),
       pose.z + uz * localX + rz * 0.95,
     );
-    camera.position.copy(eye);
+    camera.position.copy(this.cameraEye);
     // olhar: para fora pela porta — rumo ao centro do Ring (spawn/desembarque)
-    const look = new THREE.Vector3(-pose.x * 0.5, FLOOR_Y - 1.2, -pose.z * 0.5);
-    look.x += rx * 6; look.z += rz * 6;
-    camera.lookAt(look);
+    this.cameraLook.set(-pose.x * 0.5 + rx * 6, FLOOR_Y - 1.2, -pose.z * 0.5 + rz * 6);
+    camera.lookAt(this.cameraLook);
     camera.rotation.z += (this.sway ?? 0) * 0.6;
   }
 
