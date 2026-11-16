@@ -25,7 +25,9 @@ if (typeof globalThis.document === 'undefined') {
   globalThis.document = { createElement() { return { width: 0, height: 0, getContext: () => ctx2d }; } };
 }
 
-const { createOperative, animateOperative, SKIN_TONES } = await import('../src/game3d/entities3d.js');
+const { createOperative, attachWeapon, animateOperative, SKIN_TONES } = await import('../src/game3d/entities3d.js');
+const { applyOperativeGear } = await import('../src/game3d/gear3d.js');
+const { validateEquippedEntityBudget } = await import('../src/game3d/hero3d.js');
 const { ETHNIC_SCULPT, CANON, resolveEthnicity, sculptSkullGeo, buildCanonicalHead } = await import('../src/game3d/heads3d.js');
 
 function meshStats(group) {
@@ -151,6 +153,21 @@ test('drop-in: createOperative expressa o cânone sem quebrar a API Fase 7/9', (
     assert.ok(tris <= 6500, `${v}: ${tris} tris ≤ 6500`);
     assert.ok(tris >= 3000, `${v}: ${tris} tris — detalhe canônico presente`);
   }
+});
+
+test('entidade completa corpo + gear máximo + M4 com anexos/skin/mítico fica sob 8.000 tris', () => {
+  const { group, parts } = createOperative({ variant: 'OP_MALE_VANGUARD', helmet: false });
+  applyOperativeGear(parts, { vest: 4, helmet: 3, pack: 0 });
+  attachWeapon(parts, group, 'm4', 'COMUM', {
+    attachments: ['mira4x', 'silenciador', 'magestendida', 'gripvertical'],
+    attachmentRarities: ['COMUM', 'COMUM', 'COMUM', 'COMUM'],
+    mythicStage: 4,
+  });
+  const measured = validateEquippedEntityBudget(group);
+  assert.equal(measured.accepted, true, JSON.stringify(measured.errors));
+  assert.equal(measured.limit, 8000);
+  assert.equal(measured.metrics.triangleCount, 7536, 'corresponde ao pior cenário medido no audit');
+  assert.equal(group.userData.equippedBudget.metrics.triangleCount, measured.metrics.triangleCount, 'attachWeapon registra o orçamento atualizado');
 });
 
 test('cabelo/barba por estilo: curly aglomera cachos, long tem nuca, Talon raspado', () => {
