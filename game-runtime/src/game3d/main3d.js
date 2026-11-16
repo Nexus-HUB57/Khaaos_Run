@@ -11,6 +11,7 @@ import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
+import { botPan } from './footsteps3d.js'; // Task 69 — pan espacial dos passos dos bots
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
@@ -1337,9 +1338,17 @@ export class Game3D {
     this._gait ??= newGait();
     advanceGait(this._gait, { x: p.x, z: p.z, dt });
     if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
-      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
+      // Task 69 — o strike REAL manda no estéreo (L π/2 → esquerda, R 3π/2 →
+      // direita) e o sprint muda o caráter da voz (mais grave/presente/longa).
+      for (const strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface, { side: strike, sprint: !!p.sprinting });
     }
     const airborne = !!p.dropPhase;
+    // Task 69 — POUSO: o mesmo evento que a camada visual absorve (Task 64)
+    // dispara o impacto pesado — quem cai, soa. Uma vez por transição.
+    if (this._prevAirborne && !airborne && p.alive && !p.knocked && this.audio) {
+      this.audio.step(1.05, 0, this.audio.worldAmbience.surface, { land: true, side: 'R' });
+    }
+    this._prevAirborne = airborne;
     // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA: sprintK com CONSTANTE DE
     // TEMPO PRÓPRIA por ator (peso do corpo — banda instantânea de speedNorm
     // atravessava em ~1 frame na frenagem exponencial); ADS/crouch/fire
@@ -1577,7 +1586,10 @@ export class Game3D {
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
-            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
+            // Task 69 — passos dos BOTES espacializados: pan pela projeção do
+            // bot no eixo direito do ouvinte (hear a flank!), strikes reais L/R.
+            const pan = botPan({ bx: b.x, bz: b.z, lx: cam.x, lz: cam.z, yaw: p.yaw });
+            for (const strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface, { side: strike, pan, sprint: !!b.sprinting });
           }
         }
       }
