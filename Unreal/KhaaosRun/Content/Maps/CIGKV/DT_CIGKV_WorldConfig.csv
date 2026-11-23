@@ -1,9 +1,14 @@
 Key,Value
 world_id,CIGKV
 display_name,CIGKV — Khaaos Ville (Campo de Instrução de Guerra)
-biome,urban_training
+biome,fortified_rectangle
+shape,fortified_rectangle
 sector_count,3
+hazard,KHAOS_GRAVITY
+area_m2,16000
+bbox_m,160x100
+target_players,100
 color_primary,#53606B
 color_secondary,#8A979A
-color_accent,#C8FF3D
+color_accent,#00f0ff
 color_fog,#26313A
