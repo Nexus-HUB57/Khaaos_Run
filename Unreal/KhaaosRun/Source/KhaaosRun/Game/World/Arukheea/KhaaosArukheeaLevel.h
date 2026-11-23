@@ -1,17 +1,16 @@
 // ============================================================================
-// Khaaos Run — W4/C4 Arukheea Level Script Actor (Fase 4)
+// Khaaos Run — W4/C4 Arukheea Level Script Actor (Fase 4 / F42 canon)
 // ============================================================================
-// Arukheea — Mundo desértico de cânions
-// Level script for the desert canyon world (W4/C4 Arukheea Ring)
+// Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)
+// Level script for the coastal-island competitive map (W4/C4 Arukheea Ring)
 //
-// Handles:
-//   - Zone shrinking phases (~1h40m Ring, 4 phases: Dunes→Canyon→Oasis→Arena)
-//   - 80 players
-//   - 22 ZEX (oasis and canyon-based)
-//   - 3 Zu variants (cinto/saltar/areia — sand entry)
-//   - Desert combat (sandstorms, heat damage, oasis healing)
-//   - 10km x 10km map with heat mechanics
-//   - Entry requires minimum 5 W3 Ckesalth matches completed
+// Handles (cânon README + shared/worlds.ts):
+//   - Zone shrinking phases (target ~7 days / 12h cycles)
+//   - ~100 players (densidade 180 m²/jogador; bounding ~180×100 m)
+//   - ZEX nodes + Zu ingress variants
+//   - Hazard: TSUNAMI_WAVE (submergeBelowY)
+//   - Bioma: ilha isolada, prisão, tubarões, cemitério das baleias, pressão hidráulica
+//   - Entry requires minimum completions of W3 Ckesalth
 // ============================================================================
 
 #pragma once

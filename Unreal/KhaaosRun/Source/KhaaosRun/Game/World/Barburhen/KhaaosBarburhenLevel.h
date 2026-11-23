@@ -1,18 +1,17 @@
 // ============================================================================
-// Khaaos Run — W1/C1 Barburhen Level Script Actor (Fase 4)
+// Khaaos Run — W1/C1 Barburhen Level Script Actor (Fase 4 / F42 canon)
 // ============================================================================
-// Barburhen — Primeiro mundo competitivo de Khaaos Run
-// Level script for the first competitive map (W1/C1 Barburhen Ring)
+// Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)
+// Level script for the urban post-war competitive map (W1/C1 Barburhen Ring)
 //
-// Handles:
-//   - Zone shrinking phases (1.5h Ring, 4 phases, faster + higher damage)
-//   - 100 players (double CIGKV)
-//   - 30 ZEX (Zonas de Extração de XP)
-//   - 4 Zu variants (cinto/saltar/máscara/gelo — gelo unique to Barburhen)
-//   - Season system (Verão/Inverno) affecting loot tables and zone damage
-//   - Giants Challenge integration (top 50 qualify for special event)
-//   - Entry requires minimum 10 CIGKV matches completed (progression gate)
-//   - Pulso Khaaos (every 8 min: climate change or legendary drop)
+// Handles (cânon README + shared/worlds.ts):
+//   - Zone shrinking phases (target ~7 days / 12h cycles)
+//   - ~100 players (densidade 190 m²/jogador; bounding ~190×100 m)
+//   - ZEX nodes + Zu ingress variants
+//   - Hazard: ACID_RAIN (chuva ácida)
+//   - Bioma: urbano pós-guerra, construções inacabadas, carros abandonados,
+//     cadáveres que apodrecem, desabamentos e fumaça
+//   - Entry requires minimum completions of CIGKV
 //   - Inactivity punishment ("dedo-duro" system)
 // ============================================================================
 
