@@ -905,3 +905,168 @@ export function buildGrassFieldLOD({
     },
   };
 }
+
+// =============================================================================
+// FLORA CARNÍVORA (Priadus — "flora carnívora" do README / Floresta da Escuridão)
+// =============================================================================
+// Plantas carnivoras procedurais (pitcher + snap-trap) para a Área Pantanosa /
+// Bosque. Headless-safe, determinístico, ZERO colliders / gameplay.
+// Colocado via buildCarnivorousFlora e integrado em world3d após o tree field.
+
+const CARNIVORE_PLAN = Object.freeze({
+  Priadus: Object.freeze({
+    pitcher: { count: 7, districts: [0, 1], roam: 28 },
+    snapTrap: { count: 5, districts: [0, 2], roam: 22 },
+  }),
+  // leve presença em outros mundos de natureza (opcional)
+  Ckesalth: Object.freeze({
+    pitcher: { count: 0, districts: [], roam: 0 },
+    snapTrap: { count: 0, districts: [], roam: 0 },
+  }),
+});
+
+function buildPitcherPlant(rng) {
+  const g = new THREE.Group();
+  const stemM = new THREE.MeshStandardMaterial({ color: '#2d5a3a', roughness: .9 });
+  const potM = new THREE.MeshStandardMaterial({ color: '#1a4a32', roughness: .75, emissive: '#0a2a18', emissiveIntensity: .15 });
+  const lipM = new THREE.MeshStandardMaterial({ color: '#6b2a3a', roughness: .7 });
+  // caule
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(.04, .07, 1.1, 6), stemM);
+  stem.position.y = .55;
+  stem.castShadow = false; stem.receiveShadow = false;
+  g.add(stem);
+  // jarro (cilindro afilado + boca)
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(.18, .28, .7, 8, 1, true), potM);
+  pot.position.y = 1.25;
+  pot.castShadow = false; pot.receiveShadow = false;
+  g.add(pot);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(.2, .04, 6, 12), lipM);
+  lip.position.y = 1.6;
+  lip.rotation.x = Math.PI / 2;
+  lip.castShadow = false; lip.receiveShadow = false;
+  g.add(lip);
+  // tampa inclinada
+  const lid = new THREE.Mesh(new THREE.SphereGeometry(.16, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2), lipM);
+  lid.position.set(.08, 1.72, 0);
+  lid.rotation.z = -.6;
+  lid.castShadow = false;
+  g.add(lid);
+  g.userData.lid = lid;
+  g.scale.setScalar(.85 + rng() * .45);
+  return g;
+}
+
+function buildSnapTrap(rng) {
+  const g = new THREE.Group();
+  const leafM = new THREE.MeshStandardMaterial({ color: '#3a6b3a', roughness: .88 });
+  const jawM = new THREE.MeshStandardMaterial({ color: '#8a2a3a', roughness: .7, emissive: '#4a1020', emissiveIntensity: .2 });
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(.03, .05, .55, 5), leafM);
+  stem.position.y = .28;
+  stem.castShadow = false;
+  g.add(stem);
+  // duas mandíbulas (hemi-esferas achatadas)
+  const jawGeo = new THREE.SphereGeometry(.22, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+  const jawL = new THREE.Mesh(jawGeo, jawM);
+  const jawR = new THREE.Mesh(jawGeo, jawM);
+  jawL.position.set(-.08, .62, 0); jawL.rotation.z = .35; jawL.scale.set(1, .55, 1.1);
+  jawR.position.set(.08, .62, 0); jawR.rotation.z = -.35; jawR.rotation.y = Math.PI; jawR.scale.set(1, .55, 1.1);
+  jawL.castShadow = false; jawR.castShadow = false;
+  g.add(jawL, jawR);
+  g.userData.jaws = [jawL, jawR];
+  g.scale.setScalar(.75 + rng() * .5);
+  return g;
+}
+
+/**
+ * Placements puros de flora carnívora (Priadus). Mesma semântica de faunaPlacements.
+ */
+export function carnivorePlacements(layout, scenarioId, { density = 1 } = {}) {
+  const plan = CARNIVORE_PLAN[scenarioId];
+  if (!plan) return { items: [], counts: {} };
+  const rng = vegRng(hashStr(`${layout.seed}:${layout.scenarioId}:carniflora`));
+  const districts = layout.districts ?? [];
+  const items = [];
+  const counts = {};
+
+  const place = (kind, cfg) => {
+    const n = Math.max(0, Math.round((cfg.count || 0) * density));
+    if (!n || !cfg.districts?.length) return;
+    for (let i = 0; i < n; i++) {
+      const dIdx = cfg.districts[Math.floor(rng() * cfg.districts.length)];
+      const d = districts[dIdx] ?? { cx: 0, cz: 0 };
+      let x = d.cx, z = d.cz;
+      for (let t = 0; t < 8; t++) {
+        const a = rng() * Math.PI * 2;
+        const r = Math.sqrt(rng()) * (cfg.roam || 20);
+        const cx = d.cx + Math.cos(a) * r;
+        const cz = d.cz + Math.sin(a) * r;
+        if (Math.hypot(cx, cz) < 45) continue;
+        x = cx; z = cz; break;
+      }
+      items.push({ kind, x, z, district: dIdx });
+    }
+    counts[kind] = (counts[kind] ?? 0) + n;
+  };
+
+  place('pitcher', plan.pitcher || {});
+  place('snapTrap', plan.snapTrap || {});
+  return { items, counts };
+}
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+/**
+ * Constrói flora carnívora e registra em scene.userData.carniflora.
+ * Só ativa de forma significativa em Priadus.
+ */
+export function buildCarnivorousFlora(scene, layout, scenario, q = {}) {
+  if (scene.userData.carniflora) return scene.userData.carniflora;
+  const density = q.dressingFactor ?? 1;
+  const plan = carnivorePlacements(layout, scenario.id, { density });
+  if (!plan.items.length) {
+    const empty = { group: null, animators: [], counts: {}, placements: [] };
+    scene.userData.carniflora = empty;
+    return empty;
+  }
+  const rng = vegRng(hashStr(`${layout.seed}:${layout.scenarioId}:carniflora-build`));
+  const group = new THREE.Group();
+  group.name = 'carniflora';
+  const animators = [];
+
+  for (const item of plan.items) {
+    if (item.kind === 'pitcher') {
+      const plant = buildPitcherPlant(rng);
+      plant.position.set(item.x, 0, item.z);
+      group.add(plant);
+      const phase = rng() * Math.PI * 2;
+      animators.push((dt, t) => {
+        if (plant.userData.lid) {
+          plant.userData.lid.rotation.z = -.55 + Math.sin(t * .7 + phase) * .08;
+        }
+      });
+    } else if (item.kind === 'snapTrap') {
+      const plant = buildSnapTrap(rng);
+      plant.position.set(item.x, 0, item.z);
+      group.add(plant);
+      const phase = rng() * Math.PI * 2;
+      let open = 1;
+      animators.push((dt, t) => {
+        // ciclo de abertura/fechamento lento
+        const cycle = (Math.sin(t * .45 + phase) + 1) * .5;
+        open = .35 + cycle * .65;
+        const jaws = plant.userData.jaws || [];
+        if (jaws[0]) jaws[0].rotation.z = .15 + open * .4;
+        if (jaws[1]) jaws[1].rotation.z = -.15 - open * .4;
+      });
+    }
+  }
+
+  scene.add(group);
+  const handle = { group, animators, counts: plan.counts, placements: plan.items };
+  scene.userData.carniflora = handle;
+  return handle;
+}
