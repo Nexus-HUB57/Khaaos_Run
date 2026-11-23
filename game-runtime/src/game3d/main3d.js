@@ -1691,11 +1691,19 @@ export class Game3D {
         u.fogDensity.value = this.scene.fog.density ?? 0.0035;
       }
     }
-    // Task 65 — dedo-duro: fauna reage à PRESSÃO DO RING (1 − raio/170):
-    // conforme a zona fecha, ratos correm mais, enxames crescem e jacarés/
-    // tubarões patrulham mais rápido (visual; dano continua na sim/servidor).
-    this.scene.userData.fauna?.setAgitation?.(
-      Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170)));
+    // Task 65 + AI: fauna reage à PRESSÃO DO RING e à posição do jogador
+    // (flee / hunt / investigate via faunaAI3d).
+    const fauna = this.scene.userData.fauna;
+    if (fauna) {
+      const agitation = Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170));
+      const px = this.sim?.player?.x ?? this.playerOp?.group?.position?.x;
+      const pz = this.sim?.player?.z ?? this.playerOp?.group?.position?.z;
+      if (fauna.setContext) {
+        fauna.setContext({ playerX: px, playerZ: pz, agitation });
+      } else {
+        fauna.setAgitation?.(agitation);
+      }
+    }
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
