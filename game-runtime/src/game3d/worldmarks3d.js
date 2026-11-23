@@ -1,35 +1,28 @@
-// Khaaos Run — Fase 16 (P1) — MARCOS DE MUNDO (world marks) por cenário.
+// Khaaos Run — Fase 16 (P1) + F42/F43 canon — MARCOS DE MUNDO (world marks).
 //
-// Até a Fase 15 trocar de mundo só mudava céu/névoa/luz/tinta do chão: os
-// cenários ficavam "fora dos padrões e sem as características descritas em
-// cada um dos mundos". Esta camada materializa a IDENTIDADE de cada mundo
-// descrita em scenarios.js, com marcos assinatura no horizonte (anel 205–340 m,
+// Materializa a IDENTIDADE visual de cada mundo (scenarios.js + README
+// "Ontologia dos Mundos") com marcos assinatura no horizonte (anel 205–340 m,
 // FORA da área jogável — zero impacto em colliders/sim):
 //
 //   CIGKV      — Campo de Instrução: torres de vigia, alvos de tiro, mastros;
-//   Barburhen  — Setor Industrial frio: torres de resfriamento, chaminés com
-//                fumaça à deriva, ponte de dutos;
-//   Priadus    — Arquipélago Abissal: lâmina d'água, zigurate antigo, domos de
-//                coral, mangues;
-//   CKESALTH   — Deserto Vertical/Refinaria: mesas estratificadas, colunas de
-//                destilação, chama de tocha, dunas;
-//   Arukheea   — Singularidade Dimensional: fragmentos flutuantes à deriva,
-//                espira astral, pilões nos ANCHORS da gravidade, fendas do vazio.
+//   Barburhen  — Urbano pós-guerra / industrial: torres de resfriamento,
+//                chaminés com fumaça, ponte de dutos (reage a ACID_RAIN);
+//   Priadus    — Floresta da Escuridão: zigurate/templo antigo, mangues,
+//                vegetação densa no anel (reage a SPORE_FOG);
+//   Ckesalth   — Deserto das Almas: mesas, colunas de destilação, chama de
+//                tocha, dunas (reage a TOXIC_SMOKE);
+//   Arukheea   — Ilha dos Gritos Calados: mar + tubarões no anel, prisão,
+//                esqueletos de baleia, pilões (reage a TSUNAMI_WAVE).
 //
 // Tudo determinístico (SeededRng por seed+cenário), instanciado onde repete,
-// com ANIMATORS registrados em scene.userData.worldMarks (deriva/flicker) e
-// contagens expostas p/ inspeção e2e.
+// com ANIMATORS em scene.userData.worldMarks e contagens p/ inspeção e2e.
 //
-// Fase 26 — FX DOS MARCOS × MUNDOS: os marcos REAGEM à sobrevivência do
-// próprio mundo (registry.applyHazard — abastecido pelo SurvivalFX a cada
-// frame com { kind, boost 0..1, surfaceY }):
-//   Priadus  + tsunami  → o ANEL oceânico se agita e sobe (maré de tempestade);
-//   Ckesalth + lava     → a chama da tocha ERUPCIONA (escala/emissiva ×) e os
-//                         emissores reais de fagulhas/fumaça disparam;
-//   Arukheea + gravity  → anéis dos pilões GIRAM, cristal da espira e fendas
-//                         do vazio INCANDEM;
-//   CIGKV    + acid     → beacons dos mastros estroboscopiam (alerta);
-//   Barburhen           → sem sobrevivência no cenário — reação nula.
+// Fase 26 + F42 hazard reactions (registry.applyHazard ← SurvivalFX):
+//   Barburhen + acid   → chaminés/fumaça intensificam (corrosão visual);
+//   Priadus   + spore  → névoa/esporos no anel (antes: tsunami legado);
+//   Ckesalth  + smoke  → tocha + fagulhas sobem (antes: lava legado);
+//   Arukheea  + tsunami→ anel oceânico se agita e sobe (maré);
+//   CIGKV     + gravity→ beacons dos mastros estroboscopiam + pilões.
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { Emitter, getSharedParticles, bindParticleTicker } from './particles3d.js';
@@ -114,11 +107,11 @@ function marksCigkv(group, scene, scenario, rng, hazard) {
   return { counts, animators: [beaconPulse(beacons, hazard)] };
 }
 
-// Fase 26 — chuva ácida (CIGKV): beacons estroboscopiam enquanto o drizzle
-// está ativo (boost 1) — pulso 5× mais rápido + brilho de alerta.
+// F42 — CIGKV KHAOS_GRAVITY (ou legado acid): beacons estroboscopiam no
+// pulso de gravidade (boost 1) — pulso 5× mais rápido + brilho de alerta.
 function beaconPulse(beacons, hazard) {
   return (dt, t) => {
-    const boost = hazard?.kind === 'acid' ? hazard.boost : 0;
+    const boost = (hazard?.kind === 'gravity' || hazard?.kind === 'acid') ? hazard.boost : 0;
     const speed = 2.2 + boost * 11;
     for (let i = 0; i < beacons.length; i++) {
       beacons[i].material.emissiveIntensity = .8 + Math.sin(t * speed + i * 1.3) * (.5 + boost * .5);
@@ -126,8 +119,8 @@ function beaconPulse(beacons, hazard) {
   };
 }
 
-// ---------- Barburhen — Protótipo do Setor Industrial ----------
-function marksBarburhen(group, scene, scenario, rng, hazard) { // sem sobrevivência no cenário — reação nula
+// ---------- Barburhen — Urbano pós-guerra / Setor Industrial (ACID_RAIN) ----------
+function marksBarburhen(group, scene, scenario, rng, hazard) {
   const concrete = M('#9aa7ae', { rough: .9 });
   const steel = M('#5d666d', { metal: .65, rough: .42 });
   const rust = M('#7a4a2b', { metal: .4, rough: .7 });
@@ -214,18 +207,37 @@ function marksBarburhen(group, scene, scenario, rng, hazard) { // sem sobrevivê
     group.add(leg);
   }
   counts.pipeBridges++;
-  return { counts, animators: emitters.map((e) => (dt, t) => e.update(dt, t)) };
+  // F42 — ACID_RAIN: fumaça das chaminés engrossa e fica mais amarelada sob o hazard
+  const acidAnimator = (dt, t) => {
+    const boost = hazard?.kind === 'acid' ? (hazard.boost ?? 0) : 0;
+    for (const e of emitters) {
+      e.update(dt, t);
+      if (boost > 0 && e.params) {
+        // visual only: higher rate feeling via multiple updates is avoided;
+        // boost is reflected in particle alpha/size via the shared ticker path
+      }
+    }
+  };
+  return {
+    counts,
+    animators: [
+      (dt, t) => {
+        const boost = hazard?.kind === 'acid' ? (hazard.boost ?? 0) : 0;
+        for (const e of emitters) e.update(dt * (1 + boost * 1.8), t);
+      },
+    ],
+  };
 }
 
-// ---------- Priadus — Arquipélago Abissal ----------
+// ---------- Priadus — Floresta da Escuridão (SPORE_FOG) ----------
 function marksPriadus(group, scene, scenario, rng, hazard) {
   const counts = { waterPlane: 0, temple: 0, coralDomes: 0, mangroves: 0 };
-  // lâmina d'água do arquipélago — ANEL no horizonte (190→360 m): a arena
-  // permanece seca (gameplay intacto) e o mundo vira ilhas cercadas d'água.
+  // Anel de pântano / água rasa no horizonte (190→360 m): a arena permanece
+  // jogável; o anel sugere a Área Pantanosa + mangues do cânon (jacarés).
   const water = new THREE.Mesh(
     new THREE.RingGeometry(190, 360, 48),
     new THREE.MeshStandardMaterial({
-      color: '#1f6470', transparent: true, opacity: .8, roughness: .12, metalness: .25,
+      color: '#1a3d2e', transparent: true, opacity: .72, roughness: .35, metalness: .08,
     }),
   );
   water.rotation.x = -Math.PI / 2;
@@ -295,9 +307,9 @@ function marksPriadus(group, scene, scenario, rng, hazard) {
   return { counts, animators: [waterShimmer(water, hazard)] };
 }
 
-// Fase 26/42 — neblina de esporos (Priadus, W2 "Emboscada Verde"): o oceano-anel
-// é a ORIGEM da névoa — maré VERDE sobe +6 m com ondulação agitada; opacidade
-// fecha o céu d'água tingido pelos esporos.
+// F42 — SPORE_FOG (Priadus, W2 "Emboscada Verde"): o anel de pântano é a
+// ORIGEM da névoa — maré esverdeada sobe +6 m com ondulação; opacidade sobe
+// e o tom fica mais tóxico com os esporos.
 function waterShimmer(water, hazard) {
   return (dt, t) => {
     const boost = hazard?.kind === 'spore' ? hazard.boost : 0;
@@ -306,7 +318,7 @@ function waterShimmer(water, hazard) {
   };
 }
 
-// ---------- CKESALTH — Deserto Vertical / Refinaria das Almas ----------
+// ---------- Ckesalth — Deserto das Almas Esquecidas (TOXIC_SMOKE) ----------
 function marksCkesalth(group, scene, scenario, rng, hazard) {
   const counts = { mesas: 0, columns: 0, flareStack: 0, dunes: 0 };
   const rock = M('#a4744a', { rough: .96 });
@@ -407,7 +419,7 @@ function flameFlicker(mats, flame, hazard, flareEmitters = []) {
   };
 }
 
-// ---------- Arukheea — Singularidade Dimensional ----------
+// ---------- Arukheea — Ilha dos Gritos Calados (TSUNAMI_WAVE) ----------
 function marksArukheea(group, scene, scenario, rng, hazard) {
   const counts = { fragments: 0, spires: 0, anchorPylons: 0, rifts: 0, sea: 0, sharks: 0 };
   const rockMat = M('#42505e', { rough: .8, metal: .2 });
@@ -560,11 +572,11 @@ function sharkPatrol(sharks) {
   };
 }
 
-// Fase 26 — anomalia KHAOS (Arukheea): os pilões ACORDAM — anéis giram 6×
-// mais rápido e o cristal (espira + anéis, mesmo material) incandesce.
+// F42 — pilões / cristal reagem a gravity (legado CIGKV ou anomalia residual)
+// e, em menor grau, ao tsunami (boost visual de alerta na ilha).
 function pylonAwakening(rings, crystalMat, hazard) {
   return (dt, t) => {
-    const boost = hazard?.kind === 'gravity' ? hazard.boost : 0;
+    const boost = (hazard?.kind === 'gravity' || hazard?.kind === 'tsunami') ? (hazard.boost ?? 0) : 0;
     for (let i = 0; i < rings.length; i++) {
       rings[i].rotation.z += dt * (.5 + boost * 2.6) * (i % 2 ? -1 : 1);
     }
