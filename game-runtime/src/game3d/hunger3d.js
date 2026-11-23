@@ -162,3 +162,40 @@ export function hungerSnapshot(actor) {
     staminaRegenMul: effects.staminaRegenMul,
   };
 }
+
+// =============================================================================
+// Caça / carne de animais + Safe Pack (ração humana)
+// =============================================================================
+
+/** Rendimento de comida ao abater espécie (unidades de inventory.food). */
+export const ANIMAL_MEAT = Object.freeze({
+  rat: Object.freeze({ food: 1, hp: 18, label: 'Carne de rato' }),
+  crab: Object.freeze({ food: 1, hp: 22, label: 'Carne de caranguejo' }),
+  scorpion: Object.freeze({ food: 1, hp: 16, label: 'Carne de escorpião' }),
+  croc: Object.freeze({ food: 3, hp: 90, label: 'Carne de jacaré' }),
+  // tubarão: opcional / alto risco — fora da arena jogável; não spawnado como caça
+  locust: Object.freeze({ food: 1, hp: 8, label: 'Insetos' }),
+});
+
+/** Conteúdo garantido do Safe Pack (supply drop / airdrop). */
+export const SAFE_PACK = Object.freeze({
+  food: 2,   // rações humanas
+  water: 2,  // cantis
+  medkit: 1,
+  label: 'Safe Pack',
+});
+
+/**
+ * Lista de nós de caça a partir do plano de fauna (contagens por espécie).
+ * Positions are approximate anchors — sim places them with rng.
+ */
+export function huntSpeciesForScenario(scenarioId) {
+  const table = {
+    CIGKV: ['rat', 'locust'],
+    Barburhen: ['rat'],
+    Priadus: ['croc'],
+    Ckesalth: ['scorpion', 'locust'],
+    Arukheea: ['crab'],
+  };
+  return table[scenarioId] ?? ['rat'];
+}

@@ -4,3 +4,4 @@
 
 /* Hunger / Fome vitality bar */
 .vitality-row.hunger .bar i{background:linear-gradient(90deg,#c8a035,#f0c14b)}.vitality-row.hunger.low .bar i{background:linear-gradient(90deg,#ff6b2c,#ff3d52)}.vitality-row.hunger.critical .bar i{background:var(--red);animation:hunger-pulse 0.8s ease-in-out infinite alternate}@keyframes hunger-pulse{from{opacity:.55}to{opacity:1}}
+.vitality-row.thirst .bar i{background:linear-gradient(90deg,#2a7ab5,#42d9de)}.vitality-row.thirst.low .bar i{background:linear-gradient(90deg,#2a7ab5,#ff6b2c)}.vitality-row.thirst.critical .bar i{background:var(--cyan);animation:hunger-pulse 0.8s ease-in-out infinite alternate}

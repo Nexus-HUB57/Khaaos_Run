@@ -27,7 +27,8 @@ import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS,
 import { ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, doorWindowOpen, wagonOfIndex, wagonSeatOfIndex, wagonStopMs, wagonJumpWindowOpen, trainRoute, safeJumpPose, platformSlotPose, seedHashOf, ZU_ACCIDENTS } from '../shared/zuTrain.js'; // Task 53/68 — protocolo oficial de entrada ZU (vagões + salto controlado + escudo)
 import { scheduleFor, phaseStateAt, centerDrift } from './safeZone.js'; // Fase 61 — zona segura no cânon de cada mundo
 import { attachmentsForDrop } from '../shared/weapons.js';
-import { tickHunger, eatFood, pickupFood, hungerEffects, HUNGER } from './hunger3d.js';
+import { tickHunger, eatFood, pickupFood, hungerEffects, HUNGER, ANIMAL_MEAT, SAFE_PACK, huntSpeciesForScenario } from './hunger3d.js';
+import { tickThirst, drinkWater, pickupWater, thirstEffects, THIRST } from './thirst3d.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -147,7 +148,8 @@ export const EXTRACT_XP = 250;
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
   crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
-  eat: false, // sistema de fome — consumir ration
+  eat: false,   // fome — consumir ração / carne
+  drink: false, // sede — beber cantil / água de Safe Pack
 });
 
 // Fase 5 — Espectador: após a eliminação do jogador, a partida CONTINUA (bots
@@ -401,7 +403,9 @@ export function stepActorMovement(a, input, dt, world) {
   if ((a.landGraceT ?? 0) > 0) a.landGraceT = Math.max(0, a.landGraceT - dt);
   const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   const sprintIntent = !!(input.sprint && !input.ads && hasMove);
-  const stamRegenMul = Number.isFinite(a.hunger) ? (hungerEffects(a.hunger).staminaRegenMul) : 1;
+  const stamH = Number.isFinite(a.hunger) ? hungerEffects(a.hunger).staminaRegenMul : 1;
+  const stamT = Number.isFinite(a.thirst) ? thirstEffects(a.thirst).staminaRegenMul : 1;
+  const stamRegenMul = Math.min(stamH, stamT);
   a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20 * stamRegenMul) * dt, 0, 100);
   // Fase 7 — caído não corre, não desliza e não salta: só rasteja
   a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1 && !a.knocked;  a.ads = !!input.ads;
@@ -416,9 +420,11 @@ export function stepActorMovement(a, input, dt, world) {
   }
   a.crouching = !!input.crouch || !!a.sliding;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-  // Fome: multiplica velocidade (warn=1, weak/starve < 1)
-  const hungerMul = Number.isFinite(a.hunger) ? (hungerEffects(a.hunger).speedMul) : 1;
-  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1) * hungerMul;
+  // Fome + sede: multiplica velocidade (usa o pior dos dois)
+  const hungerMul = Number.isFinite(a.hunger) ? hungerEffects(a.hunger).speedMul : 1;
+  const thirstMul = Number.isFinite(a.thirst) ? thirstEffects(a.thirst).speedMul : 1;
+  const needMul = Math.min(hungerMul, thirstMul);
+  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1) * needMul;
   if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   if (a.knocked) sp *= DBNO.crawlSpeedMult; // rastejar (DBNO)
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
@@ -663,7 +669,9 @@ export class KhaaosSim3D {
     this.loot = this.#spawnLoot();
     this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true, channelerId: null, channelProgress: 0 }));
-    // Fase 28 — airdrop de suprimento: agendado por seed a ~38% da partida
+    // Caça — nós de animais abatíveis (carne → inventory.food)
+    this.gameAnimals = this.#spawnGameAnimals();
+    // Fase 28 — airdrop de suprimento / Safe Pack: agendado por seed a ~38% da partida
     this.supplyDropState = { scheduledTick: null, done: false };
     this.supplyDropItem = null; // item de loot da caixa após o pouso
     // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls + portas).
@@ -708,11 +716,12 @@ export class KhaaosSim3D {
       // Fase 32 — raridade por anexo (gasto→dourado) viaja em paralelo
       weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
-      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, food: 2, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, food: 2, water: 2, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, zexChannel: null, interactLatch: false, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null,
-      // Vitalidade — fome (parity UKhaaosVitalityComponent)
-      hunger: HUNGER.MAX, hungerTier: 'ok', eatCd: 0 };
+      // Vitalidade — fome + sede (parity UKhaaosVitalityComponent)
+      hunger: HUNGER.MAX, hungerTier: 'ok', eatCd: 0,
+      thirst: THIRST.MAX, thirstTier: 'ok', drinkCd: 0 };
   }
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
@@ -839,6 +848,68 @@ export class KhaaosSim3D {
     let n = 0;
     for (const it of items) if (String(it.id).startsWith('loot-i')) n++;
     return n;
+  }
+
+  /**
+   * Animais de caça (nós abatíveis). Posições nos lootSpots / botSpawns
+   * determinísticas; HP e rendimento em ANIMAL_MEAT.
+   */
+  #spawnGameAnimals() {
+    const speciesList = huntSpeciesForScenario(this.scenario.id);
+    const spots = this.world.botSpawns?.length
+      ? this.world.botSpawns
+      : (this.world.lootSpots ?? []).map((s) => ({ x: s.x, z: s.z }));
+    const animals = [];
+    let n = 0;
+    for (const species of speciesList) {
+      const def = ANIMAL_MEAT[species];
+      if (!def) continue;
+      const count = species === 'croc' ? 3 : species === 'rat' ? 6 : 4;
+      for (let i = 0; i < count; i++) {
+        const spot = spots[(n * 5 + i * 3) % Math.max(1, spots.length)] ?? { x: 0, z: 0 };
+        const jx = (this.rng.next() - 0.5) * 14;
+        const jz = (this.rng.next() - 0.5) * 14;
+        animals.push({
+          id: `game-${species}-${n}`,
+          species,
+          x: spot.x + jx,
+          y: 0,
+          z: spot.z + jz,
+          life: def.hp,
+          maxLife: def.hp,
+          alive: true,
+          r: species === 'croc' ? 0.9 : 0.35,
+        });
+        n++;
+      }
+    }
+    return animals;
+  }
+
+  #damageGameAnimal(animal, dmg, ownerId) {
+    if (!animal?.alive) return;
+    animal.life -= dmg;
+    this.emit('animalHit', { id: animal.id, species: animal.species, life: Math.max(0, animal.life), owner: ownerId });
+    if (animal.life > 0) return;
+    animal.alive = false;
+    const def = ANIMAL_MEAT[animal.species] ?? { food: 1, label: 'Carne' };
+    // drop de carne no chão (mesmo pipeline de loot)
+    this.loot.push({
+      id: `meat-${animal.id}`,
+      kind: 'consumable',
+      id_consumable: 'food',
+      consumableId: 'food',
+      amount: def.food,
+      name: def.label,
+      x: animal.x,
+      y: 0.4,
+      z: animal.z,
+      active: true,
+    });
+    this.emit('animalKill', {
+      id: animal.id, species: animal.species, food: def.food, label: def.label,
+      x: animal.x, z: animal.z, owner: ownerId,
+    });
   }
 
   // ---------- protocolo ----------
@@ -1143,22 +1214,29 @@ export class KhaaosSim3D {
     if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
-    // Vitalidade — fome: drena com o tempo / esforço; em limiares causa dano
+    // Vitalidade — fome + sede: drenam com esforço; limiares causam dano
     if (isPlayer && a.alive && !this.#combatLocked()) {
       if ((a.eatCd ?? 0) > 0) a.eatCd = Math.max(0, a.eatCd - dt);
+      if ((a.drinkCd ?? 0) > 0) a.drinkCd = Math.max(0, a.drinkCd - dt);
       const ringR = this.ring?.radius ?? 170;
       const ringPressure = Math.max(0, Math.min(1, 1 - ringR / 170));
+      const arid = this.scenario?.id === 'Ckesalth';
       const hr = tickHunger(a, dt, {
         sprinting: a.sprinting, sliding: a.sliding, ringPressure, alive: a.alive,
       });
-      if (hr.vitalityDamage > 0) {
-        this.#hurtPlayer(hr.vitalityDamage, null, 'hunger');
-      }
-      // aviso de transição de tier (evita spam: só no edge)
+      const tr = tickThirst(a, dt, {
+        sprinting: a.sprinting, sliding: a.sliding, ringPressure, arid, alive: a.alive,
+      });
+      const vDmg = (hr.vitalityDamage || 0) + (tr.vitalityDamage || 0);
+      if (vDmg > 0) this.#hurtPlayer(vDmg, null, hr.vitalityDamage >= tr.vitalityDamage ? 'hunger' : 'thirst');
       if (hr.tier !== (a._lastHungerTier ?? 'ok') && hr.effects.label) {
         this.emit('hunger', { tier: hr.tier, label: hr.effects.label, hunger: a.hunger });
       }
       a._lastHungerTier = hr.tier;
+      if (tr.tier !== (a._lastThirstTier ?? 'ok') && tr.effects.label) {
+        this.emit('thirst', { tier: tr.tier, label: tr.effects.label, thirst: a.thirst });
+      }
+      a._lastThirstTier = tr.tier;
     }
     // Caído: rasteja e pode usar um medkit em si mesmo; não combate/coleta.
     if (a.knocked) {
@@ -1179,6 +1257,7 @@ export class KhaaosSim3D {
         if (input.reload) this.#tryReload(a);
         if (input.medkit) this.#useMedkit(a);
         if (input.eat) this.#useFood(a);
+        if (input.drink) this.#useWater(a);
         if (input.interact) this.#interact(a); else a.interactLatch = false; // Fase 25 — soltou E: rearma
         if (input.throw) this.#throwFrag(a);
         if (input.gloo) this.#deployGloo(a);
@@ -1776,6 +1855,27 @@ export class KhaaosSim3D {
         const h = rayCharacter(ox, oy, oz, dx, dy, dz, bot, len);
         if (h && h.t < charT) { charT = h.t; charHit = { ref: bot, head: h.head, isPlayer: false }; }
       }
+      // Caça — interseção esférica simples com animais abatíveis
+      let animalHit = null, animalT = Infinity;
+      for (const ga of this.gameAnimals ?? []) {
+        if (!ga.alive) continue;
+        const hx = ga.x - ox, hy = (ga.y + 0.3) - oy, hz = ga.z - oz;
+        const proj = hx * dx + hy * dy + hz * dz;
+        if (proj < 0 || proj > len) continue;
+        const cx = ox + dx * proj, cy = oy + dy * proj, cz = oz + dz * proj;
+        const dist = Math.hypot(ga.x - cx, (ga.y + 0.3) - cy, ga.z - cz);
+        if (dist <= (ga.r ?? 0.4) && proj < animalT) {
+          animalT = proj;
+          animalHit = ga;
+        }
+      }
+      if (animalHit && animalT < hitT && animalT < charT) {
+        b.life = 0;
+        const dmg = (b.baseDamage ?? b.damage) * (b.distance > 40 ? 0.75 : 1);
+        this.#damageGameAnimal(animalHit, dmg, b.owner);
+        this.emit('impact', { x: animalHit.x, y: 0.4, z: animalHit.z, kind: 'animal' });
+        continue;
+      }
       if (charHit && charT < hitT) {
         b.life = 0;
         const profile = WEAPONS3D[b.weapon]?.ballistic;
@@ -2128,11 +2228,17 @@ export class KhaaosSim3D {
     } else target.life = Math.min(100, target.life + 30);
     this.emit('medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
-  /** Consome 1 ration do inventário (input.eat). */
+  /** Consome 1 ration / carne do inventário (input.eat). */
   #useFood(a) {
     const result = eatFood(a);
     if (!result.ok) return;
     this.emit('eat', { hunger: result.hunger, restored: result.restored, food: a.inventory.food ?? 0 });
+  }
+  /** Consome 1 cantil / água de Safe Pack (input.drink). */
+  #useWater(a) {
+    const result = drinkWater(a);
+    if (!result.ok) return;
+    this.emit('drink', { thirst: result.thirst, restored: result.restored, water: a.inventory.water ?? 0 });
   }
   // ---------- Fase 32 — economia de sobrevivência dos bots ----------
   // Coleta por proximidade, cura fora de combate e utilitários no engajamento.
@@ -2325,10 +2431,13 @@ export class KhaaosSim3D {
       a.inventory.ammo[ammoId] = Math.min(cap, (a.inventory.ammo[ammoId] || 0) + item.amount);
       this.emit('loot', { item: `${item.amount}× ${ammoId}`, kind: 'ammo' });
     } else if (item.kind === 'consumable') {
-      const id = item.id || item.consumableId || 'medkit';
-      if (id === 'food' || id === 'ration') {
+      const id = item.consumableId || item.id_consumable || item.id || 'medkit';
+      if (id === 'food' || id === 'ration' || id === 'meat') {
         const added = pickupFood(a, item.amount ?? 1);
-        if (added > 0) this.emit('loot', { item: 'Ração', kind: 'consumable', food: a.inventory.food });
+        if (added > 0) this.emit('loot', { item: item.name || 'Ração', kind: 'consumable', food: a.inventory.food });
+      } else if (id === 'water' || id === 'canteen') {
+        const added = pickupWater(a, item.amount ?? 1);
+        if (added > 0) this.emit('loot', { item: 'Água', kind: 'consumable', water: a.inventory.water });
       } else {
         a.inventory.medkit = Math.min(5, (a.inventory.medkit || 0) + 1);
         this.emit('loot', { item: 'Kit Médico', kind: 'consumable' });
@@ -2355,13 +2464,18 @@ export class KhaaosSim3D {
       this.#grantBundle(a, item.bundle ?? []);
       this.emit('loot', { item: `Espólios de ${item.victimName ?? 'operativo'}`, kind: 'deathBox' });
     } else if (item.kind === 'supplyDrop') {
-      // Fase 28 — caixa de airdrop: AR-47 LENDÁRIO + consumíveis (pool exclusivo)
+      // Safe Pack (ração humana + água + medkit) + airdrop lendário
+      const safePack = [
+        { kind: 'consumable', id: 'food', amount: SAFE_PACK.food },
+        { kind: 'consumable', id: 'water', amount: SAFE_PACK.water },
+        { kind: 'consumable', id: 'medkit', amount: SAFE_PACK.medkit },
+      ];
+      this.#grantBundle(a, safePack);
       const drops = rollLoot(this.rng, 'supplyDrop', 3);
       // Fase 30 — assinatura do airdrop: a AR-47 vermelha desce COMPLETA
-      // (4 sockets equipados — vitrine dos anexos)
       for (const d of drops) if (d.kind === 'weapon' && d.id === 'ar47') d.attachments = ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
       this.#grantBundle(a, drops);
-      this.emit('loot', { item: 'Suprimentos do Airdrop', kind: 'supplyDrop' });
+      this.emit('loot', { item: `${SAFE_PACK.label} + Airdrop`, kind: 'supplyDrop', food: SAFE_PACK.food, water: SAFE_PACK.water });
     } else if (item.kind === 'resource') {
       const resId = item.resourceId || item.id;
       a.inventory[resId] = (a.inventory[resId] || 0) + (item.amount || 1);
