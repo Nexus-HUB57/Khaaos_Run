@@ -36,6 +36,7 @@ import {
   grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
   bushShadowEntries,                                   // F38 — sombra de contato dos arbustos
   scrubShadowBand, patchInstanceAlpha,                 // F39 — banda de distância da sombra do scrub
+  buildCarnivorousFlora,                               // Flora carnívora (Priadus)
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
@@ -1059,9 +1060,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   });
   // Task 65 — fauna canônica por mundo: ratos/gaivotas/gafanhotos/mosquitos
   // (dedo-duro do README), jacarés (Priadus), tubarões + esqueletos de baleia
-  // (Arukheea). ZERO colliders — fauna é ambiente; animators em
-  // scene.userData.fauna (main3d tick 1×/frame + setAgitation pela zona).
+  // (Arukheea), moscas (Barburhen), escorpiões (Ckesalth), caranguejos (Arukheea).
+  // ZERO colliders — fauna é ambiente; animators em scene.userData.fauna
+  // (main3d tick 1×/frame + setAgitation pela zona).
   buildFauna(scene, layout, scenario, q);
+  // Flora carnívora (Priadus — README "flora carnívora"): pitcher + snap-trap
+  // na Área Pantanosa / Bosque. Animators em scene.userData.carniflora.
+  buildCarnivorousFlora(scene, layout, scenario, q);
   // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte

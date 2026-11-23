@@ -1,17 +1,16 @@
 // ============================================================================
-// Khaaos Run — W3/C3 Ckesalth Level Script Actor (Fase 4)
+// Khaaos Run — W3/C3 Ckesalth Level Script Actor (Fase 4 / F42 canon)
 // ============================================================================
-// Ckesalth — Mundo vertical montanhoso
-// Level script for the mountain world (W3/C3 Ckesalth Ring)
+// Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)
+// Level script for the arid-desert competitive map (W3/C3 Ckesalth Ring)
 //
-// Handles:
-//   - Zone shrinking phases (1.5h Ring, 4 phases: Base→Mid→Peak→Summit)
-//   - 60 players
-//   - 25 ZEX (altitude-based)
-//   - 3 Zu variants (cinto/saltar/escalando — climbing entry)
-//   - Vertical combat (climbing, ziplines, elevation advantage)
-//   - 6km x 6km map with 2000m vertical extent
-//   - Entry requires minimum 5 W2 Priadus matches completed
+// Handles (cânon README + shared/worlds.ts):
+//   - Zone shrinking phases (target ~7 days / 12h cycles)
+//   - ~100 players (densidade 250 m²/jogador; bounding ~250×100 m)
+//   - ZEX nodes + Zu ingress variants
+//   - Hazard: TOXIC_SMOKE (fumaça tóxica, smokeTopY)
+//   - Bioma: deserto árido, lagoas de petróleo em chamas, areia movediça
+//   - Entry requires minimum completions of W2 Priadus
 // ============================================================================
 
 #pragma once

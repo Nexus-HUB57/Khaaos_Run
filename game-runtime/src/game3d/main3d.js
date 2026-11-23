@@ -2535,6 +2535,9 @@ export class Game3D {
     // animators do dressing/worldmarks)
     const faunaAnim = this.scene.userData.fauna?.animators;
     if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
+    // Flora carnívora (Priadus): tampa do pitcher e mandíbulas do snap-trap
+    const carniAnim = this.scene.userData.carniflora?.animators;
+    if (carniAnim) for (const fn of carniAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

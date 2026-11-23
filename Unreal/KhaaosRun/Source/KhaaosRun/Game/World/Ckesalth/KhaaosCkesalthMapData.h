@@ -75,9 +75,10 @@ class KHAAOSRUN_API UKhaaosCkesalthMapData : public UPrimaryDataAsset
     GENERATED_BODY()
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") FString MapName = TEXT("W3/C3 Ckesalth");
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") FString MapDescription = TEXT("Mundo vertical montanhoso — Climbing, ziplines, elevation advantage");
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") FVector MapSize = FVector(6000.0f, 6000.0f, 2000.0f);
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") int32 TargetPlayerCount = 60;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") FString MapDescription = TEXT("Deserto das Almas Esquecidas — Petróleo em chamas, fumaça tóxica e areia movediça (cânon F42+)");
+    // UE units = cm. Cânon: ~250 m × 100 m (25.000 m² área alvo).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") FVector MapSize = FVector(25000.0f, 10000.0f, 1500.0f);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Meta") int32 TargetPlayerCount = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Sectors") TArray<FCkesalthSector> Sectors;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ckesalth|Spawns") TArray<FCkesalthSpawnPoint> PlayerSpawnPoints;
