@@ -508,6 +508,7 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       });
     } else if (item.kind === 'croc') {
       const body = buildCroc();
+      body.userData.species = 'croc';
       body.position.set(item.x, groundY(item.x, item.z) + .05, item.z);
       group.add(body);
       const brain = createBrain('croc', {
@@ -572,6 +573,7 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       });
     } else if (item.kind === 'scorpion') {
       const body = buildScorpion(rng);
+      body.userData.species = 'scorpion';
       body.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(body);
       const brain = createBrain('scorpion', {
@@ -588,6 +590,7 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       });
     } else if (item.kind === 'crab') {
       const body = buildCrab(rng);
+      body.userData.species = 'crab';
       body.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(body);
       const brain = createBrain('crab', {
@@ -606,6 +609,7 @@ export function buildFauna(scene, layout, scenario, q = {}) {
   }
 
   scene.add(group);
+  const meshById = new Map();
   const handle = {
     group,
     animators,
@@ -613,15 +617,54 @@ export function buildFauna(scene, layout, scenario, q = {}) {
     counts: plan.counts,
     species: plan.species,
     placements: plan.items,
-    /** Pressão do anel (0..1) — acelera e deixa a fauna mais reativa. */
+    meshById,
     setAgitation(v) { ctx.agitation = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)); },
-    /** Posição do jogador p/ flee / hunt / investigate. */
-    setContext({ playerX = null, playerZ = null, agitation } = {}) {
+    setContext({ playerX = null, playerZ = null, agitation, camX, camZ, attractors, microBoids } = {}) {
       if (playerX != null) ctx.playerX = playerX;
       if (playerZ != null) ctx.playerZ = playerZ;
       if (agitation != null) ctx.agitation = Math.max(0, Math.min(1, agitation));
+      if (camX != null) ctx.camX = camX;
+      if (camZ != null) ctx.camZ = camZ;
+      if (attractors) ctx.attractors = attractors;
+      if (microBoids != null) ctx.microBoids = !!microBoids;
     },
     getContext: () => ({ ...ctx }),
+    /** P0: amarra meshes aos gameAnimals da sim. */
+    bindGameAnimals(gameAnimals = []) {
+      meshById.clear();
+      const bySpecies = new Map();
+      for (const child of group.children) {
+        const sp = child.userData?.species;
+        if (!sp) continue;
+        if (!bySpecies.has(sp)) bySpecies.set(sp, []);
+        bySpecies.get(sp).push(child);
+      }
+      for (const ga of gameAnimals) {
+        const list = bySpecies.get(ga.species) || [];
+        const mesh = list.shift();
+        if (mesh) {
+          mesh.userData.gameId = ga.id;
+          meshById.set(ga.id, mesh);
+        }
+      }
+    },
+    /** Sync pose/visibilidade da sim (após sim.step). */
+    syncFromSim(gameAnimals = []) {
+      for (const ga of gameAnimals) {
+        const mesh = meshById.get(ga.id);
+        if (!mesh) continue;
+        if (!ga.alive) { mesh.visible = false; continue; }
+        mesh.visible = true;
+        mesh.position.x = ga.x;
+        mesh.position.z = ga.z;
+        mesh.position.y = groundY(ga.x, ga.z) + (ga.yOffset || 0);
+        if (ga.yaw != null) mesh.rotation.y = ga.yaw;
+        if (ga.species === 'locust' && mesh.userData.members) {
+          const keep = ga.swarmMembers ?? mesh.userData.members.length;
+          mesh.userData.members.forEach((m, i) => { m.mesh.visible = i < keep; });
+        }
+      }
+    },
   };
   scene.userData.fauna = handle;
   return handle;

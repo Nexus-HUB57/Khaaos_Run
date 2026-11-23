@@ -1700,11 +1700,22 @@ export class Game3D {
       const agitation = Math.max(0, Math.min(1, 1 - (r?.radius ?? 170) / 170));
       const px = this.sim?.player?.x ?? this.playerOp?.group?.position?.x;
       const pz = this.sim?.player?.z ?? this.playerOp?.group?.position?.z;
+      const cam = this.camera?.position;
       if (fauna.setContext) {
-        fauna.setContext({ playerX: px, playerZ: pz, agitation });
+        fauna.setContext({
+          playerX: px, playerZ: pz, agitation,
+          camX: cam?.x, camZ: cam?.z,
+          microBoids: true,
+        });
       } else {
         fauna.setAgitation?.(agitation);
       }
+      // P0: bind once + sync caça
+      if (!fauna._bound && this.sim?.gameAnimals?.length) {
+        fauna.bindGameAnimals?.(this.sim.gameAnimals);
+        fauna._bound = true;
+      }
+      fauna.syncFromSim?.(this.sim?.gameAnimals ?? []);
     }
   }
 
@@ -2148,6 +2159,8 @@ export class Game3D {
         case 'hunger': this.hud.feed('VITALIDADE', e.label || 'Fome', e.tier === 'starve' || e.tier === 'weak' ? 'bad' : 'warn'); break;
         case 'thirst': this.hud.feed('VITALIDADE', e.label || 'Sede', e.tier === 'dehydrate' || e.tier === 'weak' ? 'bad' : 'warn'); break;
         case 'animalKill': this.hud.feed('CAÇA', `${e.label || e.species} abatido · +${e.food} comida no chão.`, 'good'); break;
+        case 'predatorFear': this.hud.feed('AMEAÇA', e.species === 'croc' ? 'Jacaré à espreita!' : 'Predador próximo!', 'bad'); break;
+        case 'swarmShrink': break;
         case 'ability': {
           // Fase 8 — online: distingue o próprio disparo da habilidade de outro operativo
           const prefix = (!e.isSelf && e.by) ? `${e.by} · ` : '';

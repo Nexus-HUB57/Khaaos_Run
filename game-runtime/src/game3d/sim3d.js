@@ -29,6 +29,7 @@ import { scheduleFor, phaseStateAt, centerDrift } from './safeZone.js'; // Fase 
 import { attachmentsForDrop } from '../shared/weapons.js';
 import { tickHunger, eatFood, pickupFood, hungerEffects, HUNGER, ANIMAL_MEAT, SAFE_PACK, huntSpeciesForScenario } from './hunger3d.js';
 import { tickThirst, drinkWater, pickupWater, thirstEffects, THIRST } from './thirst3d.js';
+import { createBrain, propagateGroupFlee, SPECIES_AI } from './faunaAI3d.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -851,8 +852,8 @@ export class KhaaosSim3D {
   }
 
   /**
-   * Animais de caça (nós abatíveis). Posições nos lootSpots / botSpawns
-   * determinísticas; HP e rendimento em ANIMAL_MEAT.
+   * Animais de caça com brain de AI (P0: brains ↔ gameAnimals).
+   * Posições determinísticas; HP/carne em ANIMAL_MEAT; movimento via createBrain.
    */
   #spawnGameAnimals() {
     const speciesList = huntSpeciesForScenario(this.scenario.id);
@@ -863,22 +864,27 @@ export class KhaaosSim3D {
     let n = 0;
     for (const species of speciesList) {
       const def = ANIMAL_MEAT[species];
-      if (!def) continue;
-      const count = species === 'croc' ? 3 : species === 'rat' ? 6 : 4;
+      const profile = SPECIES_AI[species];
+      if (!def || !profile?.huntable) continue;
+      const count = species === 'croc' ? 3 : species === 'rat' ? 6 : species === 'locust' ? 3 : 4;
       for (let i = 0; i < count; i++) {
         const spot = spots[(n * 5 + i * 3) % Math.max(1, spots.length)] ?? { x: 0, z: 0 };
         const jx = (this.rng.next() - 0.5) * 14;
         const jz = (this.rng.next() - 0.5) * 14;
+        const x = spot.x + jx, z = spot.z + jz;
+        const id = `game-${species}-${n}`;
+        const brain = createBrain(species, {
+          id, x, z, homeX: x, homeZ: z,
+          homeR: species === 'croc' ? 22 : species === 'locust' ? 28 : 16,
+          seed: this.rng.next() * 10000,
+        });
         animals.push({
-          id: `game-${species}-${n}`,
-          species,
-          x: spot.x + jx,
-          y: 0,
-          z: spot.z + jz,
-          life: def.hp,
-          maxLife: def.hp,
-          alive: true,
-          r: species === 'croc' ? 0.9 : 0.35,
+          id, species, x, y: 0, z,
+          life: def.hp, maxLife: def.hp, alive: true,
+          r: species === 'croc' ? 0.9 : species === 'locust' ? 0.6 : 0.35,
+          brain,
+          // swarm visual: membros restantes (locust)
+          swarmMembers: species === 'locust' ? 8 : 1,
         });
         n++;
       }
@@ -886,18 +892,82 @@ export class KhaaosSim3D {
     return animals;
   }
 
+  #stepGameAnimals(dt) {
+    const animals = this.gameAnimals;
+    if (!animals?.length) return;
+    const p = this.player;
+    const ringR = this.ring?.radius ?? 170;
+    const agitation = Math.max(0, Math.min(1, 1 - ringR / 170));
+    const ctx = {
+      playerX: p?.alive ? p.x : null,
+      playerZ: p?.alive ? p.z : null,
+      agitation,
+      camX: p?.x, camZ: p?.z,
+      attractors: this.#faunaAttractors(),
+      microBoids: true,
+    };
+    const t = this.tick / (this.tickRate || 30);
+    const brains = [];
+    for (const ga of animals) {
+      if (!ga.alive || !ga.brain) continue;
+      ga.brain.alive = true;
+      ga.brain.step(dt, t, ctx);
+      ga.x = ga.brain.x;
+      ga.z = ga.brain.z;
+      ga.yaw = ga.brain.yaw;
+      ga.yOffset = ga.brain.yOffset || 0;
+      ga.state = ga.brain.state;
+      ga.alert = ga.brain.alert;
+      brains.push(ga.brain);
+      // predador: micro-dano + fear event
+      if (ga.brain.predatorContact && p?.alive && ga.brain.profile.predator) {
+        const dmg = (ga.brain.profile.predatorDamage ?? 0) * dt;
+        if (dmg > 0) this.#hurtPlayer(dmg, null, 'predator');
+        if ((ga._fearCd ?? 0) <= 0) {
+          this.emit('predatorFear', {
+            species: ga.species, fear: ga.brain.profile.predatorFear ?? 0.4,
+            x: ga.x, z: ga.z,
+          });
+          ga._fearCd = 1.2;
+        }
+      }
+      if ((ga._fearCd ?? 0) > 0) ga._fearCd -= dt;
+    }
+    propagateGroupFlee(brains, 16);
+  }
+
+  /** Attractors: poças/corpos (loot meat ativo, supply) puxam swarms. */
+  #faunaAttractors() {
+    const list = [];
+    for (const it of this.loot ?? []) {
+      if (!it.active) continue;
+      if (it.kind === 'consumable' && (it.consumableId === 'food' || it.id_consumable === 'food' || String(it.id).startsWith('meat-'))) {
+        list.push({ x: it.x, z: it.z, strength: 1.2, radius: 18 });
+      }
+    }
+    // cenário árido / poças — âncora no centro do ring como fraco atrator de "água"
+    if (this.scenario?.id === 'Barburhen' || this.scenario?.id === 'Priadus') {
+      list.push({ x: this.ring?.x ?? 0, z: this.ring?.z ?? 0, strength: 0.35, radius: 40 });
+    }
+    return list;
+  }
+
   #damageGameAnimal(animal, dmg, ownerId) {
     if (!animal?.alive) return;
     animal.life -= dmg;
     this.emit('animalHit', { id: animal.id, species: animal.species, life: Math.max(0, animal.life), owner: ownerId });
+    // locust swarm: cada hit reduz membros visuais
+    if (animal.species === 'locust' && animal.swarmMembers > 1) {
+      animal.swarmMembers = Math.max(0, animal.swarmMembers - 1);
+      this.emit('swarmShrink', { id: animal.id, members: animal.swarmMembers });
+    }
     if (animal.life > 0) return;
     animal.alive = false;
+    if (animal.brain) animal.brain.alive = false;
     const def = ANIMAL_MEAT[animal.species] ?? { food: 1, label: 'Carne' };
-    // drop de carne no chão (mesmo pipeline de loot)
     this.loot.push({
       id: `meat-${animal.id}`,
       kind: 'consumable',
-      id_consumable: 'food',
       consumableId: 'food',
       amount: def.food,
       name: def.label,
@@ -1163,6 +1233,8 @@ export class KhaaosSim3D {
       a.knockT -= dt;
       if (a.knockT <= 0) this.#finalizeDeath(a, null, 'bleedout');
     }
+    // --- caça AI (brains ↔ gameAnimals) ---
+    if (!this.#combatLocked()) this.#stepGameAnimals(dt);
     // --- projéteis e arremessáveis ---
     this.#stepBullets(dt);
     this.#stepThrowables(dt);
