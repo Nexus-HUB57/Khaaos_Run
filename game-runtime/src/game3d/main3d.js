@@ -2,7 +2,7 @@
 // Renderizador Three.js sobre a simulação determinística KhaaosSim3D.
 // Controles: WASD + mouse (pointer lock), RMB mira, Shift corre, Espaço salta,
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
-// F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
+// F gloo, N comer ração (fome), 1..2 slots. Espectador: ←/→ trocam operative. Touch: joystick + botões.
 import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, ZEX_CHANNEL_SECONDS, EXTRACT_XP, doorHpFor, windowPaneOnSegment } from './sim3d.js';
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
@@ -650,6 +650,7 @@ export class Game3D {
       if (k === 'e') this.input.interact = true;
       if (k === 'q' && !e.repeat) this.abilityPending = true; // Fase 8 — online também (autoritativa)
       if (k === 'h') this.input.medkit = true;
+      if (k === 'n') this.input.eat = true; // sistema de fome — consumir ração
       if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
@@ -1919,6 +1920,7 @@ export class Game3D {
       reload: !trainStunned && !onboard && (this.input.reload || !!touch.reload),
       interact: !trainStunned && !onboard && (this.input.interact || !!touch.interact),
       medkit: !trainStunned && !onboard && (this.input.medkit || !!touch.medkit),
+      eat: !trainStunned && !onboard && (this.input.eat || !!touch.eat),
       throw: !trainStunned && !onboard && (this.input.throw || !!touch.throw),
       gloo: !trainStunned && !onboard && (this.input.gloo || !!touch.gloo),
       ability: !trainStunned && !onboard && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
@@ -1926,6 +1928,7 @@ export class Game3D {
     };
     // consome one-shots
     this.input.reload = false; this.input.interact = false; this.input.medkit = false;
+    this.input.eat = false;
     this.input.throw = false; this.input.gloo = false;
     this.abilityPending = false;
     this.pendingSlot = 0;
@@ -2138,6 +2141,8 @@ export class Game3D {
         case 'reloaded': break;
         case 'weaponSwitch': break;
         case 'medkit': this.hud.feed('OFICINA', 'Kit médico aplicado. +30 VL.', 'good'); break;
+        case 'eat': this.hud.feed('VITALIDADE', `Ração consumida. Fome ${Math.round(e.hunger)} · ${e.food} restante(s).`, 'good'); break;
+        case 'hunger': this.hud.feed('VITALIDADE', e.label || 'Fome', e.tier === 'starve' || e.tier === 'weak' ? 'bad' : 'warn'); break;
         case 'ability': {
           // Fase 8 — online: distingue o próprio disparo da habilidade de outro operativo
           const prefix = (!e.isSelf && e.by) ? `${e.by} · ` : '';

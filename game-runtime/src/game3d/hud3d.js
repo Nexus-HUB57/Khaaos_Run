@@ -327,6 +327,23 @@ export class HUD {
     $('#armorValue').textContent = `${Math.round(armorTotal)}`;
     $('#armorValue').title = p.temporaryArmor > 0 ? `${Math.round(p.armor)} VD permanente + ${Math.round(p.temporaryArmor)} temporária` : '';
     $('#lifeBar').classList.toggle('low', p.life < 30);
+    // Fome (FM) — vitalidade
+    const hungerEl = $('#hungerBar');
+    if (hungerEl) {
+      const h = Number.isFinite(p.hunger) ? p.hunger : 100;
+      hungerEl.style.width = `${Math.max(0, Math.min(100, h))}%`;
+      const hv = $('#hungerValue');
+      if (hv) {
+        hv.textContent = `${Math.max(0, Math.round(h))}`;
+        const food = p.inventory?.food ?? 0;
+        hv.title = food > 0 ? `Rações: ${food} (tecla de comer)` : 'Sem rações';
+      }
+      const row = hungerEl.closest?.('.vitality-row') ?? hungerEl.parentElement?.parentElement;
+      if (row) {
+        row.classList.toggle('low', h < 45);
+        row.classList.toggle('critical', h < 25);
+      }
+    }
     // arma
     const w = WEAPONS3D[p.weapon];
     $('#weaponName').textContent = w?.name ?? '—';

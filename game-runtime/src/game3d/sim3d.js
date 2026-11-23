@@ -27,6 +27,7 @@ import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS,
 import { ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, doorWindowOpen, wagonOfIndex, wagonSeatOfIndex, wagonStopMs, wagonJumpWindowOpen, trainRoute, safeJumpPose, platformSlotPose, seedHashOf, ZU_ACCIDENTS } from '../shared/zuTrain.js'; // Task 53/68 — protocolo oficial de entrada ZU (vagões + salto controlado + escudo)
 import { scheduleFor, phaseStateAt, centerDrift } from './safeZone.js'; // Fase 61 — zona segura no cânon de cada mundo
 import { attachmentsForDrop } from '../shared/weapons.js';
+import { tickHunger, eatFood, pickupFood, hungerEffects, HUNGER } from './hunger3d.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -145,7 +146,9 @@ export const EXTRACT_XP = 250;
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,});
+  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
+  eat: false, // sistema de fome — consumir ration
+});
 
 // Fase 5 — Espectador: após a eliminação do jogador, a partida CONTINUA (bots
 // lutam entre si) e o cliente acompanha outro operativo. Com `spectate: false`
@@ -398,7 +401,8 @@ export function stepActorMovement(a, input, dt, world) {
   if ((a.landGraceT ?? 0) > 0) a.landGraceT = Math.max(0, a.landGraceT - dt);
   const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   const sprintIntent = !!(input.sprint && !input.ads && hasMove);
-  a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
+  const stamRegenMul = Number.isFinite(a.hunger) ? (hungerEffects(a.hunger).staminaRegenMul) : 1;
+  a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20 * stamRegenMul) * dt, 0, 100);
   // Fase 7 — caído não corre, não desliza e não salta: só rasteja
   a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1 && !a.knocked;  a.ads = !!input.ads;
   if (a.knocked) a.sliding = false;
@@ -412,7 +416,9 @@ export function stepActorMovement(a, input, dt, world) {
   }
   a.crouching = !!input.crouch || !!a.sliding;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
+  // Fome: multiplica velocidade (warn=1, weak/starve < 1)
+  const hungerMul = Number.isFinite(a.hunger) ? (hungerEffects(a.hunger).speedMul) : 1;
+  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1) * hungerMul;
   if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   if (a.knocked) sp *= DBNO.crawlSpeedMult; // rastejar (DBNO)
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
@@ -702,9 +708,11 @@ export class KhaaosSim3D {
       // Fase 32 — raridade por anexo (gasto→dourado) viaja em paralelo
       weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
-      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, food: 2, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, zexChannel: null, interactLatch: false, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
+      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null,
+      // Vitalidade — fome (parity UKhaaosVitalityComponent)
+      hunger: HUNGER.MAX, hungerTier: 'ok', eatCd: 0 };
   }
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
@@ -1135,6 +1143,23 @@ export class KhaaosSim3D {
     if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    // Vitalidade — fome: drena com o tempo / esforço; em limiares causa dano
+    if (isPlayer && a.alive && !this.#combatLocked()) {
+      if ((a.eatCd ?? 0) > 0) a.eatCd = Math.max(0, a.eatCd - dt);
+      const ringR = this.ring?.radius ?? 170;
+      const ringPressure = Math.max(0, Math.min(1, 1 - ringR / 170));
+      const hr = tickHunger(a, dt, {
+        sprinting: a.sprinting, sliding: a.sliding, ringPressure, alive: a.alive,
+      });
+      if (hr.vitalityDamage > 0) {
+        this.#hurtPlayer(hr.vitalityDamage, null, 'hunger');
+      }
+      // aviso de transição de tier (evita spam: só no edge)
+      if (hr.tier !== (a._lastHungerTier ?? 'ok') && hr.effects.label) {
+        this.emit('hunger', { tier: hr.tier, label: hr.effects.label, hunger: a.hunger });
+      }
+      a._lastHungerTier = hr.tier;
+    }
     // Caído: rasteja e pode usar um medkit em si mesmo; não combate/coleta.
     if (a.knocked) {
       if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
@@ -1153,6 +1178,7 @@ export class KhaaosSim3D {
       if (!airborne) {
         if (input.reload) this.#tryReload(a);
         if (input.medkit) this.#useMedkit(a);
+        if (input.eat) this.#useFood(a);
         if (input.interact) this.#interact(a); else a.interactLatch = false; // Fase 25 — soltou E: rearma
         if (input.throw) this.#throwFrag(a);
         if (input.gloo) this.#deployGloo(a);
@@ -2102,6 +2128,12 @@ export class KhaaosSim3D {
     } else target.life = Math.min(100, target.life + 30);
     this.emit('medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
+  /** Consome 1 ration do inventário (input.eat). */
+  #useFood(a) {
+    const result = eatFood(a);
+    if (!result.ok) return;
+    this.emit('eat', { hunger: result.hunger, restored: result.restored, food: a.inventory.food ?? 0 });
+  }
   // ---------- Fase 32 — economia de sobrevivência dos bots ----------
   // Coleta por proximidade, cura fora de combate e utilitários no engajamento.
   // MESMOS números e ordem nas duas trilhas (sim offline / MatchRoom3D) —
@@ -2293,8 +2325,14 @@ export class KhaaosSim3D {
       a.inventory.ammo[ammoId] = Math.min(cap, (a.inventory.ammo[ammoId] || 0) + item.amount);
       this.emit('loot', { item: `${item.amount}× ${ammoId}`, kind: 'ammo' });
     } else if (item.kind === 'consumable') {
-      a.inventory.medkit = Math.min(5, (a.inventory.medkit || 0) + 1);
-      this.emit('loot', { item: 'Kit Médico', kind: 'consumable' });
+      const id = item.id || item.consumableId || 'medkit';
+      if (id === 'food' || id === 'ration') {
+        const added = pickupFood(a, item.amount ?? 1);
+        if (added > 0) this.emit('loot', { item: 'Ração', kind: 'consumable', food: a.inventory.food });
+      } else {
+        a.inventory.medkit = Math.min(5, (a.inventory.medkit || 0) + 1);
+        this.emit('loot', { item: 'Kit Médico', kind: 'consumable' });
+      }
     } else if (item.kind === 'armor') {
       a.armor = Math.min(100, a.armor + (item.amount || 18));
       // Fase 28 — placa cerâmica também reflete na silhueta do colete
