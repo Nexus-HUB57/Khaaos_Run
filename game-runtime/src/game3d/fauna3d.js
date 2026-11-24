@@ -19,6 +19,8 @@
 //  - ANIMATORS em scene.userData.fauna.animators (main3d tick 1×/frame);
 //  - AGITAÇÃO "dedo-duro": setAgitation(0..1) — pressão do Ring (1 − raio/170)
 //    acelera patrulhas e enxames (visual; a punição canônica continua na sim).
+//  - IA de comportamento (faunaAI3d): estados idle/wander/flee/investigate/hunt
+//    + steering; reage ao jogador via setContext({ playerX, playerZ }).
 //
 // Espécies por mundo (ÂNCORAS nos distritos canônicos de layout3d):
 //   CIGKV     — ratos (quartel/armory+proving), gaivotas (banda), gafanhotos (Parque);
@@ -33,6 +35,7 @@
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { terrainHeightAt } from './terrain3d.js';
+import { createBrain, createFaunaContext } from './faunaAI3d.js';
 
 // distância ponto→AABB expandida (mesma matemática dos placements do dressing)
 function insideCollider(x, z, c, margin) {
@@ -411,41 +414,34 @@ export function buildFauna(scene, layout, scenario, q = {}) {
   const group = new THREE.Group();
   group.name = 'fauna';
   const animators = [];
-  // AGITAÇÃO "dedo-duro" DESTE build: main3d.updateRing alimenta com a pressão
-  // do Ring (1 − raio/170) — fauna acelera/enxames crescem conforme o anel
-  // fecha (visual; a punição canônica por inatividade segue na sim/servidor).
-  const agit = { value: 0 };
+  // Contexto compartilhado de IA: main3d alimenta player + agitation a cada frame.
+  const ctx = createFaunaContext();
+  const agit = ctx; // alias: setAgitation escreve ctx.agitation
   const groundY = (x, z) => terrainHeightAt(x, z, scenario.id);
+  const brains = [];
+
+  /** Aplica pose do brain no mesh (solo). */
+  const applyGroundBrain = (body, brain, t, tailWag = 9) => {
+    body.position.x = brain.x;
+    body.position.z = brain.z;
+    body.position.y = groundY(brain.x, brain.z) + (brain.yOffset || 0);
+    body.rotation.y = brain.yaw;
+    if (body.userData.tail) body.userData.tail.rotation.z = Math.sin(t * tailWag) * (0.25 + brain.alert * 0.2);
+  };
 
   for (const item of plan.items) {
     if (item.kind === 'rat') {
       const body = buildRat(rng);
       body.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(body);
-      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
-        tx: item.x, tz: item.z, run: false, wait: 1 + rng.next() * 2,
-        speed: 2 + rng.next() * 1.1 };
+      const brain = createBrain('rat', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        const sp = st.speed * (1 + 1.1 * agit.value);
-        if (!st.run) {
-          st.wait -= dt;
-          if (st.wait <= 0) { // nova toca determinística dentro do raio de casa
-            const a = Math.abs((Math.sin(t * 12.9898 + st.ax) * 43758.5453) % 1) * Math.PI * 2;
-            const r = Math.sqrt(Math.abs((Math.cos(t * 78.233 + st.az) * 12543.853) % 1)) * st.homeR;
-            st.tx = st.ax + Math.cos(a) * r; st.tz = st.az + Math.sin(a) * r;
-            st.run = true;
-          }
-          return;
-        }
-        const dx = st.tx - st.body.position.x, dz = st.tz - st.body.position.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist < .3) { st.run = false; st.wait = .9 + (Math.sin(t * 3.7 + st.az) * .5 + .5) * 1.8; return; }
-        st.body.position.x += (dx / dist) * sp * dt;
-        st.body.position.z += (dz / dist) * sp * dt;
-        st.body.rotation.y = Math.atan2(dx, dz);
-        // ancorado no relevo (terreno + bob da corrida)
-        st.body.position.y = groundY(st.body.position.x, st.body.position.z) + Math.abs(Math.sin(t * 14)) * .035;
-        if (st.body.userData.tail) st.body.userData.tail.rotation.z = Math.sin(t * 9) * .3;
+        brain.step(dt, t, ctx);
+        applyGroundBrain(body, brain, t, 11);
       });
     } else if (item.kind === 'seagull') {
       const band = new THREE.Group();
@@ -460,7 +456,7 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       group.add(band);
       let angle = rng.next() * Math.PI * 2;
       animators.push((dt, t) => {
-        angle += dt * (.14 + .18 * agit.value) * item.dir;
+        angle += dt * (.14 + .18 * ctx.agitation) * item.dir;
         for (const { bird, phase, r } of birds) {
           const a = angle + phase;
           bird.position.set(Math.cos(a) * r, Math.sin(t * 1.7 + phase) * 1.4, Math.sin(a) * r);
@@ -472,13 +468,15 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       const swarm = buildMosquitoSwarm(rng);
       swarm.position.set(item.x, 1.15, item.z);
       group.add(swarm);
-      const st = { x: item.x, z: item.z, seedA: rng.next() * 100, seedB: rng.next() * 100 };
+      const brain = createBrain('mosquito', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR ?? 12,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        // nuvem à deriva (lissajous) + indivíduos em órbita com ruído
-        st.x += Math.sin(t * .21 + st.seedA) * dt * .5;
-        st.z += Math.cos(t * .17 + st.seedB) * dt * .5;
-        swarm.position.set(st.x, 1.05 + Math.sin(t * .5 + st.seedA) * .25, st.z);
-        const spread = 1 + agit.value * .9;
+        brain.step(dt, t, ctx);
+        swarm.position.set(brain.x, 1.05 + Math.sin(t * .5 + brain.seed) * .25, brain.z);
+        const spread = 1 + ctx.agitation * .9 + brain.alert * .4;
         for (const m of swarm.userData.members) {
           const a = t * m.speed + m.phase;
           m.mesh.position.set(Math.cos(a) * m.radius * spread, Math.sin(a * 1.7 + m.yPhase) * .35, Math.sin(a) * m.radius * spread);
@@ -488,14 +486,17 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       const swarm = buildLocustSwarm(rng);
       swarm.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(swarm);
-      const st = { ax: item.x, az: item.z, seed: rng.next() * 100 };
+      const brain = createBrain('locust', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR ?? 30,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        // enxame rasteiro: âncora lissajous + indivíduos saltando em parábola
-        const gx = st.ax + Math.sin(t * .09 + st.seed) * st.homeR * .5;
-        const gz = st.az + Math.cos(t * .07 + st.seed) * st.homeR * .5;
+        brain.step(dt, t, ctx);
+        const gx = brain.x, gz = brain.z;
         swarm.position.set(gx, groundY(gx, gz), gz);
         for (const m of swarm.userData.members) {
-          m.hopPhase += dt * m.hopSpeed * (1 + .8 * agit.value);
+          m.hopPhase += dt * m.hopSpeed * (1 + .8 * ctx.agitation + brain.alert);
           if (m.hopPhase >= 1) { m.hopPhase = 0; m.dir += (Math.sin(t + m.offset) * .5 + .5) * 1.6; }
           const d = m.hopPhase * 2.2;
           m.mesh.position.set(
@@ -507,44 +508,43 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       });
     } else if (item.kind === 'croc') {
       const body = buildCroc();
+      body.userData.species = 'croc';
       body.position.set(item.x, groundY(item.x, item.z) + .05, item.z);
       group.add(body);
-      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
-        a: rng.next() * Math.PI * 2, dir: 1, submerged: 0, nextDive: 10 + rng.next() * 10 };
+      const brain = createBrain('croc', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000, dir: 1,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        const speed = .8 * (1 + .9 * agit.value) * st.dir;
-        const px = st.body.position.x + Math.cos(st.a) * speed * dt;
-        const pz = st.body.position.z + Math.sin(st.a) * speed * dt;
-        // patrulha circular dentro do pântano (inverte ao sair do raio de casa)
-        if (Math.hypot(px - st.ax, pz - st.az) > st.homeR) st.dir *= -1;
-        else { st.body.position.x = px; st.body.position.z = pz; }
-        st.body.rotation.y = Math.atan2(Math.cos(st.a) * st.dir, Math.sin(st.a) * st.dir);
-        st.body.userData.tailParts.forEach((seg, i) => { seg.rotation.y = Math.sin(t * 2.6 + i * .7) * .22; });
-        // mergulho canônico do jacaré (olhos ficam na linha d'água)
-        st.nextDive -= dt;
-        if (st.nextDive <= 0) { st.submerged = st.submerged > 0 ? 0 : 2.6; st.nextDive = (12 + (Math.sin(t * 5.1 + st.a) * .5 + .5) * 10) / (1 + agit.value * 1.6); }
-        if (st.submerged > 0) st.submerged -= dt;
-        const targetY = groundY(st.body.position.x, st.body.position.z) + (st.submerged > 0 ? -.22 : .05);
-        st.body.position.y += (targetY - st.body.position.y) * Math.min(1, dt * 2.2);
+        brain.step(dt, t, ctx);
+        body.position.x = brain.x;
+        body.position.z = brain.z;
+        body.rotation.y = brain.yaw;
+        const targetY = groundY(brain.x, brain.z) + (brain.yOffset || 0.05);
+        body.position.y += (targetY - body.position.y) * Math.min(1, dt * 2.2);
+        body.userData.tailParts?.forEach((seg, i) => {
+          seg.rotation.y = Math.sin(t * (2.6 + brain.alert * 2) + i * .7) * (.22 + brain.alert * .12);
+        });
       });
     } else if (item.kind === 'shark') {
       const body = buildShark();
       const ang0 = Math.atan2(item.z, item.x);
       const r0 = Math.hypot(item.x, item.z);
       group.add(body);
-      const st = { body, a: ang0, r: r0, dir: item.dir, dive: item.dive, roll: 0 };
+      const brain = createBrain('shark', {
+        x: item.x, z: item.z, angle: ang0, r: r0, dir: item.dir,
+        ringMin: 205, ringMax: 268, seed: item.dive ?? rng.next() * 10,
+      });
+      brains.push(brain);
+      let roll = 0;
       animators.push((dt, t) => {
-        // tubarão PATRULHA o mar em anel fora da arena (worlds.ts: "tubarões
-        // patrulhando o mar") — mergulha e aforna à superfície em ciclo
-        st.a += dt * (.11 + .2 * agit.value) * st.dir;
-        st.r += Math.sin(t * .13 + st.dive * 3) * dt * 1.2;
-        const x = Math.cos(st.a) * st.r, z = Math.sin(st.a) * st.r;
-        const y = .1 + Math.sin(t * .4 + st.dive * 2) * st.dive * .5;
-        st.body.position.set(x, y, z);
-        st.body.rotation.y = -st.a + (st.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-        st.roll += (Math.sin(t * .8 + st.dive) * .12 - st.roll) * Math.min(1, dt * 2);
-        st.body.rotation.z = st.roll;
-        st.body.userData.tail.rotation.y = Math.sin(t * 3.4) * .3;
+        brain.step(dt, t, ctx);
+        body.position.set(brain.x, brain.yOffset || 0.1, brain.z);
+        body.rotation.y = brain.yaw;
+        roll += (Math.sin(t * .8 + brain.seed) * .12 - roll) * Math.min(1, dt * 2);
+        body.rotation.z = roll;
+        if (body.userData.tail) body.userData.tail.rotation.y = Math.sin(t * (3.4 + brain.alert * 2)) * .3;
       });
     } else if (item.kind === 'whaleSkeleton') {
       const skeleton = buildWhaleSkeleton(rng);
@@ -555,91 +555,116 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       const swarm = buildFlySwarm(rng);
       swarm.position.set(item.x, groundY(item.x, item.z) + .4, item.z);
       group.add(swarm);
-      const st = { x: item.x, z: item.z, seedA: rng.next() * 100, seedB: rng.next() * 100 };
+      const brain = createBrain('fly', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR ?? 18,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        const ag = 1 + 1.6 * agit.value;
-        st.x += Math.sin(t * .55 + st.seedA) * dt * .7 * ag;
-        st.z += Math.cos(t * .41 + st.seedB) * dt * .7 * ag;
-        swarm.position.x = st.x;
-        swarm.position.z = st.z;
-        swarm.position.y = groundY(st.x, st.z) + .35 + Math.sin(t * 3.1) * .08;
+        brain.step(dt, t, ctx);
+        swarm.position.x = brain.x;
+        swarm.position.z = brain.z;
+        swarm.position.y = groundY(brain.x, brain.z) + .35 + Math.sin(t * 3.1) * .08;
+        const flap = 22 + brain.alert * 12;
         for (const f of swarm.userData.flies) {
-          for (const w of f.userData.wings) w.rotation.y = Math.sin(t * 28 + f.id) * .8;
+          for (const w of f.userData.wings) w.rotation.y = Math.sin(t * flap + f.position.x) * .8;
           f.position.y = .05 + Math.abs(Math.sin(t * 9 + f.position.x * 3)) * .12;
         }
       });
     } else if (item.kind === 'scorpion') {
       const body = buildScorpion(rng);
+      body.userData.species = 'scorpion';
       body.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(body);
-      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
-        tx: item.x, tz: item.z, walk: false, wait: .8 + rng.next() * 2.5,
-        speed: .55 + rng.next() * .35 };
+      const brain = createBrain('scorpion', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        const sp = st.speed * (1 + .9 * agit.value);
-        if (!st.walk) {
-          st.wait -= dt;
-          if (st.wait <= 0) {
-            const a = Math.abs((Math.sin(t * 9.1 + st.ax) * 31254.7) % 1) * Math.PI * 2;
-            const r = Math.sqrt(Math.abs((Math.cos(t * 41.3 + st.az) * 9182.1) % 1)) * st.homeR;
-            st.tx = st.ax + Math.cos(a) * r; st.tz = st.az + Math.sin(a) * r;
-            st.walk = true;
-          }
-        } else {
-          const dx = st.tx - st.body.position.x, dz = st.tz - st.body.position.z;
-          const dist = Math.hypot(dx, dz);
-          if (dist < .25) { st.walk = false; st.wait = 1.2 + (Math.sin(t * 2.1 + st.az) * .5 + .5) * 2; }
-          else {
-            st.body.position.x += (dx / dist) * sp * dt;
-            st.body.position.z += (dz / dist) * sp * dt;
-            st.body.rotation.y = Math.atan2(dx, dz);
-          }
+        brain.step(dt, t, ctx);
+        applyGroundBrain(body, brain, t, 0);
+        if (body.userData.tail) {
+          body.userData.tail.rotation.x = Math.sin(t * 2.4) * .12 + brain.alert * .25;
         }
-        st.body.position.y = groundY(st.body.position.x, st.body.position.z);
-        if (st.body.userData.tail) st.body.userData.tail.rotation.x = Math.sin(t * 2.4) * .12;
       });
     } else if (item.kind === 'crab') {
       const body = buildCrab(rng);
+      body.userData.species = 'crab';
       body.position.set(item.x, groundY(item.x, item.z), item.z);
       group.add(body);
-      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
-        tx: item.x, tz: item.z, scuttle: false, wait: .5 + rng.next() * 1.8,
-        speed: 1.1 + rng.next() * .6 };
+      const brain = createBrain('crab', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
       animators.push((dt, t) => {
-        const sp = st.speed * (1 + 1.2 * agit.value);
-        if (!st.scuttle) {
-          st.wait -= dt;
-          if (st.wait <= 0) {
-            const a = Math.abs((Math.sin(t * 15.2 + st.ax) * 22117.3) % 1) * Math.PI * 2;
-            const r = Math.sqrt(Math.abs((Math.cos(t * 33.7 + st.az) * 7741.9) % 1)) * st.homeR;
-            st.tx = st.ax + Math.cos(a) * r; st.tz = st.az + Math.sin(a) * r;
-            st.scuttle = true;
-          }
-        } else {
-          const dx = st.tx - st.body.position.x, dz = st.tz - st.body.position.z;
-          const dist = Math.hypot(dx, dz);
-          if (dist < .2) { st.scuttle = false; st.wait = .4 + (Math.sin(t * 4.4 + st.ax) * .5 + .5) * 1.4; }
-          else {
-            st.body.position.x += (dx / dist) * sp * dt;
-            st.body.position.z += (dz / dist) * sp * dt;
-            // caranguejo anda de lado
-            st.body.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
-          }
-        }
-        st.body.position.y = groundY(st.body.position.x, st.body.position.z)
-          + Math.abs(Math.sin(t * 18)) * (st.scuttle ? .02 : 0);
+        brain.step(dt, t, ctx);
+        body.position.x = brain.x;
+        body.position.z = brain.z;
+        body.position.y = groundY(brain.x, brain.z) + (brain.yOffset || 0);
+        body.rotation.y = brain.yaw;
       });
     }
   }
 
   scene.add(group);
+  const meshById = new Map();
   const handle = {
     group,
     animators,
+    brains,
     counts: plan.counts,
     species: plan.species,
     placements: plan.items,
-    setAgitation(v) { agit.value = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)); },
+    meshById,
+    setAgitation(v) { ctx.agitation = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)); },
+    setContext({ playerX = null, playerZ = null, agitation, camX, camZ, attractors, microBoids } = {}) {
+      if (playerX != null) ctx.playerX = playerX;
+      if (playerZ != null) ctx.playerZ = playerZ;
+      if (agitation != null) ctx.agitation = Math.max(0, Math.min(1, agitation));
+      if (camX != null) ctx.camX = camX;
+      if (camZ != null) ctx.camZ = camZ;
+      if (attractors) ctx.attractors = attractors;
+      if (microBoids != null) ctx.microBoids = !!microBoids;
+    },
+    getContext: () => ({ ...ctx }),
+    /** P0: amarra meshes aos gameAnimals da sim. */
+    bindGameAnimals(gameAnimals = []) {
+      meshById.clear();
+      const bySpecies = new Map();
+      for (const child of group.children) {
+        const sp = child.userData?.species;
+        if (!sp) continue;
+        if (!bySpecies.has(sp)) bySpecies.set(sp, []);
+        bySpecies.get(sp).push(child);
+      }
+      for (const ga of gameAnimals) {
+        const list = bySpecies.get(ga.species) || [];
+        const mesh = list.shift();
+        if (mesh) {
+          mesh.userData.gameId = ga.id;
+          meshById.set(ga.id, mesh);
+        }
+      }
+    },
+    /** Sync pose/visibilidade da sim (após sim.step). */
+    syncFromSim(gameAnimals = []) {
+      for (const ga of gameAnimals) {
+        const mesh = meshById.get(ga.id);
+        if (!mesh) continue;
+        if (!ga.alive) { mesh.visible = false; continue; }
+        mesh.visible = true;
+        mesh.position.x = ga.x;
+        mesh.position.z = ga.z;
+        mesh.position.y = groundY(ga.x, ga.z) + (ga.yOffset || 0);
+        if (ga.yaw != null) mesh.rotation.y = ga.yaw;
+        if (ga.species === 'locust' && mesh.userData.members) {
+          const keep = ga.swarmMembers ?? mesh.userData.members.length;
+          mesh.userData.members.forEach((m, i) => { m.mesh.visible = i < keep; });
+        }
+      }
+    },
   };
   scene.userData.fauna = handle;
   return handle;

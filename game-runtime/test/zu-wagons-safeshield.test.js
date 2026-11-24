@@ -243,7 +243,12 @@ test('sim: escudo de pouso protege de ATAQUES — tiro no recém-pousado é reje
 });
 
 test('sim: A BORDO após o desbloqueio — vagão tardio está fora de alcance de ataques', () => {
-  const sim = new KhaaosSim3D({ seed: 'ZU-T68-G', botCount: 2 });
+  // spectate: true — a partida PRECISA continuar mesmo se o jogador cair
+  // (tiros dos bots dependem do stream de RNG; fome/loot/fauna mudam o stream).
+  // As assertions deste teste são sobre o PROTOCOLO do trem (imunidade a bordo,
+  // desembarque obrigatório no vagão 10 + escudo), não sobre a sobrevivência
+  // do jogador — sem spectate, a morte dele congela trainT antes dos 61 s.
+  const sim = new KhaaosSim3D({ seed: 'ZU-T68-G', botCount: 2, spectate: true });
   sim.start('belt');
   const bot = sim.bots[1]; // i%3 !== 0 → não salta; segue até a parada do vagão
   bot.wagon = 9; bot.zuSeat = 0; // último vagão: parada em 61 s

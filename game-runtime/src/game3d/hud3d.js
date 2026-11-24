@@ -327,6 +327,40 @@ export class HUD {
     $('#armorValue').textContent = `${Math.round(armorTotal)}`;
     $('#armorValue').title = p.temporaryArmor > 0 ? `${Math.round(p.armor)} VD permanente + ${Math.round(p.temporaryArmor)} temporária` : '';
     $('#lifeBar').classList.toggle('low', p.life < 30);
+    // Fome (FM) — vitalidade
+    const hungerEl = $('#hungerBar');
+    if (hungerEl) {
+      const h = Number.isFinite(p.hunger) ? p.hunger : 100;
+      hungerEl.style.width = `${Math.max(0, Math.min(100, h))}%`;
+      const hv = $('#hungerValue');
+      if (hv) {
+        hv.textContent = `${Math.max(0, Math.round(h))}`;
+        const food = p.inventory?.food ?? 0;
+        hv.title = food > 0 ? `Rações/carne: ${food} (N comer)` : 'Sem comida';
+      }
+      const row = hungerEl.closest?.('.vitality-row') ?? hungerEl.parentElement?.parentElement;
+      if (row) {
+        row.classList.toggle('low', h < 45);
+        row.classList.toggle('critical', h < 25);
+      }
+    }
+    // Sede (SD)
+    const thirstEl = $('#thirstBar');
+    if (thirstEl) {
+      const th = Number.isFinite(p.thirst) ? p.thirst : 100;
+      thirstEl.style.width = `${Math.max(0, Math.min(100, th))}%`;
+      const tv = $('#thirstValue');
+      if (tv) {
+        tv.textContent = `${Math.max(0, Math.round(th))}`;
+        const water = p.inventory?.water ?? 0;
+        tv.title = water > 0 ? `Água: ${water} (B beber)` : 'Sem água';
+      }
+      const trow = thirstEl.closest?.('.vitality-row') ?? thirstEl.parentElement?.parentElement;
+      if (trow) {
+        trow.classList.toggle('low', th < 40);
+        trow.classList.toggle('critical', th < 22);
+      }
+    }
     // arma
     const w = WEAPONS3D[p.weapon];
     $('#weaponName').textContent = w?.name ?? '—';
