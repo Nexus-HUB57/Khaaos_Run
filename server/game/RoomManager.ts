@@ -17,6 +17,9 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { Server } from "http";
 import { randomBytes, randomInt } from "node:crypto";
 import { z } from "zod";
+import { inArray } from "drizzle-orm";
+import { storage } from "../storage";
+import { db, pool } from "../db";
 import type { IStorage } from "../storage";
 import { metrics } from "./metrics";
 import {
@@ -334,7 +337,7 @@ export class RoomManager {
   });
 
   /** Attach to existing HTTP server */
-  constructor(storageAdapter: RoomStorage) {
+  constructor(storageAdapter: RoomStorage = storage) {
     this.storage = storageAdapter;
     this.matchmaking = new MatchmakingService(
       (ws, msg) => this.send(ws, msg as ServerMessage),
