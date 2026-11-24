@@ -9,7 +9,7 @@ import { KhaaosSim3D } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import {
   ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, canAttackAt, doorWindowOpen,
-  trainRoute, trainPoseAt, trainDoorJumpPose, safeJumpPose, combatUnlockEpoch, zuTrainAnnouncement, seedHashOf,
+  trainRoute, trainPoseAt, trainPoseAtInto, trainDoorJumpPose, safeJumpPose, combatUnlockEpoch, zuTrainAnnouncement, seedHashOf,
 } from '../src/shared/zuTrain.js';
 import { DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 
@@ -67,6 +67,14 @@ test('SSOT: rota e pose de salto são PURAS (paridade servidor ↔ cliente)', ()
   assert.equal(ann.arrivalAtMs, 16000);
   assert.equal(ann.graceS, 15);
   assert.equal(ann.combatLockedUntil, combatUnlockEpoch(1720000000000));
+});
+
+test('SSOT: pose reutilizável mantém paridade sem alocação por frame', () => {
+  const route = trainRoute({ x: 30, z: 118 }, seedHashOf('CIGKV-3D'));
+  const out = {};
+  for (const elapsed of [0, 3400, 8000, 12345, 16000, 31000]) {
+    assert.deepEqual(trainPoseAtInto(elapsed, route, out), trainPoseAt(elapsed, route));
+  }
 });
 
 // ---------- 2. sim offline — embarque e trava ----------
