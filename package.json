@@ -18,6 +18,7 @@
     "test:agent-packet-loss": "node --import tsx --test tests/official/agent-packet-loss-chaos.test.ts",
     "test:marshal-load": "node --import tsx --test tests/performance/marshal-console-load.test.ts",
     "test:coverage": "c8 npm run test:official",
+    "coverage:gate": "node scripts/assert-coverage-threshold.mjs coverage/official/coverage-summary.json 40",
     "test:postgres": "node scripts/run-postgres-tests.mjs",
     "bench:redis-locks": "node --import tsx scripts/benchmark-redis-locks.mjs",
     "test:python": "python3 -m unittest discover -s tests/python -p 'test_*.py' && python3 scripts/validate_weapon_balance.py --check && python3 scripts/audit_weapon_source_divergence.py --check",

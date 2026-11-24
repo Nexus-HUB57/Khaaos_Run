@@ -1,5 +1,5 @@
 import { pool } from "../db";
-import { roomManager } from "./RoomManager";
+import { roomManager } from "./roomManagerSingleton";
 import { CampaignOutboxWorker, campaignRoomRequestedHandler } from "./campaignOutboxWorker";
 
 const worker = new CampaignOutboxWorker(pool, {

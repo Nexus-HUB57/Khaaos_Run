@@ -296,7 +296,7 @@ void AKhaaosGameMode::InitializePhDSubsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - AirdropSystem initialized"));
     }
 
-    // Player entry is handled by the server-authoritative Zu portal protocol.
+    // Player entry is handled by the server-authoritative Zu vehicle protocol.
 
     // Circle Prediction: Minimap UI white circle (Fortnite-style)
     CirclePrediction = NewObject<UKhaaosCirclePredictionComponent>(this, UKhaaosCirclePredictionComponent::StaticClass());

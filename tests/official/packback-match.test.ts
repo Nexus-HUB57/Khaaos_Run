@@ -5,7 +5,7 @@ process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 process.env.WS_TOKEN_SECRET ??= "official-packback-integration-test-key-32-bytes";
 
 const [{ roomManager }, { storage }] = await Promise.all([
-  import("../../server/game/RoomManager.ts"),
+  import("../../server/game/roomManagerSingleton.ts"),
   import("../../server/storage.ts"),
 ]);
 

@@ -11,7 +11,7 @@ import {
   canUnlockSpecialization,
 } from "@shared/schema";
 import type { ZoneStatus } from "@shared/schema";
-import { roomManager } from "./game/RoomManager";
+import { roomManager } from "./game/roomManagerSingleton";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
