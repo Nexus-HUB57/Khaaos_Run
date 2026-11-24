@@ -1,9 +1,14 @@
 Key,Value
 world_id,Priadus
 display_name,Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)
-biome,mountain_peaks
-sector_count,10
-color_primary,#4A5568
-color_secondary,#718096
-color_accent,#E53E3E
-color_fog,#2D3748
+biome,organic_blob
+shape,organic_blob
+sector_count,4
+hazard,SPORE_FOG
+area_m2,22000
+bbox_m,220x100
+target_players,100
+color_primary,#1a2f1a
+color_secondary,#2d4a2d
+color_accent,#06b6d4
+color_fog,#0f1a1f

@@ -81,11 +81,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Priadus|Meta")
     FString MapName = TEXT("W2/C2 Priadus");
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Priadus|Meta")
-    FString MapDescription = TEXT("Mundo arquipélago aquático — Water combat, islands, and depths");
+    FString MapDescription = TEXT("Floresta da Escuridão — Selva densa, pântanos, neblina de esporos tóxicos e jacarés (cânon F42+)");
+    // UE units = cm. Cânon: ~220 m × 100 m (22.000 m² área alvo).
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Priadus|Meta")
-    FVector MapSize = FVector(8000.0f, 8000.0f, 500.0f);
+    FVector MapSize = FVector(22000.0f, 10000.0f, 2000.0f);
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Priadus|Meta")
-    int32 TargetPlayerCount = 75;
+    int32 TargetPlayerCount = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Priadus|Sectors")
     TArray<FPriadusSector> Sectors;

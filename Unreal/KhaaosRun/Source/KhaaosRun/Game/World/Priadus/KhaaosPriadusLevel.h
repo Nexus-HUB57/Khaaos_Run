@@ -1,17 +1,16 @@
 // ============================================================================
-// Khaaos Run — W2/C2 Priadus Level Script Actor (Fase 4)
+// Khaaos Run — W2/C2 Priadus Level Script Actor (Fase 4 / F42 canon)
 // ============================================================================
-// Priadus — Mundo arquipélago aquático
-// Level script for the water-world competitive map (W2/C2 Priadus Ring)
+// Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)
+// Level script for the dense-jungle competitive map (W2/C2 Priadus Ring)
 //
-// Handles:
-//   - Zone shrinking phases (2h Ring, 3 phases: Beach→Shallows→Deep)
-//   - 75 players
-//   - 20 ZEX (island-based)
-//   - 3 Zu variants (cinto/saltar/nadando — swimming entry)
-//   - Aquatic combat zones (swimming, boats, underwater)
-//   - Water hazards (currents, sharks, depth pressure)
-//   - Entry requires minimum 5 W1 Barburhen matches completed
+// Handles (cânon README + shared/worlds.ts):
+//   - Zone shrinking phases (target ~7 days / 12h cycles; ring phases)
+//   - ~100 players (densidade 220 m²/jogador; bounding ~220×100 m)
+//   - ZEX nodes + Zu ingress variants
+//   - Hazard: SPORE_FOG (neblina com esporos tóxicos, sporeTopY)
+//   - Bioma: selva densa, pântanos, flora carnívora, jacarés
+//   - Entry requires minimum completions of W1 Barburhen
 // ============================================================================
 
 #pragma once

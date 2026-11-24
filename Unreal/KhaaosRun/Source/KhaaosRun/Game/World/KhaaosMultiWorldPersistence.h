@@ -6,6 +6,13 @@
 // Hierarquia de mundos: CIGKV (treino) → W1/Barburhen → W2/Priadus
 //                        → W3/Ckesalth → W4/Arukheea
 //
+// Cânon (README + shared/worlds.ts, F42+):
+//   CIGKV     — Khaaos Ville, Campo de Instrução de Guerra (vila militar)
+//   W1/Barburhen — Mundo da Destruição (urbano pós-guerra, chuva ácida)
+//   W2/Priadus   — Floresta da Escuridão (selva, pântanos, neblina de esporos)
+//   W3/Ckesalth  — Deserto das Almas Esquecidas (petróleo em chamas, fumaça tóxica)
+//   W4/Arukheea  — Ilha dos Gritos Calados (prisão, tsunami, tubarões)
+//
 // Features:
 //   - Player profile per world (stats, inventory, progression)
 //   - Progression gates (CIGKV→W1→W2→W3→W4)
@@ -29,11 +36,11 @@
 UENUM(BlueprintType)
 enum class EKhaaosWorldId : uint8
 {
-    CIGKV    UMETA(DisplayName = "CIGKV — Campo de Instrução (Training)"),
-    W1       UMETA(DisplayName = "W1/C1 Barburhen — Primeiro competitivo"),
-    W2       UMETA(DisplayName = "W2/C2 Priadus — Arquipélago aquático"),
-    W3       UMETA(DisplayName = "W3/C3 Ckesalth — Montanha vertical"),
-    W4       UMETA(DisplayName = "W4/C4 Arukheea — Deserto de cânions"),
+    CIGKV    UMETA(DisplayName = "CIGKV — Khaaos Ville (Campo de Instrução)"),
+    W1       UMETA(DisplayName = "W1/C1 Barburhen — Mundo da Destruição (Urbano)"),
+    W2       UMETA(DisplayName = "W2/C2 Priadus — Floresta da Escuridão"),
+    W3       UMETA(DisplayName = "W3/C3 Ckesalth — Deserto das Almas Esquecidas"),
+    W4       UMETA(DisplayName = "W4/C4 Arukheea — Ilha dos Gritos Calados"),
 };
 
 // ─── Inventory Classification ────────────────────────────────────────────────
