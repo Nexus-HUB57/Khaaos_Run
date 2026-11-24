@@ -1,9 +1,14 @@
 Key,Value
 world_id,Barburhen
 display_name,Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)
-biome,ocean_archipelago
-sector_count,12
-color_primary,#0A3D62
-color_secondary,#1B6CA5
-color_accent,#00E5FF
-color_fog,#062A45
+biome,urban_gridiron
+shape,urban_gridiron
+sector_count,4
+hazard,ACID_RAIN
+area_m2,19000
+bbox_m,190x100
+target_players,100
+color_primary,#3d2b1f
+color_secondary,#6b4e31
+color_accent,#f59e0b
+color_fog,#2a1f14

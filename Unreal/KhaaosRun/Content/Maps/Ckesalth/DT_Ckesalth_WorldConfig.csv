@@ -1,9 +1,14 @@
 Key,Value
 world_id,Ckesalth
 display_name,Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)
-biome,volcanic_swamp
-sector_count,9
-color_primary,#2D1B0E
-color_secondary,#5C3A1E
-color_accent,#FF4500
-color_fog,#1A0F05
+biome,desert_basin
+shape,desert_basin
+sector_count,4
+hazard,TOXIC_SMOKE
+area_m2,25000
+bbox_m,250x100
+target_players,100
+color_primary,#5c3a1e
+color_secondary,#8a5a2a
+color_accent,#ef4444
+color_fog,#2a1a0a

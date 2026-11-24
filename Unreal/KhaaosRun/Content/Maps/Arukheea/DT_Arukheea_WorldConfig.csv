@@ -1,9 +1,14 @@
 Key,Value
 world_id,Arukheea
 display_name,Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)
-biome,forging_hellscape
-sector_count,11
-color_primary,#1A0000
-color_secondary,#4A0000
-color_accent,#FFD700
-color_fog,#0D0000
+biome,coastal_island
+shape,coastal_island
+sector_count,4
+hazard,TSUNAMI_WAVE
+area_m2,18000
+bbox_m,180x100
+target_players,100
+color_primary,#1e1a2e
+color_secondary,#3a2f5c
+color_accent,#a855f7
+color_fog,#0d0a14

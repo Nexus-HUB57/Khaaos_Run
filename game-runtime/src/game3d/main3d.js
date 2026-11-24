@@ -12,7 +12,7 @@ import { createOperative, createFirstPersonRig, createWeaponModel, animateOperat
 import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { botPan } from './footsteps3d.js'; // Task 69 — pan espacial dos passos dos bots
-import { CULL, cullRadiusFor, propagateNoCull, cullDecide } from './cull3d.js'; // Task 70 — culling por distância
+import { CULL, cullRadiusFor, cullEffectiveDist, propagateNoCull, cullDecide } from './cull3d.js'; // Task 70/71 — culling por distância (bounding sphere)
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { resolveGameplayAvatar, LEGACY_BODY_IDS, createHumanoidBody, attachHumanoidToOperative, animateHumanoid, weldWeaponToHand, syncHumanoidGear, poseLeftHandSupport, poseWeaponReady, headYawClamp } from './humanoid3d.js'; // Fase 57 + Task 64 — corpo real, gear nos bones, empunhadura 2 mãos (+ F60 headYaw)
@@ -354,6 +354,8 @@ export class Game3D {
 
   initWorld() {
     const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer, this.quality); // cenário + envmap PBR (renderer)
+    // T71 — o CHÃO é gameplay: nunca culled (esfera gigante já protege; tag cinta-e-cintas)
+    scene.traverse((o) => { if (o.isMesh && o.name === 'terrain') propagateNoCull(o); });
     this.scene = scene;
     this.sun = sun;
     // F41 — exposição ACES POR CENÁRIO: o perfil de luz (world3d.lightingProfile)
@@ -730,8 +732,28 @@ export class Game3D {
       o.getWorldPosition(wp);
       const radius = cullRadiusFor({ name: o.parent?.name || o.name || '', worldY: wp.y });
       if (radius == null) { o.visible = true; return; }      // céu/montanhas: SEMPRE
-      const dist = Math.hypot(wp.x - cam.x, wp.y - cam.y, wp.z - cam.z);
-      o.visible = cullDecide({ dist, radius, baseVisible: true, hidden: !o.visible });
+      // T71 FIX regressão: meshes GRANDES (terreno 440 m, domo, shells) têm o
+      // CENTRO além do raio com o jogador EM CIMA — cull pela bounding sphere
+      // (dist efetiva = dist(centro) − raio; dentro da esfera ⇒ nunca culled).
+      const geo = o.geometry;
+      if (!geo?.boundingSphere) geo?.computeBoundingSphere?.();
+      const bs = geo?.boundingSphere;
+      let eff;
+      if (bs) {
+        const cx = bs.center.x, cy = bs.center.y, cz = bs.center.z;
+        // centro da esfera em espaço MUNDO (meshes estáticos: matrixWorld ok)
+        const m = o.matrixWorld.elements;
+        const wx = m[0] * cx + m[4] * cy + m[8] * cz + m[12];
+        const wy = m[1] * cx + m[5] * cy + m[9] * cz + m[13];
+        const wz = m[2] * cx + m[6] * cy + m[10] * cz + m[14];
+        const scale = Math.max(m[0] * m[0] + m[1] * m[1] + m[2] * m[2],
+          m[4] * m[4] + m[5] * m[5] + m[6] * m[6],
+          m[8] * m[8] + m[9] * m[9] + m[10] * m[10]);
+        eff = cullEffectiveDist({ camX: cam.x, camY: cam.y, camZ: cam.z, cx: wx, cy: wy, cz: wz, r: bs.radius * Math.sqrt(Math.max(1, scale)) });
+      } else {
+        eff = Math.hypot(wp.x - cam.x, wp.y - cam.y, wp.z - cam.z);
+      }
+      o.visible = cullDecide({ dist: eff, radius, baseVisible: true, hidden: !o.visible });
     });
   }
 
@@ -2513,6 +2535,9 @@ export class Game3D {
     // animators do dressing/worldmarks)
     const faunaAnim = this.scene.userData.fauna?.animators;
     if (faunaAnim) for (const fn of faunaAnim) fn(dt, this.animT);
+    // Flora carnívora (Priadus): tampa do pitcher e mandíbulas do snap-trap
+    const carniAnim = this.scene.userData.carniflora?.animators;
+    if (carniAnim) for (const fn of carniAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

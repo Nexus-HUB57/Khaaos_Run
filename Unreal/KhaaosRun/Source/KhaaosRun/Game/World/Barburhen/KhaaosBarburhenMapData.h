@@ -163,11 +163,11 @@ public:
     FString MapName = TEXT("W1/C1 Barburhen");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Barburhen|Meta")
-    FString MapDescription = TEXT("Primeiro mundo competitivo — Harsher ring, 100 players, 1.5h");
+    FString MapDescription = TEXT("Mundo da Destruição — Urbano pós-guerra, chuva ácida, ruínas e carros abandonados (cânon F42+)");
 
-    /** Map size in cm (12km x 12km) */
+    /** Map size in cm. Cânon: ~190 m × 100 m (19.000 m² área alvo). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Barburhen|Meta")
-    FVector MapSize = FVector(12000.0f, 12000.0f, 800.0f);
+    FVector MapSize = FVector(19000.0f, 10000.0f, 1500.0f);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Barburhen|Meta")
     int32 TargetPlayerCount = 100;

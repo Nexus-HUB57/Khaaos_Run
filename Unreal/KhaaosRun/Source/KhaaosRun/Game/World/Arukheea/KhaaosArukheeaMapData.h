@@ -74,9 +74,10 @@ class KHAAOSRUN_API UKhaaosArukheeaMapData : public UPrimaryDataAsset
     GENERATED_BODY()
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") FString MapName = TEXT("W4/C4 Arukheea");
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") FString MapDescription = TEXT("Mundo desértico de cânions — Heat, sandstorms, oasis healing");
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") FVector MapSize = FVector(10000.0f, 10000.0f, 600.0f);
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") int32 TargetPlayerCount = 80;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") FString MapDescription = TEXT("Ilha dos Gritos Calados — Prisão do Sol da Noite, tsunami, tubarões e cemitério das baleias (cânon F42+)");
+    // UE units = cm. Cânon: ~180 m × 100 m (18.000 m² área alvo).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") FVector MapSize = FVector(18000.0f, 10000.0f, 1200.0f);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Meta") int32 TargetPlayerCount = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Sectors") TArray<FArukheeaSector> Sectors;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arukheea|Spawns") TArray<FArukheeaSpawnPoint> PlayerSpawnPoints;

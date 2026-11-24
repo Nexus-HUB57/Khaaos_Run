@@ -22,11 +22,14 @@
 //
 // Espécies por mundo (ÂNCORAS nos distritos canônicos de layout3d):
 //   CIGKV     — ratos (quartel/armory+proving), gaivotas (banda), gafanhotos (Parque);
-//   Barburhen — ratos (urbano+industrial), gaivotas, mosquitos (poças ácidas);
+//   Barburhen — ratos (urbano+industrial), gaivotas, mosquitos (poças ácidas),
+//               MOSCAS (cadáveres / dedo-duro urbano);
 //   Priadus   — JACARÉS (Área Pantanosa), mosquitos (pântano/bosque);
-//   Ckesalth  — GAFANHOTOS (vilarejo/refinaria/areia), mosquitos (lagoas de óleo);
+//               + flora carnívora em vegetation3d (pitcher / snap-trap);
+//   Ckesalth  — GAFANHOTOS (vilarejo/refinaria/areia), mosquitos (lagoas de óleo),
+//               ESCORPIÕES (areia / refinaria);
 //   Arukheea  — TUBARÕES (mar, anel 205–268 m FORA da arena), gaivotas,
-//               esqueletos de baleia (Cemitério das Baleias).
+//               esqueletos de baleia (Cemitério das Baleias), CARANGUEJOS (costão).
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { terrainHeightAt } from './terrain3d.js';
@@ -52,19 +55,25 @@ export const FAUNA_PLAN = Object.freeze({
     rat: { count: 8, districts: [0, 3], roam: 30 },
     seagull: { bands: 1, birdsPerBand: 5, orbit: 120, height: 38 },
     mosquito: { count: 2, districts: [2, 3], roam: 14 },
+    // Cadáveres / poças ácidas — enxames de moscas (dedo-duro urbano)
+    fly: { swarms: 2, districts: [0, 1, 3], roam: 18 },
   }),
   Priadus: Object.freeze({
-    croc: { count: 3, districts: [0], roam: 20 },
+    croc: { count: 4, districts: [0], roam: 22 },
     mosquito: { count: 3, districts: [0, 2], roam: 12 },
   }),
   Ckesalth: Object.freeze({
     locust: { swarms: 3, districts: [1, 2, 3], roam: 34 },
     mosquito: { count: 1, districts: [2], roam: 12 },
+    // Areia / refinaria — escorpiões e lagartos de deserto
+    scorpion: { count: 5, districts: [0, 1, 3], roam: 16 },
   }),
   Arukheea: Object.freeze({
     shark: { count: 4, ringMin: 205, ringMax: 268 },
     seagull: { bands: 2, birdsPerBand: 5, orbit: 130, height: 46 },
     whaleSkeleton: { count: 2, districts: [2], roam: 24 },
+    // Costão / enseadas — caranguejos na linha d'água
+    crab: { count: 6, districts: [0, 1], roam: 14 },
   }),
 });
 
@@ -137,6 +146,18 @@ export function faunaPlacements(layout, scenarioId, { density = 1 } = {}) {
   if (plan.whaleSkeleton) push('whaleSkeleton', plan.whaleSkeleton.count, () => {
     const dIdx = plan.whaleSkeleton.districts[0];
     return { ...anchor(dIdx, plan.whaleSkeleton.roam), rot: rng.next() * Math.PI * 2 };
+  });
+  if (plan.fly) push('fly', plan.fly.swarms, () => {
+    const dIdx = plan.fly.districts[Math.floor(rng.next() * plan.fly.districts.length)];
+    return { ...anchor(dIdx, plan.fly.roam), homeR: plan.fly.roam, district: dIdx };
+  });
+  if (plan.scorpion) push('scorpion', plan.scorpion.count, () => {
+    const dIdx = plan.scorpion.districts[Math.floor(rng.next() * plan.scorpion.districts.length)];
+    return { ...anchor(dIdx, plan.scorpion.roam), homeR: plan.scorpion.roam, district: dIdx };
+  });
+  if (plan.crab) push('crab', plan.crab.count, () => {
+    const dIdx = plan.crab.districts[Math.floor(rng.next() * plan.crab.districts.length)];
+    return { ...anchor(dIdx, plan.crab.roam), homeR: plan.crab.roam, district: dIdx };
   });
 
   return { items, counts, species: Object.keys(counts).filter((k) => counts[k] > 0) };
@@ -268,6 +289,86 @@ function buildShark() {
     fin.rotation.z = s * 1.9; fin.position.set(s * .38, -.1, .3); g.add(fin);
   }
   g.userData.tail = tail;
+  return g;
+}
+
+/** Enxame de moscas (Barburhen — cadáveres / poças). Nuvem baixa e nervosa. */
+function buildFlySwarm(rng) {
+  const g = new THREE.Group();
+  const bodyM = mat('#1a1512', { rough: .6 });
+  const wingM = mat('#888880', { rough: .4 });
+  wingM.transparent = true; wingM.opacity = .35;
+  const flies = [];
+  for (let i = 0; i < 9; i++) {
+    const f = new THREE.Group();
+    const body = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.018, 5, 4), bodyM));
+    const w1 = noShadow(new THREE.Mesh(new THREE.PlaneGeometry(.04, .02), wingM));
+    const w2 = noShadow(new THREE.Mesh(new THREE.PlaneGeometry(.04, .02), wingM));
+    w1.position.set(.02, .01, 0); w2.position.set(-.02, .01, 0);
+    f.add(body, w1, w2);
+    f.userData.wings = [w1, w2];
+    f.position.set((rng.next() - .5) * .6, rng.next() * .35, (rng.next() - .5) * .6);
+    g.add(f);
+    flies.push(f);
+  }
+  g.userData.flies = flies;
+  return g;
+}
+
+/** Escorpião de deserto (Ckesalth). Corpo + pinças + cauda articulada. */
+function buildScorpion(rng) {
+  const g = new THREE.Group();
+  const shell = mat('#6b4a2a', { rough: .88, metal: .12 });
+  const dark = mat('#3d2818', { rough: .9 });
+  const body = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.22, .08, .34), shell));
+  body.position.y = .05; g.add(body);
+  // pinças
+  for (const s of [-1, 1]) {
+    const claw = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.06, .04, .14), dark));
+    claw.position.set(s * .14, .06, .18);
+    claw.rotation.y = s * .35;
+    g.add(claw);
+  }
+  // cauda em 3 segmentos + ferrão
+  const tail = new THREE.Group();
+  let ty = .08, tz = -.16;
+  for (let i = 0; i < 3; i++) {
+    const seg = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.05, .05, .1), shell));
+    seg.position.set(0, ty + i * .06, tz - i * .08);
+    seg.rotation.x = -.4 - i * .25;
+    tail.add(seg);
+  }
+  const stinger = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.025, .1, 5), dark));
+  stinger.position.set(0, ty + .22, tz - .28);
+  stinger.rotation.x = -1.1;
+  tail.add(stinger);
+  g.add(tail);
+  g.userData.tail = tail;
+  g.scale.setScalar(.85 + rng.next() * .35);
+  return g;
+}
+
+/** Caranguejo de costão (Arukheea). Corpo achatado + pinças laterais. */
+function buildCrab(rng) {
+  const g = new THREE.Group();
+  const shell = mat('#c45c3a', { rough: .8 });
+  const dark = mat('#8a3a22', { rough: .85 });
+  const body = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.28, .08, .2), shell));
+  body.position.y = .05; g.add(body);
+  for (const s of [-1, 1]) {
+    const claw = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.08, .05, .16), dark));
+    claw.position.set(s * .18, .06, .08);
+    claw.rotation.y = s * .5;
+    g.add(claw);
+    // pernas laterais simples
+    for (let k = 0; k < 2; k++) {
+      const leg = noShadow(new THREE.Mesh(new THREE.CylinderGeometry(.015, .012, .18, 4), dark));
+      leg.position.set(s * (.12 + k * .04), .03, -.02 - k * .06);
+      leg.rotation.z = s * (.9 + k * .15);
+      g.add(leg);
+    }
+  }
+  g.scale.setScalar(.7 + rng.next() * .4);
   return g;
 }
 
@@ -450,6 +551,84 @@ export function buildFauna(scene, layout, scenario, q = {}) {
       skeleton.position.set(item.x, groundY(item.x, item.z), item.z);
       skeleton.rotation.y = item.rot;
       group.add(skeleton);
+    } else if (item.kind === 'fly') {
+      const swarm = buildFlySwarm(rng);
+      swarm.position.set(item.x, groundY(item.x, item.z) + .4, item.z);
+      group.add(swarm);
+      const st = { x: item.x, z: item.z, seedA: rng.next() * 100, seedB: rng.next() * 100 };
+      animators.push((dt, t) => {
+        const ag = 1 + 1.6 * agit.value;
+        st.x += Math.sin(t * .55 + st.seedA) * dt * .7 * ag;
+        st.z += Math.cos(t * .41 + st.seedB) * dt * .7 * ag;
+        swarm.position.x = st.x;
+        swarm.position.z = st.z;
+        swarm.position.y = groundY(st.x, st.z) + .35 + Math.sin(t * 3.1) * .08;
+        for (const f of swarm.userData.flies) {
+          for (const w of f.userData.wings) w.rotation.y = Math.sin(t * 28 + f.id) * .8;
+          f.position.y = .05 + Math.abs(Math.sin(t * 9 + f.position.x * 3)) * .12;
+        }
+      });
+    } else if (item.kind === 'scorpion') {
+      const body = buildScorpion(rng);
+      body.position.set(item.x, groundY(item.x, item.z), item.z);
+      group.add(body);
+      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
+        tx: item.x, tz: item.z, walk: false, wait: .8 + rng.next() * 2.5,
+        speed: .55 + rng.next() * .35 };
+      animators.push((dt, t) => {
+        const sp = st.speed * (1 + .9 * agit.value);
+        if (!st.walk) {
+          st.wait -= dt;
+          if (st.wait <= 0) {
+            const a = Math.abs((Math.sin(t * 9.1 + st.ax) * 31254.7) % 1) * Math.PI * 2;
+            const r = Math.sqrt(Math.abs((Math.cos(t * 41.3 + st.az) * 9182.1) % 1)) * st.homeR;
+            st.tx = st.ax + Math.cos(a) * r; st.tz = st.az + Math.sin(a) * r;
+            st.walk = true;
+          }
+        } else {
+          const dx = st.tx - st.body.position.x, dz = st.tz - st.body.position.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < .25) { st.walk = false; st.wait = 1.2 + (Math.sin(t * 2.1 + st.az) * .5 + .5) * 2; }
+          else {
+            st.body.position.x += (dx / dist) * sp * dt;
+            st.body.position.z += (dz / dist) * sp * dt;
+            st.body.rotation.y = Math.atan2(dx, dz);
+          }
+        }
+        st.body.position.y = groundY(st.body.position.x, st.body.position.z);
+        if (st.body.userData.tail) st.body.userData.tail.rotation.x = Math.sin(t * 2.4) * .12;
+      });
+    } else if (item.kind === 'crab') {
+      const body = buildCrab(rng);
+      body.position.set(item.x, groundY(item.x, item.z), item.z);
+      group.add(body);
+      const st = { body, ax: item.x, az: item.z, homeR: item.homeR,
+        tx: item.x, tz: item.z, scuttle: false, wait: .5 + rng.next() * 1.8,
+        speed: 1.1 + rng.next() * .6 };
+      animators.push((dt, t) => {
+        const sp = st.speed * (1 + 1.2 * agit.value);
+        if (!st.scuttle) {
+          st.wait -= dt;
+          if (st.wait <= 0) {
+            const a = Math.abs((Math.sin(t * 15.2 + st.ax) * 22117.3) % 1) * Math.PI * 2;
+            const r = Math.sqrt(Math.abs((Math.cos(t * 33.7 + st.az) * 7741.9) % 1)) * st.homeR;
+            st.tx = st.ax + Math.cos(a) * r; st.tz = st.az + Math.sin(a) * r;
+            st.scuttle = true;
+          }
+        } else {
+          const dx = st.tx - st.body.position.x, dz = st.tz - st.body.position.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < .2) { st.scuttle = false; st.wait = .4 + (Math.sin(t * 4.4 + st.ax) * .5 + .5) * 1.4; }
+          else {
+            st.body.position.x += (dx / dist) * sp * dt;
+            st.body.position.z += (dz / dist) * sp * dt;
+            // caranguejo anda de lado
+            st.body.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
+          }
+        }
+        st.body.position.y = groundY(st.body.position.x, st.body.position.z)
+          + Math.abs(Math.sin(t * 18)) * (st.scuttle ? .02 : 0);
+      });
     }
   }
 
