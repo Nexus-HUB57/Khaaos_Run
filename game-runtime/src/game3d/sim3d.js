@@ -854,12 +854,16 @@ export class KhaaosSim3D {
   /**
    * Animais de caça com brain de AI (P0: brains ↔ gameAnimals).
    * Posições determinísticas; HP/carne em ANIMAL_MEAT; movimento via createBrain.
+   * RNG DEDICADO (`:fauna`): não consome o stream `:sim` — o determinismo das
+   * partidasexistentes (spread de balas, loot, AI dos bots) permanece bit a bit
+   * idêntico ao main; a fauna tem stream próprio derivado da mesma seed.
    */
   #spawnGameAnimals() {
     const speciesList = huntSpeciesForScenario(this.scenario.id);
     const spots = this.world.botSpawns?.length
       ? this.world.botSpawns
       : (this.world.lootSpots ?? []).map((s) => ({ x: s.x, z: s.z }));
+    const faunaRng = new SeededRng(`${this.seed}:fauna`);
     const animals = [];
     let n = 0;
     for (const species of speciesList) {
@@ -869,14 +873,14 @@ export class KhaaosSim3D {
       const count = species === 'croc' ? 3 : species === 'rat' ? 6 : species === 'locust' ? 3 : 4;
       for (let i = 0; i < count; i++) {
         const spot = spots[(n * 5 + i * 3) % Math.max(1, spots.length)] ?? { x: 0, z: 0 };
-        const jx = (this.rng.next() - 0.5) * 14;
-        const jz = (this.rng.next() - 0.5) * 14;
+        const jx = (faunaRng.next() - 0.5) * 14;
+        const jz = (faunaRng.next() - 0.5) * 14;
         const x = spot.x + jx, z = spot.z + jz;
         const id = `game-${species}-${n}`;
         const brain = createBrain(species, {
           id, x, z, homeX: x, homeZ: z,
           homeR: species === 'croc' ? 22 : species === 'locust' ? 28 : 16,
-          seed: this.rng.next() * 10000,
+          seed: faunaRng.next() * 10000,
         });
         animals.push({
           id, species, x, y: 0, z,
