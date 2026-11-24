@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 import { KhaaosSim3D } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import {
-  ZU_TRAIN, COMBAT_UNLOCK_MS, zuTrainPhase, canAttackAt, doorWindowOpen,
-  trainRoute, trainPoseAt, trainPoseAtInto, trainDoorJumpPose, combatUnlockEpoch, zuTrainAnnouncement, seedHashOf,
+  ZU_TRAIN, COMBAT_UNLOCK_MS, LAST_WAGON_STOP_MS, zuTrainPhase, canAttackAt, doorWindowOpen,
+  trainRoute, trainPoseAt, trainPoseAtInto, trainDoorJumpPose, safeJumpPose, combatUnlockEpoch, zuTrainAnnouncement, seedHashOf,
 } from '../src/shared/zuTrain.js';
 import { DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 
