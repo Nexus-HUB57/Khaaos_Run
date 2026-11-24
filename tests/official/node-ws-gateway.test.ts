@@ -213,8 +213,8 @@ test("RoomManager: join em sala de OUTRO nó abre túnel e entrega welcome/room_
   const suffix = uniqueId("rm");
   const nodeA = `node-A-${suffix}`;
   const nodeB = `node-B-${suffix}`;
-  const managerHost = new RoomManagerClass();
-  const managerOrigin = new RoomManagerClass();
+  const managerHost = new RoomManagerClass(storage);
+  const managerOrigin = new RoomManagerClass(storage);
   try {
     await managerHost.__startLocalBusNodeForTests(nodeB);
     await managerOrigin.__startLocalBusNodeForTests(nodeA);
@@ -287,8 +287,8 @@ test("RoomManager: join_code cross-node abre túnel quando o relay está dispon�
   const suffix = uniqueId("code");
   const nodeA = `node-A-${suffix}`;
   const nodeB = `node-B-${suffix}`;
-  const managerHost = new RoomManagerClass();
-  const managerOrigin = new RoomManagerClass();
+  const managerHost = new RoomManagerClass(storage);
+  const managerOrigin = new RoomManagerClass(storage);
   try {
     await managerHost.__startLocalBusNodeForTests(nodeB);
     await managerOrigin.__startLocalBusNodeForTests(nodeA);
@@ -333,7 +333,7 @@ test("RoomManager: join_code cross-node abre túnel quando o relay está dispon�
 
 test("RoomManager: sem gateway ativo o caminho legado ROOM_REMOTE_NODE permanece", async () => {
   const suffix = uniqueId("legacy");
-  const managerLegacy = new RoomManagerClass(); // gateway NUNCA started
+  const managerLegacy = new RoomManagerClass(storage); // gateway NUNCA started
   const { RoomEventMesh } = await import("../../server/game/RoomEventMesh.ts");
   const remoteOwner = new RoomEventMesh({ nodeId: `remote-${suffix}`, enabled: false });
   try {
@@ -381,8 +381,8 @@ test("RoomManager: destruição da sala derruba sessões relayadas com room_clos
   const suffix = uniqueId("drop");
   const nodeA = `node-A-${suffix}`;
   const nodeB = `node-B-${suffix}`;
-  const managerHost = new RoomManagerClass();
-  const managerOrigin = new RoomManagerClass();
+  const managerHost = new RoomManagerClass(storage);
+  const managerOrigin = new RoomManagerClass(storage);
   try {
     await managerHost.__startLocalBusNodeForTests(nodeB);
     await managerOrigin.__startLocalBusNodeForTests(nodeA);

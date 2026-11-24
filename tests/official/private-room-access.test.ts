@@ -8,7 +8,7 @@ const {
   roomManager,
   INVITE_HOST_WINDOW_LIMIT,
   INVITE_ROOM_PENDING_LIMIT,
-} = await import("../../server/game/RoomManager.ts");
+} = await import("../../server/game/roomManagerSingleton.ts");
 const rooms: Map<string, any> = (roomManager as any).rooms;
 
 function privateRoom(id: string, inviteCode = "KX7T2Q") {

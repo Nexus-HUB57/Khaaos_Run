@@ -7,7 +7,7 @@ process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 process.env.WS_TOKEN_SECRET = "official-wari-websocket-e2e-test-secret-32-bytes";
 
 const [{ roomManager }, { storage }, { createWsAccessToken }] = await Promise.all([
-  import("../../server/game/RoomManager.ts"),
+  import("../../server/game/roomManagerSingleton.ts"),
   import("../../server/storage.ts"),
   import("../../server/replit_integrations/auth/ws-token.ts"),
 ]);
@@ -96,7 +96,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     getEquippedItems: storage.getEquippedItems,
     getItemForUser: storage.getItemForUser,
     consumeItemDurability: storage.consumeItemDurability,
-    pickupLoot: storage.pickupLoot,
+    createItem: storage.createItem,
   };
   let durabilityWrites = 0;
   storage.getPlayerStats = async () => ({
@@ -118,6 +118,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     grenade = { ...grenade, durability: String(Number(grenade.durability) - amount) };
     return grenade as any;
   };
+  storage.createItem = async (values) => ({ ...values, id: grenadeId + 1 } as any);
 
   const httpServer = createServer();
   let ownerSocket: WebSocket | undefined;
@@ -221,10 +222,10 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     let allowPersistence!: () => void;
     const persistenceGate = new Promise<void>((resolve) => { allowPersistence = resolve; });
     releaseLootPersistence = allowPersistence;
-    storage.pickupLoot = async (id, userId) => {
+    storage.createItem = async ({ userId, name, type, rarity, stats }) => {
       signalPersistenceStarted();
       await persistenceGate;
-      return { loot: { ...loot, id, isPickedUp: true, pickedUpBy: userId } as any, item: { id, userId, name: loot.name } as any };
+      return { id: lootId, userId, name, type, rarity, stats } as any;
     };
     let lootBroadcastSeen = false;
     const monitorLootBroadcast = (raw: WebSocket.RawData) => {
@@ -256,7 +257,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     room.loot.push(failedLoot);
     room.lootGrid.insert({ ...failedLoot });
     const carriedWeightBefore = owner.carriedWeight;
-    storage.pickupLoot = async () => { throw new Error("fixture: PostgreSQL indisponível"); };
+    storage.createItem = async () => { throw new Error("fixture: PostgreSQL indisponível"); };
     const persistenceErrorPromise = waitForMessage(
       ownerSocket,
       (message) => message.type === "error" && message.message.includes("Falha ao persistir o loot"),
@@ -336,6 +337,6 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     storage.getEquippedItems = originals.getEquippedItems;
     storage.getItemForUser = originals.getItemForUser;
     storage.consumeItemDurability = originals.consumeItemDurability;
-    storage.pickupLoot = originals.pickupLoot;
+    storage.createItem = originals.createItem;
   }
 });
