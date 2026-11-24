@@ -22,7 +22,7 @@
 
 import type { Express } from "express";
 import { storage } from "../storage";
-import { roomManager } from "./RoomManager";
+import { roomManager } from "./roomManagerSingleton";
 import { WORLD_IDS } from "./worldTelemetry";
 import {
   EKhaaosWebhookChannel,

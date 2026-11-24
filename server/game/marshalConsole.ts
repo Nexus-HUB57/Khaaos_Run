@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Express, Request, RequestHandler, Response } from "express";
 import { z } from "zod";
 import { isAuthenticated } from "../replit_integrations/auth";
-import { roomManager } from "./RoomManager";
+import { roomManager } from "./roomManagerSingleton";
 import { PostgresMarshalConsoleRepository, type MarshalConsoleRepository, type NewPersistedCouncil, type NewPersistedProposal, type PersistedCouncil, type PersistedProposal } from "./marshalConsoleRepository";
 import { runSpecialClassCouncil, type AgentId, type CouncilAgentAdapter, type CouncilRequest, type CouncilResult, type GovernanceFinding, type WorldId, SPECIAL_AGENTS } from "./orchestration";
 import { WORLD_CATALOG, WORLD_IDS, type WorldTelemetrySnapshot } from "./worldTelemetry";

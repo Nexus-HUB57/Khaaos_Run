@@ -7,7 +7,7 @@ process.env.WS_TOKEN_SECRET ??= "official-room-mesh-test-key-32-bytes";
 const meshModule = await import("../../server/game/RoomEventMesh.ts");
 const { RoomEventMesh, __expireLocalLeaseForTests } = meshModule;
 type RoomMeshRecord = import("../../server/game/RoomEventMesh.ts").RoomMeshRecord;
-const { roomManager } = await import("../../server/game/RoomManager.ts");
+const { roomManager } = await import("../../server/game/roomManagerSingleton.ts");
 
 // Determinismo: o mesh do RoomManager roda em modo BARRAMENTO LOCAL nos
 // testes oficiais mesmo se REDIS_URL existir no ambiente (a suíte não depende
