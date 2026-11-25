@@ -57,7 +57,10 @@ const KITS = {
   CIGKV: {
     0: { tent: 3, flagmast: 2 },                       // Pátio de Armamento
     1: { tirerow: 2, bleacher: 1, tent: 1 },           // Proving Grounds
-    2: { bleacher: 1, flagmast: 2 },                   // Parque Abandonado
+    // F48 — README CIGKV "Parque Abandonado": "árvores antigas... copas altas
+    // e galhos bem espalhados... entre os espaços existem RIACHOS e ROCHAS que
+    // podem servir de abrigo" — parque ganha identidade canônica própria.
+    2: { bleacher: 1, flagmast: 2, ancienttree: 2, boulder: 3, stream: 2 }, // Parque Abandonado
     3: { fanunit: 2 },                                 // Setor Industrial
     4: {},                                             // Terminal ZEX (praça limpa)
   },
@@ -98,13 +101,16 @@ const KITS = {
   Arukheea: {
     // Diretiva (Mundos W4): ilha dos piratas — bosque de palmeiras, Prisão do
     // Sol da Noite com farol, cemitério das baleias e marina com naufrágios
-    0: { runering: 2, shard: 3, palmtree: 3 },                                  // Bosque dos Perdidos
-    1: { crystal: 2, quantumring: 1, prisonwall: 2, lighthouse: 1 },            // Prisão do Sol da Noite
+    // F48 — README W4: "chalés de palha em ruínas ou destruídos pelo fogo" na
+    // costa (vila da prisão) e "barris de óleo por todos os cantos e chamas" na
+    // fábrica de óleo de baleia (marina).
+    0: { runering: 2, shard: 3, palmtree: 3, strawhut: 1 },                     // Bosque dos Perdidos
+    1: { crystal: 2, quantumring: 1, prisonwall: 2, lighthouse: 1, strawhut: 2 }, // Prisão do Sol da Noite
     // F43 — README W4: "tubarões" vivem no MAR dos worldmarks (buildArukheeaSea:
     // anel oceânico + patrulha em arco fechado) — fauna visual fora da arena,
     // mesma gramática do anel oceânico de Priadus.
-    2: { rift: 1, shard: 2, whaleribs: 2, bones: 2 },                           // Cemitério das Baleias
-    3: { quantumring: 2, shard: 2, shipwreck: 2, palmtree: 2 },                 // Marina Fantasma
+    2: { rift: 1, shard: 2, whaleribs: 2, bones: 2, strawhut: 1 },              // Cemitério das Baleias
+    3: { quantumring: 2, shard: 2, shipwreck: 2, palmtree: 2, oilbarrel: 3 },   // Marina Fantasma
     4: {},
   },
 };
@@ -112,7 +118,9 @@ const KITS = {
 // patches de solo por tipo (entram em `patches`, não em `items`)
 // F43 — 'quicksand' (README W3: areia movediça) e 'mist' (README W2: neblina
 // alucinógena) entram na MESMA gramática de patch de solo.
-const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist']);
+// F48 — 'stream' (README CIGKV: "riachos" do Parque Abandonado) na mesma
+// gramática — faixa d'água alongada com margens.
+const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist', 'stream']);
 
 /**
  * Placements determinísticos do dressing por cenário.
@@ -225,6 +233,11 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         skeleton: { sMin: 1, sMax: 1.1, size: 2.8, gap: 10 },   // construção inacabada W1
         collapse: { sMin: .95, sMax: 1.15, size: 2.2, gap: 8 }, // desabamento W1
         carnplant: { sMin: .9, sMax: 1.3, size: 1.2, gap: 4.5 },// flora carnívora W2
+        // F48 — fidelidade canônica W4/CIGKV
+        strawhut: { sMin: .9, sMax: 1.2, size: 1.8, gap: 7 },   // chalé de palha W4
+        oilbarrel: { sMin: .85, sMax: 1.1, size: .9, gap: 3.5 },// barril de óleo W4
+        boulder: { sMin: .8, sMax: 1.5, size: 1.5, gap: 5 },    // rocha-abrigo CIGKV
+        ancienttree: { sMin: 1, sMax: 1.2, size: 3.6, gap: 11 },// árvore antiga CIGKV
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
       scatter(district, type, n, spec);
     }
@@ -257,6 +270,8 @@ const SHADOW_SIZE = {
   palmtree: 1.8, prisonwall: 2.8, lighthouse: 2.2, whaleribs: 3.0, shipwreck: 3.2,
   // F43 — detalhes fiéis ao README por mundo
   skeleton: 3.6, collapse: 2.8, carnplant: 1.2,
+  // F48 — W4 chalés/barris + CIGKV parque canônico
+  strawhut: 3.0, oilbarrel: 1.0, boulder: 2.0, ancienttree: 5.0,
 };
 
 const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
@@ -314,6 +329,12 @@ function sharedMaterials() {
     acid: ST('#7dd45a', { emissive: '#3f8a1e', ei: .75, rough: .55, flat: true }), // flora carnívora W2
     vine: ST('#3f6b2a', { rough: .92 }),                       // tentáculos rasteiros W2
     finMat: ST('#3d4a52', { rough: .35, metal: .1 }),          // pele molhada do tubarão W4
+    // F48 — fidelidade canônica W4/CIGKV
+    oakCanopy: ST('#4f7a38', { rough: .9, flat: true, side: THREE.DoubleSide }), // copa do carvalho antigo CIGKV
+    oakTrunk: ST('#4a3a26', { rough: .95, flat: true }),       // tronco grosso da árvore antiga
+    strawFresh: ST('#9c8448', { rough: .95, flat: true, side: THREE.DoubleSide }), // palha intacta W4
+    strawChar: ST('#2b241c', { rough: .96, flat: true, side: THREE.DoubleSide }),  // palha queimada W4
+    barrelRust: ST('#8a3c26', { metal: .35, rough: .68 }),     // barril da fábrica de óleo W4
   };
 }
 
@@ -1057,6 +1078,130 @@ const BUILDERS = {
     g.userData.pulse = pod; // pulso bioluminescente no animator (F43 ativa o contrato)
     return g;
   },
+
+  // ════════ F48 — fidelidade canônica (README W4/CIGKV) ════════
+
+  // CHALÉ DE PALHA (W4): "chalés de palha em ruínas ou destruídos pelo fogo".
+  // variante 0=intacto (palha dourada) | 1=meio queimado | 2=colapsado (carvão)
+  strawhut(m, variant) {
+    const g = new THREE.Group();
+    const straw = variant === 0 ? m.strawFresh : variant === 1 ? m.thatch : m.strawChar;
+    const frame = m.woodDark;
+    // círculo de estacas da costa pirata
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, 1.5, 5), frame);
+      post.position.set(Math.cos(a) * .85, .72, Math.sin(a) * .7);
+      post.rotation.set(Math.sin(a) * .08, 0, -Math.cos(a) * .08);
+      post.castShadow = true;
+      g.add(post);
+    }
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(.95, 1.05, 1.1, 8, 1, true), straw);
+    wall.position.y = 1.05; wall.castShadow = true;
+    g.add(wall);
+    if (variant === 2) {
+      // colapsado: telhado caído de lado + brasas
+      const fallen = new THREE.Mesh(frustumPrism({ wB: 1.9, wT: .3, lB: 1.7, lT: .3, h: .7 }), m.strawChar);
+      fallen.position.set(.5, .3, .2); fallen.rotation.z = 1.2; fallen.castShadow = true;
+      g.add(fallen);
+      const ember = new THREE.Mesh(new THREE.ConeGeometry(.18, .3, 6), m.fire.clone());
+      ember.position.set(-.3, .18, -.15);
+      g.add(ember);
+      g.userData.flame = ember;
+    } else {
+      // telhado cônico de palha (queimado = furo/chanfrado)
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(1.35, .9, 8), variant === 1 ? m.strawChar : straw);
+      roof.position.y = 2.02; roof.castShadow = true;
+      if (variant === 1) roof.rotation.z = .12;   // assentado/quebrado
+      g.add(roof);
+    }
+    return g;
+  },
+
+  // BARRIL DE ÓLEO (W4 — fábrica de óleo de baleia): "barris de óleo por todos
+  // os cantos e chamas". variante 0=fechado enferrujado | 1=aberto com chama | 2=tombado
+  oilbarrel(m, variant) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(.32, .32, .88, 10), m.barrelRust);
+    body.position.y = .44; body.castShadow = true;
+    // aros reforçando (identidade industrial)
+    for (const y of [.22, .66]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.33, .025, 5, 12), m.rust);
+      ring.position.y = y; ring.rotation.x = Math.PI / 2;
+      g.add(ring);
+    }
+    g.add(body);
+    if (variant === 1) {
+      // barril aberto: óleo negro visível + chama real (animator flames)
+      const oil = new THREE.Mesh(new THREE.CircleGeometry(.27, 10), m.oil);
+      oil.rotation.x = -Math.PI / 2; oil.position.y = .86;
+      g.add(oil);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(.14, .42, 6), m.fire.clone());
+      flame.position.y = 1.08;
+      g.add(flame);
+      g.userData.flame = flame;
+    } else if (variant === 2) {
+      g.rotation.z = Math.PI / 2 - .12;           // tombado vazando
+      body.position.y = .3;
+    }
+    return g;
+  },
+
+  // ROCHA-ABRIGO (CIGKV — Parque Abandonado): "rochas que podem servir de
+  // abrigo" — bloco granítico com facetas ecompanhante menor (leitura CoD).
+  boulder(m, variant) {
+    const g = new THREE.Group();
+    const main = new THREE.Mesh(new THREE.DodecahedronGeometry(1 + variant * .18, 0), m.stone);
+    main.scale.set(1.15, .75, .95);
+    main.position.y = .42; main.rotation.set(variant * .7, variant * 1.3, variant * .4);
+    main.castShadow = main.receiveShadow = true;
+    g.add(main);
+    const side = new THREE.Mesh(new THREE.DodecahedronGeometry(.45 + variant * .08, 0), m.stoneDark);
+    side.position.set(.9, .22, .55);
+    side.rotation.set(variant, variant * .5, 0);
+    side.castShadow = true;
+    g.add(side);
+    return g;
+  },
+
+  // ÁRVORE ANTIGA (CIGKV — Parque Abandonado): "árvores antigas com as suas
+  // copas altas e galhos bem espalhados" — tronco grosso + 3 andares de copa
+  // em altura (7–9 m), silhueta de carvalho centenário.
+  ancienttree(m, variant) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.34, .55, 5.6, 8), m.oakTrunk);
+    trunk.position.y = 2.8; trunk.castShadow = true;
+    g.add(trunk);
+    // raízes em contraforte (árvore velha)
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + variant * .5;
+      const root = new THREE.Mesh(new THREE.ConeGeometry(.22, 1.3, 5), m.oakTrunk);
+      root.position.set(Math.cos(a) * .5, .3, Math.sin(a) * .5);
+      root.rotation.set(Math.sin(a) * .9, 0, -Math.cos(a) * .9);
+      root.castShadow = true;
+      g.add(root);
+    }
+    // galhos primários espalhados (cânon: "galhos bem espalhados")
+    const canopy = [];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + variant;
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(.07, .13, 2.6, 5), m.oakTrunk);
+      branch.position.set(Math.cos(a) * 1.2, 4.6 + (i % 2) * .9, Math.sin(a) * 1.2);
+      branch.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
+      g.add(branch);
+      // blob de copa na ponta do galho + copa do topo
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(1.15 + (i % 3) * .22, 7, 6), m.oakCanopy);
+      blob.position.set(Math.cos(a) * 2.1, 5.3 + (i % 2) * 1.1, Math.sin(a) * 2.1);
+      blob.scale.y = .72;
+      blob.castShadow = true;
+      g.add(blob); canopy.push(blob);
+    }
+    const top = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 6), m.oakCanopy);
+    top.position.y = 7.4; top.scale.y = .8; top.castShadow = true;
+    g.add(top);
+    g.userData.canopy = canopy;
+    return g;
+  },
 };
 
 // materiais de patch por tipo
@@ -1072,6 +1217,7 @@ function patchMaterial(type, scenario) {
     case 'oilpool': return oilPoolMaterial();   // Fase 31 — óleo negro de Ckesalth
     case 'quicksand': return quicksandMaterial(); // F43 — areia movediça (W3)
     case 'mist': return mistMaterial();         // F43 — neblina alucinógena (W2)
+    case 'stream': return waterPoolMaterial('#3f6f62'); // F48 — riacho do Parque CIGKV
     default: return mudMaterial(2);
   }
 }
