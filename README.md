@@ -539,7 +539,7 @@ Selva hostil, neblina alucinógena, pântanos, flora carnívora, jacarés. Teste
 
 ### W3/C3 — Ckesalth (Deserto das Almas Esquecidas)
 
-Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça. Os caídos são alimento dos **abutres**, que circulam o Cemitério de Areia (o grito rasgado do perfil de áudio tem corpo no céu desde a F48). Lição sobre a fragilidade da vaidade.
+Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça e **palmeiras derrubadas** nos três setores de areia. Os caídos são alimento dos **abutres**, que circulam o Cemitério de Areia (o grito rasgado do perfil de áudio tem corpo no céu desde a F48). Lição sobre a fragilidade da vaidade.
 
 | Setor | Fração |
 |-------|--------|
@@ -552,7 +552,7 @@ Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça.
 
 ### W4/C4 — Arukheea (Ilha dos Gritos Calados)
 
-Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarões e **aves carnicentas** (círculo baixo de espera sobre o Cemitério das Baleias). A costa preserva os **chalés de palha** em ruínas/destruídos pelo fogo e a Marina Fantasma guarda os **barris de óleo** (alguns em chamas) da fábrica de óleo de baleia. Pressão hidráulica e claustrofobia em céu aberto.
+Ilha pirata **canon-pura**: a identidade "quantum" da Singularidade saiu dos distritos (o README não a descreve) — no lugar, **chalés de palha** em ruínas/destruídos pelo fogo, a **Prisão do Sol da Noite monumental** com torre de ameias, grilhões vazios e o **helicóptero de fuga** ("quem não sobe no helicóptero torna-se 'grito calado'"), a **fábrica de óleo de baleia** enferrujada com chaminé fumegando, **barris de óleo em chamas** na marina, tubarões no mar e **aves carnicentas** em círculo baixo sobre o Cemitério das Baleias. Pressão hidráulica e claustrofobia em céu aberto.
 
 | Setor | Fração |
 |-------|--------|
@@ -572,11 +572,10 @@ Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarõ
 
 | Mundo | Cânon (README dos Mundos) | Implementação RUNTIME |
 |-------|---------------------------|------------------------|
-| CIGKV | Parque Abandonado: "árvores antigas com copas altas e galhos bem espalhados; riachos e rochas que podem servir de abrigo" | `ancienttree` (carvalho centenário 7–9 m, raízes em contraforte), `boulder` (rocha-abrigo granítica), patch `stream` (riacho de margens translúcidas) — distrito 2 |
 | W1 Barburhen | "corpos... tornam-se alimentos dos **abutres** e **chacais** famintos" | `vulture` (planador de carniça: primárias separadas em dedos, cabeça careca, corcunda; banking + ciclo planio/batida) + `jackal` (matilha com passada de 4 pernas, farejo, group-flee) — FAUNA_PLAN + SPECIES_AI |
-| W2 Priadus | "jacarés e plantas carnívoras" | `croc` patrulhando a Área Pantanosa + flora carnívora procedural (pitcher/snap-trap) — existente, mantido |
-| W3 Ckesalth | "alimentos dos **abutres**... consumidos pela areia movediça" | `vulture` sobre o Cemitério de Areia (corpo do `vultureScreech` do áudio) + `quicksand` — FAUNA_PLAN |
-| W4 Arukheea | "alimentos dos tubarões e **aves carnicentas**"; "chalés de palha em ruínas ou destruídos pelo fogo"; "barris de óleo por todos os cantos e chamas" | `carrionbird` (gaivota-do-morto: ardósia, olho vermelho, bico adunco; círculo BAIXO) + `strawhut` (intacto/queimado/colapsado com brasas) + `oilbarrel` (com chama real no animator) |
+| W3 Ckesalth | "alimentos dos **abutres**... consumidos pela areia movediça"; "palmeiras derrubadas" | `vulture` sobre o Cemitério de Areia (corpo do `vultureScreech` do áudio) + `quicksand` + `fallenpalm` (tronco tombado, raízes arrancadas, frondes caídas) |
+| W4 Arukheea | "alimentos dos tubarões e **aves carnicentas**"; "chalés de palha em ruínas ou destruídos pelo fogo"; "barris de óleo por todos os cantos e chamas"; fábrica de óleo de baleia; helicóptero de fuga | `carrionbird` (gaivota-do-morto: ardósia, olho vermelho, bico adunco; círculo BAIXO) + `strawhut` (3 variantes c/ brasas) + `oilbarrel` (chama real) + `burnthut` (carbonizado, vigas desabadas) + `prisonkeep` (torre monumental) + `heli` (rotor girando) + `whalefactory` (chaminé fumegando) — distritos canon-puros, sem vestuário quantum |
+| CIGKV | Pátio de Armamento: "zona neutra circular", "paredes holográficas"; Parque: "árvores antigas, copas altas, riachos e rochas" | `patioring` (anel de energia ciano do pátio) + `holowall` (painéis com barras de stats) + `ancienttree` + `boulder` + patch `stream` |
 
 Contratos de teste: `game-runtime/test/fauna3d.test.js` (espécies por mundo,
 âncoras de térmico, zero-collider, animators headless) e

@@ -55,11 +55,11 @@ function distToSeg(px, pz, seg) {
  */
 const KITS = {
   CIGKV: {
-    0: { tent: 3, flagmast: 2 },                       // Pátio de Armamento
+    // T74+F48 — README CIGKV: Pátio de Armamento é "zona neutra CIRCULAR" com
+    // "paredes holográficas" (patioring + holowall); Parque Abandonado ganha
+    // "árvores antigas... copas altas... RIACHOS e ROCHAS" (ancienttree/stream/boulder).
+    0: { tent: 3, flagmast: 2, holowall: 2, patioring: 1 },   // Pátio de Armamento
     1: { tirerow: 2, bleacher: 1, tent: 1 },           // Proving Grounds
-    // F48 — README CIGKV "Parque Abandonado": "árvores antigas... copas altas
-    // e galhos bem espalhados... entre os espaços existem RIACHOS e ROCHAS que
-    // podem servir de abrigo" — parque ganha identidade canônica própria.
     2: { bleacher: 1, flagmast: 2, ancienttree: 2, boulder: 3, stream: 2 }, // Parque Abandonado
     3: { fanunit: 2 },                                 // Setor Industrial
     4: {},                                             // Terminal ZEX (praça limpa)
@@ -90,27 +90,26 @@ const KITS = {
   Ckesalth: {
     // Diretiva (Mundos W3): resort murado, vilarejo beduíno, refinaria em chamas
     // e o cemitério de areia — óleo negro e ossos espalhados
-    0: { dune: 2, banner: 2, palmstump: 2, resortwall: 1, oilpool: 1 },        // Resort Abandonado
-    1: { tent: 2, campfire: 1, banner: 1, bones: 2, palmstump: 1 },            // Vilarejo Beduíno
+    // T74 — README W3: "palmeiras DERRUBADAS" (fallenpalm) nos 3 setores de areia
+    0: { dune: 2, banner: 2, palmstump: 2, fallenpalm: 2, resortwall: 1, oilpool: 2 },  // Resort Abandonado
+    1: { tent: 2, campfire: 1, banner: 1, bones: 2, palmstump: 1, fallenpalm: 1 },      // Vilarejo Beduíno
     2: { refinetower: 1, oiltank: 2, pipeline: 2, lavapatch: 2, minecart: 1, oilpool: 1 }, // Refinaria de Petróleo
     // F43 — README W3: "areia movediça" ganha o patch visual do terreno que
     // engole no setor canônico (a mecânica de afundamento segue UE5).
-    3: { dune: 2, bones: 2, palmstump: 1, quicksand: 2 },                      // Cemitério de Areia / Areia Movediça
+    3: { dune: 2, bones: 2, palmstump: 1, fallenpalm: 2, quicksand: 2 },                // Cemitério de Areia
     4: {},
   },
   Arukheea: {
-    // Diretiva (Mundos W4): ilha dos piratas — bosque de palmeiras, Prisão do
-    // Sol da Noite com farol, cemitério das baleias e marina com naufrágios
-    // F48 — README W4: "chalés de palha em ruínas ou destruídos pelo fogo" na
-    // costa (vila da prisão) e "barris de óleo por todos os cantos e chamas" na
-    // fábrica de óleo de baleia (marina).
-    0: { runering: 2, shard: 3, palmtree: 3, strawhut: 1 },                     // Bosque dos Perdidos
-    1: { crystal: 2, quantumring: 1, prisonwall: 2, lighthouse: 1, strawhut: 2 }, // Prisão do Sol da Noite
-    // F43 — README W4: "tubarões" vivem no MAR dos worldmarks (buildArukheeaSea:
-    // anel oceânico + patrulha em arco fechado) — fauna visual fora da arena,
-    // mesma gramática do anel oceânico de Priadus.
-    2: { rift: 1, shard: 2, whaleribs: 2, bones: 2, strawhut: 1 },              // Cemitério das Baleias
-    3: { quantumring: 2, shard: 2, shipwreck: 2, palmtree: 2, oilbarrel: 3 },   // Marina Fantasma
+    // T74 — README W4 canon-puro: o vestuário "quantum" da Singularidade SAIU
+    // dos distritos (identidade antiga que o README não descreve) — a ilha
+    // pirata assume o cânon: chalés de palha queimados, Prisão monumental com
+    // helicóptero de fuga, fábrica de óleo de baleia, marina com naufrágios.
+    // Farol mantido; barris de óleo em chamas na marina (F48); aves carnicentas
+    // (fauna3d) circulam o Cemitério das Baleias.
+    0: { palmtree: 3, burnthut: 2, strawhut: 1 },                              // Bosque dos Perdidos
+    1: { prisonwall: 2, prisonkeep: 1, heli: 1, lighthouse: 1, strawhut: 2 },  // Prisão do Sol da Noite + fuga
+    2: { whaleribs: 2, bones: 2, whalefactory: 1, strawhut: 1 },               // Fábrica / Cemitério das Baleias
+    3: { shipwreck: 2, palmtree: 2, burnthut: 1, oilbarrel: 3 },               // Marina Fantasma
     4: {},
   },
 };
@@ -120,7 +119,7 @@ const KITS = {
 // alucinógena) entram na MESMA gramática de patch de solo.
 // F48 — 'stream' (README CIGKV: "riachos" do Parque Abandonado) na mesma
 // gramática — faixa d'água alongada com margens.
-const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist', 'stream']);
+const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist', 'stream', 'patioring']);
 
 /**
  * Placements determinísticos do dressing por cenário.
@@ -238,6 +237,13 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         oilbarrel: { sMin: .85, sMax: 1.1, size: .9, gap: 3.5 },// barril de óleo W4
         boulder: { sMin: .8, sMax: 1.5, size: 1.5, gap: 5 },    // rocha-abrigo CIGKV
         ancienttree: { sMin: 1, sMax: 1.2, size: 3.6, gap: 11 },// árvore antiga CIGKV
+        // T74 — canon W3/W4/CIGKV (README 1:1)
+        fallenpalm: { sMin: 1.05, sMax: 1.45, size: 2.2, gap: 6.5 }, // palmeira derrubada W3
+        burnthut: { sMin: .95, sMax: 1.15, size: 1.9, gap: 6 }, // chalé queimado W4
+        prisonkeep: { sMin: 1, sMax: 1, size: 2.4, gap: 10 },   // torre da Prisão W4
+        heli: { sMin: 1, sMax: 1, size: 2.4, gap: 9 },          // helicóptero de fuga W4
+        whalefactory: { sMin: 1, sMax: 1, size: 3.0, gap: 10 }, // fábrica de óleo W4
+        holowall: { sMin: .95, sMax: 1.15, size: 1.9, gap: 6 }, // parede holográfica CIGKV
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
       scatter(district, type, n, spec);
     }
@@ -272,6 +278,8 @@ const SHADOW_SIZE = {
   skeleton: 3.6, collapse: 2.8, carnplant: 1.2,
   // F48 — W4 chalés/barris + CIGKV parque canônico
   strawhut: 3.0, oilbarrel: 1.0, boulder: 2.0, ancienttree: 5.0,
+  // T74 — canon W3/W4/CIGKV
+  fallenpalm: 3.0, burnthut: 2.2, prisonkeep: 2.6, heli: 2.4, whalefactory: 3.4, holowall: 2.0,
 };
 
 const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
@@ -1202,6 +1210,177 @@ const BUILDERS = {
     g.userData.canopy = canopy;
     return g;
   },
+
+  // ════════ T74 — canon W3/W4/CIGKV (README 1:1, reconciliado da VPS) ════════
+
+  // PALMEIRA DERRUBADA (W3): "palmeiras derrubadas" do deserto — tronco
+  // tombado com anéis de casca, raízes arrancadas e coroa de frondes aberta.
+  fallenpalm(m) {
+    const g = new THREE.Group();
+    g.name = 'fallenpalm';
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.09, .16, 3.0, 7), m.palmTrunk);
+    trunk.rotation.z = Math.PI / 2 - .1;          // tombada, quase deitada
+    trunk.position.set(0, .3, 0);                 // o tombaço levanta a base
+    trunk.castShadow = true;
+    g.add(trunk);
+    // anéis de casca ao longo do tronco (leitura de palmeira morta)
+    for (let i = 0; i < 4; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.11 + i * .012, .022, 5, 9), m.woodDark);
+      ring.rotation.y = Math.PI / 2; ring.position.set(-1.2 + i * .62, .34 + Math.sin(i * 1.1) * .03, 0);
+      g.add(ring);
+    }
+    // raízes arrancadas na base (cones sapando para trás)
+    for (const [rz, rx] of [[.28, .16], [-.22, .2], [.05, -.26]]) {
+      const root = new THREE.Mesh(new THREE.ConeGeometry(.07, .55, 5), m.palmTrunk);
+      root.rotation.x = 1.9; root.rotation.z = rx;
+      root.position.set(-1.62, .22, rz);
+      root.castShadow = true;
+      g.add(root);
+    }
+    // coroa de frondes ABERTA no chão na ponta do tronco (5 folhas caídas)
+    for (let i = 0; i < 5; i++) {
+      const frond = new THREE.Mesh(new THREE.PlaneGeometry(1.15, .26), m.palmFrond);
+      const a = (i / 5) * Math.PI * 2 + .5;
+      frond.position.set(1.62 + Math.cos(a) * .45, .06 + (i % 2) * .04, Math.sin(a) * .45);
+      frond.rotation.set(-Math.PI / 2 + .18, -a + Math.PI / 2, Math.cos(a) * .35);
+      frond.castShadow = true;
+      g.add(frond);
+    }
+    return g;
+  },
+
+  // CHALÉ QUEIMADO (W4): "chalés de palha em ruínas ou destruídos pelo fogo"
+  // — paredes carbonizadas, telhado desabado com vigas e brasas pulsantes.
+  burnthut(m) {
+    const g = new THREE.Group();
+    g.name = 'burnthut';
+    const charred = m.woodDark;
+    const wallL = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.0, .12), charred);
+    wallL.position.set(-.75, .5, 0); wallL.rotation.z = .08; wallL.castShadow = true;
+    const wallR = new THREE.Mesh(new THREE.BoxGeometry(.12, .8, 1.4), charred);
+    wallR.position.set(.72, .4, .3); wallR.rotation.z = -.12; wallR.castShadow = true;
+    g.add(wallL, wallR);
+    // vigas do telhado desabado (2 a jeito de colapso)
+    for (const [rz, ry] of [[.35, .3], [-.15, -.5]]) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, .07, .07), m.woodDark);
+      beam.position.set(0, .95 + rz * .3, rz); beam.rotation.set(0, ry, .5);
+      beam.castShadow = true;
+      g.add(beam);
+    }
+    // palha residual do telhado (planos queimados no chão)
+    for (let i = 0; i < 3; i++) {
+      const straw = new THREE.Mesh(new THREE.PlaneGeometry(.8, .5), m.palmFrond);
+      straw.position.set(-.3 + i * .45, .03 + (i % 2) * .03, .25 - i * .2);
+      straw.rotation.set(-Math.PI / 2 + .15, i * 1.4, 0);
+      g.add(straw);
+    }
+    // brasas sob a ruína (luz de fogo morto-vivo) — pulse: emissive respira
+    const ember = new THREE.Mesh(new THREE.SphereGeometry(.16, 6, 5), m.fire);
+    ember.scale.set(1.4, .5, 1.1); ember.position.set(.1, .06, -.1);
+    ember.name = 'ember';
+    g.add(ember);
+    g.userData.pulse = ember;
+    return g;
+  },
+
+  // TORRE DA PRISÃO (W4): a "Prisão do Sol da Noite" monumental — keep de
+  // pedra com ameias, grilhões vazios e a bandeira esfarrapada do carcereiro.
+  prisonkeep(m) {
+    const g = new THREE.Group();
+    g.name = 'prisonkeep';
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(.95, 1.1, 3.4, 9), m.prisonStone);
+    body.position.y = 1.7; body.castShadow = body.receiveShadow = true;
+    g.add(body);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.18, .3, 9), m.stoneDark);
+    crown.position.y = 3.55; g.add(crown);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const crenel = new THREE.Mesh(new THREE.BoxGeometry(.22, .3, .22), m.stoneDark);
+      crenel.position.set(Math.cos(a) * 1.02, 3.85, Math.sin(a) * 1.02);
+      g.add(crenel);
+    }
+    // grilhões na base (argolas vazias — os "gritos calados")
+    for (const s of [-1, 1]) {
+      const shackle = new THREE.Mesh(new THREE.TorusGeometry(.1, .025, 5, 10), m.steel);
+      shackle.rotation.x = Math.PI / 2; shackle.position.set(s * .8, .3, .6);
+      g.add(shackle);
+    }
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(.55, .8), m.palmFrond);
+    flag.position.set(0, 4.15, .25); flag.rotation.y = .4;
+    g.add(flag);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .8, 5), m.steel);
+    pole.position.set(0, 3.9, 0); g.add(pole);
+    return g;
+  },
+
+  // HELICÓPTERO DE FUGA (W4): "quem não sobe no helicóptero torna-se 'grito
+  // calado'" — marca do fim de ciclo; rotor gira no registry (spinners).
+  heli(m) {
+    const g = new THREE.Group();
+    g.name = 'heli';
+    const body = new THREE.Mesh(new THREE.SphereGeometry(.5, 9, 7), m.steel);
+    body.scale.set(1, .75, 1.7); body.position.y = .62; body.castShadow = true;
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(.07, .04, 1.4, 6), m.steel);
+    tail.rotation.x = Math.PI / 2; tail.position.set(0, .7, -1.15); g.add(tail);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.05, .4, .18), m.steel);
+    fin.position.set(0, .9, -1.78); g.add(fin);
+    const skid = new THREE.Mesh(new THREE.BoxGeometry(.9, .06, .06), m.steel);
+    skid.position.y = .12; g.add(skid);
+    const rotor = new THREE.Mesh(new THREE.BoxGeometry(2.6, .03, .18), m.steel);
+    rotor.position.y = 1.22; rotor.name = 'rotor';
+    g.add(body, tail, fin, skid, rotor);
+    g.userData.rotor = rotor;
+    return g;
+  },
+
+  // FÁBRICA DE ÓLEO DE BALEIA (W4): "na marina, onde ficava a velha fábrica de
+  // óleo de baleia, só restava a sua estrutura velha e enferrujada" — galpão
+  // em ruína com chaminé fumegando (floaters) e tanque tombado.
+  whalefactory(m) {
+    const g = new THREE.Group();
+    g.name = 'whalefactory';
+    const shed = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.5, 1.6), m.rust);
+    shed.position.y = .75; shed.castShadow = shed.receiveShadow = true;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.2, .12, 1.8), m.stoneDark);
+    roof.position.y = 1.58; roof.rotation.z = .04; g.add(roof);
+    const chimney = new THREE.Mesh(new THREE.CylinderGeometry(.18, .22, 1.5, 8), m.rust);
+    chimney.position.set(1.15, 2.1, -.4); chimney.rotation.z = .08; chimney.castShadow = true;
+    const smoke = new THREE.Mesh(new THREE.SphereGeometry(.22, 6, 5),
+      new THREE.MeshStandardMaterial({ color: '#3a3a3e', transparent: true, opacity: .5, roughness: 1 }));
+    smoke.position.set(1.28, 3.0, -.4); smoke.name = 'chimneySmoke';
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(.4, .4, .9, 10), m.rust);
+    tank.rotation.z = Math.PI / 2; tank.position.set(-1.8, .4, .9); tank.castShadow = true;
+    g.add(shed, roof, chimney, smoke, tank);
+    g.userData.floatMesh = smoke;
+    return g;
+  },
+
+  // PAREDE HOLOGRÁFICA (CIGKV): "paredes holográficas exibem as estatísticas
+  // de cada arma" (Pátio de Armamento do README CIGKV) — painel de vidro com
+  // barras de stats e base de energia.
+  holowall(m) {
+    const g = new THREE.Group();
+    const glass = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#59e6ff'), transparent: true, opacity: .3,
+      roughness: .18, metalness: .1, emissive: new THREE.Color('#2fd8f0'), emissiveIntensity: .55,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.25, .05), glass);
+    panel.position.y = 1.0; panel.name = 'holoGlass';
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.35, .04), m.steel);
+    frame.position.set(0, 1.0, -.02);
+    g.add(frame, panel);
+    // barras de stats holográficas (3 linhas de leitura legível de longe)
+    for (let i = 0; i < 3; i++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(.9 - i * .22, .07, .01),
+        new THREE.MeshBasicMaterial({ color: '#aefffb', transparent: true, opacity: .85 }));
+      bar.position.set(-.12, 1.28 - i * .22, .04);
+      g.add(bar);
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(.5, .55, .1, 10), m.holo);
+    base.position.y = .05; g.add(base);
+    return g;
+  },
 };
 
 // materiais de patch por tipo
@@ -1218,6 +1397,7 @@ function patchMaterial(type, scenario) {
     case 'quicksand': return quicksandMaterial(); // F43 — areia movediça (W3)
     case 'mist': return mistMaterial();         // F43 — neblina alucinógena (W2)
     case 'stream': return waterPoolMaterial('#3f6f62'); // F48 — riacho do Parque CIGKV
+    case 'patioring': return patioRingMaterial(); // T74 — anel do Pátio de Armamento (CIGKV, energia ciano)
     default: return mudMaterial(2);
   }
 }
@@ -1240,6 +1420,16 @@ function craterMaterial() {
     });
   }
   return _crater;
+}
+let _patioRing = null;
+function patioRingMaterial() {
+  if (!_patioRing) {
+    _patioRing = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#59e6ff'), transparent: true, opacity: .34,
+      depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+  }
+  return _patioRing;
 }
 let _oil = null;
 function oilPoolMaterial() {
