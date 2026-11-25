@@ -37,20 +37,21 @@ const IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
 
 // assinaturas mínimas de identidade por cenário (counts do dressing)
 const SIGNATURES = {
-  CIGKV: ['tent', 'flagmast', 'tirerow', 'bleacher', 'fanunit'],
+  CIGKV: ['tent', 'flagmast', 'tirerow', 'bleacher', 'fanunit', 'ancienttree', 'boulder', 'stream'],
   Barburhen: ['stall', 'billboard', 'machinery', 'snowpile', 'snowpatch'],
   Priadus: ['waterpool', 'mudpatch', 'mangrove', 'hut', 'walkway', 'templestep', 'statue', 'brazier', 'coral', 'labdome'],
   Ckesalth: ['tent', 'campfire', 'dune', 'banner', 'minecart', 'lavapatch', 'refinetower'],
-  Arukheea: ['runering', 'shard', 'crystal', 'quantumring', 'rift', 'voidscorch'],
+  Arukheea: ['runering', 'shard', 'crystal', 'quantumring', 'rift', 'voidscorch', 'strawhut', 'oilbarrel'],
 };
 
 // tipos EXCLUSIVOS por cenário (leitura de identidade inconfundível)
 const EXCLUSIVE = {
   Priadus: ['waterpool', 'mangrove', 'templestep', 'labdome'],
   Ckesalth: ['lavapatch', 'dune', 'refinetower', 'minecart'],
-  Arukheea: ['runering', 'shard', 'quantumring', 'rift'],
+  Arukheea: ['runering', 'shard', 'quantumring', 'rift', 'strawhut', 'oilbarrel'],
   Barburhen: ['stall', 'billboard', 'snowpile'],
-  CIGKV: ['tirerow', 'bleacher'],
+  // F48 — riacho/árvore antiga/rocha-abrigo são o Cânon do Parque CIGKV
+  CIGKV: ['tirerow', 'bleacher', 'ancienttree', 'boulder', 'stream'],
 };
 
 test('determinismo: mesma seed+cenário produzem placements idênticos', () => {

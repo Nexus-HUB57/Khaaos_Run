@@ -1,15 +1,23 @@
-// Khaaos Run — Task 65 (P1): FAUNA CANÔNICA POR MUNDO (os 5 cenários ganham vida).
+// Khaaos Run — Task 65 (P1) + F48 FAUNA CANÔNICA POR MUNDO (os 5 cenários ganham vida).
 // ==============================================================================
 // O usuário cobrou os "características, animais, etc" de cada mundo conforme as
-// descrições oficiais. O cânon (README "Ontologia dos Mundos" + shared/worlds.ts):
+// descrições oficiais. O cânon (README "Mundos" + shared/worlds.ts):
 //
 //   • "Dinâmica de inatividade" — o "dedo-duro" (RATOS, MOSQUITOS, GAFANHOTOS e
 //     GAIVOTAS) acompanha o jogador que evita combate — fauna geral dos Rings;
+//   • W1 Barburhen — README W1: "tornam-se alimentos dos ABUTRES e CHACAIS
+//     famintos" — F48: abutres em voo circular térmico sobre as zonas de
+//     carniça + matilhas de chacais nas ruínas (corredores do urbano);
 //   • W2 Priadus — "selva hostil, pântanos, flora carnívora, JACARÉS"
 //     (README W2; crocs patrulham a Área Pantanosa);
+//   • W3 Ckesalth — README W3: "tornam-se alimentos dos ABUTRES e sendo
+//     consumidos pela areia movediça" — F48: abutres circulando o Cemitério
+//     de Areia (o vultureScreech do profile de áudio agora tem corpo);
 //   • W4 Arukheea — "tsunami iminente, TUBARÕES" (README W4) e shared/worlds.ts:
 //     "Costão rochoso com esqueletos de baleia ... TUBARÕES patrulhando o mar"
-//     + setor "Fábrica / Cemitério das Baleias" (esqueletos como cenário).
+//     + README W4: "tornam-se alimentos dos tubarões e AVES CARNICENTAS" —
+//     F48: aves carnicentas (gaivota-do-morto de plumagem ardósia) em círculo
+//     baixo sobre o Cemitério das Baleias e a Marina Fantasma;
 //
 // Contrato (idêntico ao districts3d/worldmarks3d):
 //  - placements PUROS e determinísticos (SeededRng por seed+cenário);
@@ -60,6 +68,11 @@ export const FAUNA_PLAN = Object.freeze({
     mosquito: { count: 2, districts: [2, 3], roam: 14 },
     // Cadáveres / poças ácidas — enxames de moscas (dedo-duro urbano)
     fly: { swarms: 2, districts: [0, 1, 3], roam: 18 },
+    // F48 — README W1: "alimentos dos ABUTRES e CHACAIS famintos": o termal
+    // dos abutres gira sobre os setores de esqueletos/desabamento; a matilha
+    // de chacais vasculha o urbano e a Zona de Extração.
+    vulture: { bands: 1, birdsPerBand: 3, districts: [0, 1], roam: 26, orbit: 15, height: 24 },
+    jackal: { count: 3, districts: [0, 3], roam: 22 },
   }),
   Priadus: Object.freeze({
     croc: { count: 4, districts: [0], roam: 22 },
@@ -70,6 +83,9 @@ export const FAUNA_PLAN = Object.freeze({
     mosquito: { count: 1, districts: [2], roam: 12 },
     // Areia / refinaria — escorpiões e lagartos de deserto
     scorpion: { count: 5, districts: [0, 1, 3], roam: 16 },
+    // F48 — README W3: "alimentos dos ABUTRES" — térmico sobre o Cemitério de
+    // Areia (distrito dos bones/quicksand), o corpo do vultureScreech.
+    vulture: { bands: 1, birdsPerBand: 3, districts: [3], roam: 24, orbit: 17, height: 28 },
   }),
   Arukheea: Object.freeze({
     shark: { count: 4, ringMin: 205, ringMax: 268 },
@@ -77,6 +93,10 @@ export const FAUNA_PLAN = Object.freeze({
     whaleSkeleton: { count: 2, districts: [2], roam: 24 },
     // Costão / enseadas — caranguejos na linha d'água
     crab: { count: 6, districts: [0, 1], roam: 14 },
+    // F48 — README W4: "alimentos dos tubarões e AVES CARNICENTAS" — círculo
+    // BAIXO e nervoso sobre o Cemitério das Baleias (diferente das gaivotas
+    // altas: a carnicenta espera a carcaça, não o peixe).
+    carrionbird: { bands: 1, birdsPerBand: 4, districts: [2], roam: 22, orbit: 12, height: 17 },
   }),
 });
 
@@ -153,6 +173,27 @@ export function faunaPlacements(layout, scenarioId, { density = 1 } = {}) {
   if (plan.fly) push('fly', plan.fly.swarms, () => {
     const dIdx = plan.fly.districts[Math.floor(rng.next() * plan.fly.districts.length)];
     return { ...anchor(dIdx, plan.fly.roam), homeR: plan.fly.roam, district: dIdx };
+  });
+  // F48 — bandas de abutre/ave carnicenta: banda ancorada NA ZONA DE CARNIÇA
+  // (esqueletos/bones/desabamento do distrito), não no centro do mapa.
+  const pushRaptorBand = (key) => {
+    const spec = plan[key];
+    push(key, spec.bands, () => {
+      const dIdx = spec.districts[Math.floor(rng.next() * spec.districts.length)];
+      const c = anchor(dIdx, spec.roam);
+      return {
+        ...c,
+        orbit: spec.orbit + rng.next() * spec.orbit * .35,
+        height: spec.height + rng.next() * spec.height * .18,
+        birds: spec.birdsPerBand, dir: rng.next() < .5 ? 1 : -1,
+      };
+    }, { band: true });
+  };
+  if (plan.vulture) pushRaptorBand('vulture');
+  if (plan.carrionbird) pushRaptorBand('carrionbird');
+  if (plan.jackal) push('jackal', plan.jackal.count, () => {
+    const dIdx = plan.jackal.districts[Math.floor(rng.next() * plan.jackal.districts.length)];
+    return { ...anchor(dIdx, plan.jackal.roam), homeR: plan.jackal.roam, district: dIdx };
   });
   if (plan.scorpion) push('scorpion', plan.scorpion.count, () => {
     const dIdx = plan.scorpion.districts[Math.floor(rng.next() * plan.scorpion.districts.length)];
@@ -315,6 +356,128 @@ function buildFlySwarm(rng) {
     flies.push(f);
   }
   g.userData.flies = flies;
+  return g;
+}
+
+// F48 — ABUTRE (W1 Barburhen / W3 Ckesalth): planador de carniça — silhueta
+// "cruzeiro" (asas largas + primárias separadas em dedos), cabeça careca,
+// corcunda de penas escuras. Em planio quase não bate asas (voo térmico).
+function buildVulture(rng) {
+  const g = new THREE.Group();
+  const plumage = mat('#2e2a28', { rough: .88 });
+  const wingM = mat('#3a3532', { rough: .85 });
+  const cape = mat('#1c1a19', { rough: .9 });
+  const body = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.3, 8, 6), plumage));
+  body.scale.set(.9, .8, 1.5); g.add(body);
+  const hunch = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.22, 7, 6), cape));
+  hunch.scale.set(.85, .7, .9); hunch.position.set(0, .12, -.1); g.add(hunch);
+  // cabeça careca de couro + bico adunco (silhueta lida a 40 m)
+  const head = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.09, 7, 6), mat('#b56b5a', { rough: .75 })));
+  head.scale.set(.8, 1.05, .8); head.position.set(0, .1, .42); g.add(head);
+  const beak = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.045, .16, 6), mat('#4a3d34')));
+  beak.rotation.x = -Math.PI / 2 - .25; beak.position.set(0, .07, .54); g.add(beak);
+  // colar de penas (ruff)
+  const ruff = noShadow(new THREE.Mesh(new THREE.TorusGeometry(.11, .045, 5, 10), cape));
+  ruff.rotation.x = Math.PI / 2 - .3; ruff.position.set(0, .05, .35); g.add(ruff);
+  // asas LARGAS com 4 primárias separadas — os "dedos" que identificam o abutre
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const wing = new THREE.Group();
+    const inner = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.52, .03, .3), wingM));
+    inner.position.x = s * .26; wing.add(inner);
+    for (let i = 0; i < 4; i++) {
+      const f = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.34, .02, .085), cape));
+      f.position.set(s * (.52 + i * .16), 0, -.09 + i * .055);
+      f.rotation.y = s * (.1 + i * .075);
+      wing.add(f);
+    }
+    wing.position.y = .16;
+    g.add(wing);
+    wings.push({ wing, s });
+  }
+  const tail = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.26, .02, .3), cape));
+  tail.position.set(0, .12, -.5); g.add(tail);
+  g.userData.wings = wings;
+  g.scale.setScalar(1 + rng.next() * .25);
+  return g;
+}
+
+// F48 — AVE CARNICENTA (W4 Arukheea): gaivota-do-morto da Ilha dos Gritos —
+// plumagem de ardósia suja, bico adunco escurecido, olho vermelho; asas mais
+// angulosas que a gaivota comum e círculo de espera BAIXO sobre as carcaças.
+function buildCarrionBird(rng) {
+  const g = new THREE.Group();
+  const feather = mat('#4a4d52', { rough: .8 });
+  const wingM = mat('#3a3d42', { rough: .82 });
+  const body = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.2, 8, 6), feather));
+  body.scale.set(.85, .75, 1.6); g.add(body);
+  const head = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.1, 7, 6), mat('#33363b')));
+  head.position.set(0, .1, .34); g.add(head);
+  for (const s of [-1, 1]) {
+    const eye = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.022, 5, 4),
+      mat('#7a1a12', { emissive: '#c02414', ei: .9 })));
+    eye.position.set(s * .07, .12, .4); g.add(eye);
+  }
+  const beak = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.04, .18, 6), mat('#6b4a34')));
+  beak.rotation.x = -Math.PI / 2 - .3; beak.position.set(0, .09, .46); g.add(beak);
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const wing = new THREE.Group();
+    const inner = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.42, .025, .24), wingM));
+    inner.position.x = s * .21; wing.add(inner);
+    for (let i = 0; i < 3; i++) {
+      const f = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.3, .018, .07), mat('#26282c')));
+      f.position.set(s * (.42 + i * .13), 0, -.06 + i * .05);
+      f.rotation.y = s * (.12 + i * .09);
+      wing.add(f);
+    }
+    wing.position.y = .12;
+    g.add(wing);
+    wings.push({ wing, s });
+  }
+  const tail = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.2, .02, .24), mat('#26282c')));
+  tail.position.set(0, .1, -.42); g.add(tail);
+  g.userData.wings = wings;
+  g.scale.setScalar(.9 + rng.next() * .3);
+  return g;
+}
+
+// F48 — CHACAL (W1 Barburhen): canídeo da carniça urbana — caramelo com sela
+// dorsal escura, orelhas eretas, cauda espessa; matilha nervosa que vasculha
+// as ruínas e foge em grupo (groupFlee do faunaAI3d).
+function buildJackal(rng) {
+  const g = new THREE.Group();
+  const fur = mat('#a5825a', { rough: .9 });
+  const dark = mat('#5e4630', { rough: .92 });
+  const body = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.22, 8, 6), fur));
+  body.scale.set(.8, .75, 1.75); body.position.y = .42; g.add(body);
+  const saddle = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.2, 7, 6), dark));
+  saddle.scale.set(.62, .4, 1.55); saddle.position.y = .55; g.add(saddle);
+  const neck = noShadow(new THREE.Mesh(new THREE.CylinderGeometry(.09, .13, .3, 6), fur));
+  neck.rotation.x = .7; neck.position.set(0, .55, .34); g.add(neck);
+  const head = new THREE.Group();
+  const skull = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.11, 7, 6), fur));
+  skull.scale.set(.85, .8, 1.25); head.add(skull);
+  const snout = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.055, .2, 6), dark));
+  snout.rotation.x = -Math.PI / 2; snout.position.set(0, -.02, .16); head.add(snout);
+  for (const s of [-1, 1]) {
+    const ear = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.045, .13, 5), dark));
+    ear.position.set(s * .055, .13, -.02); ear.rotation.z = s * .18; head.add(ear);
+  }
+  head.position.set(0, .66, .5); g.add(head);
+  const legs = [];
+  for (const [sx, sz] of [[-1, .55], [1, .55], [-1, -.55], [1, -.55]]) {
+    const leg = noShadow(new THREE.Mesh(new THREE.CylinderGeometry(.04, .03, .42, 5), dark));
+    leg.geometry.translate(0, -.06, 0);          // pivô no quadril p/ passada
+    leg.position.set(sx * .16, .21, sz * .78);
+    g.add(leg); legs.push(leg);
+  }
+  const tail = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.06, .42, 6), dark));
+  tail.rotation.x = Math.PI / 2 + .5; tail.position.set(0, .48, -.62);
+  g.add(tail); g.userData.tail = tail;
+  g.userData.legs = legs;
+  g.userData.head = head;
+  g.scale.setScalar(.85 + rng.next() * .3);
   return g;
 }
 
@@ -569,6 +732,64 @@ export function buildFauna(scene, layout, scenario, q = {}) {
         for (const f of swarm.userData.flies) {
           for (const w of f.userData.wings) w.rotation.y = Math.sin(t * flap + f.position.x) * .8;
           f.position.y = .05 + Math.abs(Math.sin(t * 9 + f.position.x * 3)) * .12;
+        }
+      });
+    } else if (item.kind === 'vulture' || item.kind === 'carrionbird') {
+      // F48 — térmico de carniça: banda orbita a ZONA (item.x/z do distrito),
+      // banking para dentro da curva + ciclo planio (sem batida) → batidas
+      // curtas. Agitação dedo-duro = círculo mais rápido e mais baixo.
+      const band = new THREE.Group();
+      band.position.set(item.x, item.height, item.z);
+      const birds = [];
+      for (let b = 0; b < item.birds; b++) {
+        const bird = item.kind === 'vulture' ? buildVulture(rng) : buildCarrionBird(rng);
+        band.add(bird);
+        birds.push({ bird, phase: (b / item.birds) * Math.PI * 2, r: item.orbit * (.72 + rng.next() * .5) });
+      }
+      group.add(band);
+      let angle = rng.next() * Math.PI * 2;
+      animators.push((dt, t) => {
+        angle += dt * (.11 + .14 * ctx.agitation) * item.dir;
+        const sink = Math.sin(t * .21 + angle) * (1.4 + ctx.agitation * 1.8); // desce p/ a carcaça
+        for (const { bird, phase, r } of birds) {
+          const a = angle + phase;
+          bird.position.set(Math.cos(a) * r, sink + Math.sin(t * 1.3 + phase) * .8, Math.sin(a) * r);
+          bird.rotation.y = a + (item.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
+          bird.rotation.z = (item.dir > 0 ? 1 : -1) * (.26 + Math.sin(a * 2 + phase) * .05); // banking
+          const flap = .5 + .5 * Math.sin(t * .5 + phase * 2);   // 0=planio 1=batida
+          for (const { wing, s } of bird.userData.wings) {
+            wing.rotation.z = s * (flap > .62
+              ? Math.sin(t * 6.4 + phase) * .32
+              : .1 + Math.sin(t * .9 + phase) * .08);           // voo térmico
+          }
+        }
+      });
+    } else if (item.kind === 'jackal') {
+      // F48 — matilha com passada real (pernas) + farejador (cabeça baixa em
+      // idle) + wag da cauda pelo applyGroundBrain (alerta eleva a frenquência).
+      const body = buildJackal(rng);
+      body.userData.species = 'jackal';
+      body.position.set(item.x, groundY(item.x, item.z), item.z);
+      group.add(body);
+      const brain = createBrain('jackal', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
+      let gaitT = rng.next() * 10;
+      animators.push((dt, t) => {
+        brain.step(dt, t, ctx);
+        applyGroundBrain(body, brain, t, 7);
+        gaitT += dt * (3.1 + brain.speed * 2.4);
+        const legs = body.userData.legs;
+        if (legs) for (let i = 0; i < legs.length; i++) {
+          const ph = gaitT + (i % 2) * Math.PI + Math.floor(i / 2) * .55;
+          legs[i].rotation.x = Math.sin(ph) * (brain.speed > .2 ? .55 : .07);
+        }
+        if (body.userData.head) {
+          // farejando o chão em idle; cabeça erguida quando alerta
+          body.userData.head.rotation.x = (brain.speed > .2 ? -.08 : .3)
+            - brain.alert * .35 + Math.sin(t * 1.9 + brain.seed) * .05;
         }
       });
     } else if (item.kind === 'scorpion') {

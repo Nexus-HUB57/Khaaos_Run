@@ -55,6 +55,25 @@ export const SPECIES_AI = Object.freeze({
     idleMin: 0.2, idleMax: 0.8, states: ['swarm', 'wander'], boldness: 0.25,
     huntable: true, swarm: true, groupFlee: true,
   }),
+  // F48 — chacal (W1 Barburhen): canídeo nervoso da carniça urbana — vasculha
+  // longe do jogador (investigate/boldness alto) mas foge RÁPIDO em grupo.
+  jackal: Object.freeze({
+    baseSpeed: 2.9, fleeSpeed: 5.2, fearRadius: 15, homePull: 0.3,
+    idleMin: 0.4, idleMax: 1.8, states: ['idle', 'wander', 'flee', 'investigate'],
+    boldness: 0.42, huntable: true, groupFlee: true,
+  }),
+  // F48 — abutre (W1/W3) e ave carnicenta (W4): termal de carniça — voo em
+  // círculo (flock) que ignora o jogador a menos que passe direto por baixo.
+  vulture: Object.freeze({
+    baseSpeed: 0.11, fleeSpeed: 0.3, fearRadius: 9, homePull: 0.02,
+    idleMin: 0, idleMax: 0, states: ['flock', 'flee'], boldness: 0.05,
+    airborne: true, huntable: false,
+  }),
+  carrionbird: Object.freeze({
+    baseSpeed: 0.14, fleeSpeed: 0.36, fearRadius: 10, homePull: 0.02,
+    idleMin: 0, idleMax: 0, states: ['flock', 'flee'], boldness: 0.08,
+    airborne: true, huntable: false,
+  }),
 });
 
 /** Distância para AI completa (flee/hunt); além disso só wander barato. */

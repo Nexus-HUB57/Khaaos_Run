@@ -118,7 +118,7 @@ export const WORLD_AMBIENCE = Object.freeze({
       urban:   Object.freeze({ base: .18, phase: Object.freeze([1, 1.05, 1.15, 1.25, 1.4]) }),
     }),
     fauna: Object.freeze([Object.freeze(['gull', .16]), Object.freeze(['ratSqueak', .14]),
-      Object.freeze(['crow', .1])]),
+      Object.freeze(['crow', .1]), Object.freeze(['vultureScreech', .07])]), // F48 — abutres W1
     urban: Object.freeze({ calls: Object.freeze([Object.freeze(['metalFall', .14]),
       Object.freeze(['whistleCreak', .12]), Object.freeze(['debrisConcrete', .09]),
       Object.freeze(['doorBang', .07]), Object.freeze(['screamFar', .04]),
@@ -175,7 +175,7 @@ export const WORLD_AMBIENCE = Object.freeze({
       urban:   Object.freeze({ base: .11, phase: Object.freeze([1, 1, 1.1, 1.2, 1.35]) }),
     }),
     fauna: Object.freeze([Object.freeze(['gull', 1.0]), Object.freeze(['whaleMoan', .05]),
-      Object.freeze(['ratSqueak', .06])]),
+      Object.freeze(['ratSqueak', .06]), Object.freeze(['vultureScreech', .07])]), // F48 — aves carnicentas W4
     urban: Object.freeze({ calls: Object.freeze([Object.freeze(['debrisConcrete', .07]),
       Object.freeze(['doorBang', .05]), Object.freeze(['screamFar', .03]),
       Object.freeze(['windowGlass', .03])]), density: .35 }),

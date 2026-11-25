@@ -513,7 +513,7 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 
 ### W1/C1 — Barburhen (Mundo da Destruição)
 
-Ambiente urbano pós-guerra: construções inacabadas, carros abandonados, corpos que **não desaparecem** e apodrecem. O cenário degrada dia após dia (chuva ácida, desabamentos, fumaça).
+Ambiente urbano pós-guerra: construções inacabadas, carros abandonados, corpos que **não desaparecem** e apodrecem — alimento dos **abutres** (termal de carniça sobre os setores de esqueletos/desabamento) e dos **chacais** (matilha que vasculha o urbano e a estação). O cenário degrada dia após dia (chuva ácida, desabamentos, fumaça).
 
 | Setor | Fração |
 |-------|--------|
@@ -539,7 +539,7 @@ Selva hostil, neblina alucinógena, pântanos, flora carnívora, jacarés. Teste
 
 ### W3/C3 — Ckesalth (Deserto das Almas Esquecidas)
 
-Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça. Lição sobre a fragilidade da vaidade.
+Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça. Os caídos são alimento dos **abutres**, que circulam o Cemitério de Areia (o grito rasgado do perfil de áudio tem corpo no céu desde a F48). Lição sobre a fragilidade da vaidade.
 
 | Setor | Fração |
 |-------|--------|
@@ -552,7 +552,7 @@ Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça.
 
 ### W4/C4 — Arukheea (Ilha dos Gritos Calados)
 
-Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarões. Pressão hidráulica e claustrofobia em céu aberto.
+Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarões e **aves carnicentas** (círculo baixo de espera sobre o Cemitério das Baleias). A costa preserva os **chalés de palha** em ruínas/destruídos pelo fogo e a Marina Fantasma guarda os **barris de óleo** (alguns em chamas) da fábrica de óleo de baleia. Pressão hidráulica e claustrofobia em céu aberto.
 
 | Setor | Fração |
 |-------|--------|
@@ -562,6 +562,27 @@ Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarõ
 | Extração final (heliporto da torre) | — |
 
 **Dinâmica**: "Tsunami" — anel fecha na Prisão; quem não sobe no helicóptero torna-se "grito calado".
+
+### Fidelidade canônica dos cenários (F48 — benchmark de realismo Free Fire / Call of Duty)
+
+> A linha visual do jogo usa **Free Fire** e **Call of Duty** como referências
+> principais de realismo. A F48 fecha o inventário de fidelidade 1:1 entre o
+> README dos Mundos (cânon) e o RUNTIME 3D (`fauna3d.js`, `faunaAI3d.js`,
+> `districts3d.js`, `ambience3d.js`), com contrato travado em testes.
+
+| Mundo | Cânon (README dos Mundos) | Implementação RUNTIME |
+|-------|---------------------------|------------------------|
+| CIGKV | Parque Abandonado: "árvores antigas com copas altas e galhos bem espalhados; riachos e rochas que podem servir de abrigo" | `ancienttree` (carvalho centenário 7–9 m, raízes em contraforte), `boulder` (rocha-abrigo granítica), patch `stream` (riacho de margens translúcidas) — distrito 2 |
+| W1 Barburhen | "corpos... tornam-se alimentos dos **abutres** e **chacais** famintos" | `vulture` (planador de carniça: primárias separadas em dedos, cabeça careca, corcunda; banking + ciclo planio/batida) + `jackal` (matilha com passada de 4 pernas, farejo, group-flee) — FAUNA_PLAN + SPECIES_AI |
+| W2 Priadus | "jacarés e plantas carnívoras" | `croc` patrulhando a Área Pantanosa + flora carnívora procedural (pitcher/snap-trap) — existente, mantido |
+| W3 Ckesalth | "alimentos dos **abutres**... consumidos pela areia movediça" | `vulture` sobre o Cemitério de Areia (corpo do `vultureScreech` do áudio) + `quicksand` — FAUNA_PLAN |
+| W4 Arukheea | "alimentos dos tubarões e **aves carnicentas**"; "chalés de palha em ruínas ou destruídos pelo fogo"; "barris de óleo por todos os cantos e chamas" | `carrionbird` (gaivota-do-morto: ardósia, olho vermelho, bico adunco; círculo BAIXO) + `strawhut` (intacto/queimado/colapsado com brasas) + `oilbarrel` (com chama real no animator) |
+
+Contratos de teste: `game-runtime/test/fauna3d.test.js` (espécies por mundo,
+âncoras de térmico, zero-collider, animators headless) e
+`game-runtime/test/district-dressing.test.js` (assinaturas + exclusividade
+cruzada por mundo). Evidências visuais E2E: `artifacts/f48-validate-*.png`
+(captura headless WebGL dos 5 mundos, técnica rAF → canvas.toDataURL).
 
 ---
 
