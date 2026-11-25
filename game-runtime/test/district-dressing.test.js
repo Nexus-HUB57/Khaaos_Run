@@ -36,22 +36,24 @@ if (typeof globalThis.document === 'undefined') {
 const IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
 
 // assinaturas mínimas de identidade por cenário (counts do dressing)
+// T74/F48 — canon-puro: W4 sem vestuário quantum (readme = ilha pirata);
+// CIGKV com patioring/holowall (Pátio de Armamento) e Parque canônico.
 const SIGNATURES = {
-  CIGKV: ['tent', 'flagmast', 'tirerow', 'bleacher', 'fanunit', 'ancienttree', 'boulder', 'stream'],
+  CIGKV: ['tent', 'flagmast', 'tirerow', 'bleacher', 'fanunit', 'ancienttree', 'boulder', 'stream', 'holowall', 'patioring'],
   Barburhen: ['stall', 'billboard', 'machinery', 'snowpile', 'snowpatch'],
   Priadus: ['waterpool', 'mudpatch', 'mangrove', 'hut', 'walkway', 'templestep', 'statue', 'brazier', 'coral', 'labdome'],
-  Ckesalth: ['tent', 'campfire', 'dune', 'banner', 'minecart', 'lavapatch', 'refinetower'],
-  Arukheea: ['runering', 'shard', 'crystal', 'quantumring', 'rift', 'voidscorch', 'strawhut', 'oilbarrel'],
+  Ckesalth: ['tent', 'campfire', 'dune', 'banner', 'minecart', 'lavapatch', 'refinetower', 'fallenpalm'],
+  Arukheea: ['voidscorch', 'strawhut', 'oilbarrel', 'burnthut', 'prisonkeep', 'heli', 'whalefactory'],
 };
 
 // tipos EXCLUSIVOS por cenário (leitura de identidade inconfundível)
 const EXCLUSIVE = {
   Priadus: ['waterpool', 'mangrove', 'templestep', 'labdome'],
-  Ckesalth: ['lavapatch', 'dune', 'refinetower', 'minecart'],
-  Arukheea: ['runering', 'shard', 'quantumring', 'rift', 'strawhut', 'oilbarrel'],
+  Ckesalth: ['lavapatch', 'dune', 'refinetower', 'minecart', 'fallenpalm'],
+  Arukheea: ['strawhut', 'oilbarrel', 'burnthut', 'prisonkeep', 'heli', 'whalefactory'],
   Barburhen: ['stall', 'billboard', 'snowpile'],
-  // F48 — riacho/árvore antiga/rocha-abrigo são o Cânon do Parque CIGKV
-  CIGKV: ['tirerow', 'bleacher', 'ancienttree', 'boulder', 'stream'],
+  // F48/T74 — riacho/árvore antiga/rocha/holo/pátio são o Cânon do CIGKV
+  CIGKV: ['tirerow', 'bleacher', 'ancienttree', 'boulder', 'stream', 'patioring', 'holowall'],
 };
 
 test('determinismo: mesma seed+cenário produzem placements idênticos', () => {
@@ -194,7 +196,7 @@ test('densidade responde ao tier: density menor produz kit igual ou menor', () =
   assert.ok(low.patches.length > 0 && low.patches.length <= full.patches.length, 'patches escalam com o tier');
 });
 
-test('patches de solo usam materiais do mundo (lava emissiva, água translúcida, runa alpha)', () => {
+test('patches de solo usam materiais do mundo (lava emissiva, água translúcida, rasgo de vazio)', () => {
   const { scene } = buildScene(77, 'Ckesalth', null, 'high');
   const lavaMeshes = [];
   scene.traverse((o) => {
@@ -211,14 +213,17 @@ test('patches de solo usam materiais do mundo (lava emissiva, água translúcida
   });
   assert.ok(water.length >= 1, 'poças de água translúcidas com relevo no Priadus');
 
+  // T74 — W4 canon-puro: a identidade de distrito é a ilha pirata (chalés/
+  // prisão/fábrica); o rasgo de vazio (voidscorch) segue como patch de solo.
   const { scene: arukheea } = buildScene(77, 'Arukheea', null, 'high');
-  let runeFound = false;
+  let voidFound = false;
   arukheea.traverse((o) => {
-    if (o.isMesh && o.material?.transparent && o.material?.map && o.material.color?.getHexString() === '59e6ff') {
-      runeFound = true;
+    if (o.isMesh && o.material?.transparent && o.material?.depthWrite === false
+        && o.material.color?.getHexString() === '120c22') {
+      voidFound = true;
     }
   });
-  assert.ok(runeFound, 'círculo de runa astral presente no Arukheea');
+  assert.ok(voidFound, 'rasgo de vazio (voidscorch) presente no Arukheea');
 });
 
 test('cenários preservados: SCENARIOS com o cânon F42 (README 1:1)', () => {
@@ -264,13 +269,21 @@ test('Fase 26: lavapatches (fendas de lava) cospem brasas — Encosta Média/Pic
   assert.ok(inside >= Math.floor(snap.length * .9), `brasas na arena (${inside}/${snap.length})`);
 });
 
-test('Fase 26: fenda do vazio no EAST VOID SANCTUM deriva motos (Arukheea)', () => {
+test('Fase 26/T74: Arukheea canon-puro — chalé queimado pulsa e barris queimam (fenda do vazio saiu do distrito)', () => {
   const { scene } = buildScene(33, 'Arukheea', null, 'high');
   const dressing = scene.userData.districtDressing;
-  assert.ok(dressing.counts.rift >= 1, `fenda de distrito presente (${dressing.counts.rift})`);
-  const system = scene.userData.particles;
-  for (let i = 0; i < 240; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
-  assert.ok(system.activeCount > 0, `motos do vazio vivas (${system.activeCount})`);
+  // T74 — README W4: identidade de distrito = chalés/prisão/fábrica (canon-puro);
+  // a fenda do vazio NÃO é mais item de distrito (o rasgo segue como patch).
+  assert.equal(dressing.counts.rift ?? 0, 0, 'rift saiu dos distritos do W4 (canon-puro)');
+  assert.ok(dressing.counts.burnthut >= 1, `chalé queimado presente (${dressing.counts.burnthut})`);
+  assert.ok(dressing.counts.oilbarrel >= 1, `barris de óleo da marina presentes (${dressing.counts.oilbarrel})`);
+  // brasas do chalé queimado respiram (animator de pulso) — roda headless sem NaN
+  for (let i = 0; i < 120; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
+  scene.traverse((o) => {
+    if (o.isMesh && o.material?.emissiveIntensity !== undefined) {
+      assert.ok(Number.isFinite(o.material.emissiveIntensity), 'emissiveIntensity finito');
+    }
+  });
 });
 
 test('Fase 26/32: CENÁRIOS SEM fontes de distrito ficam com o pool ocioso e integram', () => {
