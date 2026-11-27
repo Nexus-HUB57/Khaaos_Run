@@ -2843,3 +2843,32 @@ Stage Summary (Task 71 — mundos oficiais legíveis + FIX de regressão crític
 - Identidade oficial dos mundos (README W1–W4): groundTint de cada cenário agora chega AO CHÃO (antes só pintava o círculo do env-map); treeDensity por mundo no registry (Priadus ×7 = 246–448 árvores "Floresta da Escuridão", Arukheea ×2.5, Barburhen ×1.4, Ckesalth ×0.8 deserto) — buildTreeField já é InstancedMesh: a floresta custa 2 draw calls (contrato T70 mantido: calls ~860)
 - Noite legível (skyPhase NIGHT): pisos hemi 0.52→0.60, fill 0.14→0.18, back 0.18→0.22 — noite ESURA, não preta; dia (t=0) intocado (testado)
 - Validação: +10 testes — suíte FULL 1344/1331/0 fail, build OK; E2E visual: Priadus DIA com chão musgo + sol de crepúsculo + relevo (antes: banda preta), PRIADUS NOITE legível, CIGKV deserto + pôr do sol com bots/estruturas (antes: terreno escondido sob overlays); 0 pageerrors
+
+---
+
+## Sessão 2026-11-28 — F66: cenário dos Mundos 1:1 com o DOCX de referência (end to end)
+
+Task: "Prosseguir desenvolvimento dos cenários dos Mundos do Jogo, seguem as referências" (DOCX "Khaaos Ville — Ref. Mundos" anexado; benchmark Free Fire/CoD)
+
+Recon:
+- main local desatualizada (e4dd779) → pull: origin/main em #420 (F48b reconciliação T74 MERGED); WCFG_* de components_dev são legacy-pre-f42 (cânone real = shared/worlds.ts F42 + KITS/scenarios)
+- PRs #376/#414/#418 merged no main (11-24); #410 entrou via #402 → tarefa de merge dos 4 PRs segue SUPERADA
+- Gap analysis DOCX vs RUNTIME fechou 9 lacunas canônicas (matriz completa em docs/FASE66_CENARIO_MUNDOS_DOCX.md)
+
+Implementado (6 arquivos, +~700/−20):
+- textures3d: mossMaterial + dryLakeMaterial (canvas procedural, PRNG estável)
+- districts3d: 8 builders (gazebo, brokenbench, grasstuft, officerhouse, brokenbridge, isle, rotcorpse, barbwire) + 3 patches (moss/drylake/lake) + emitters (faíscas da cerca W4, fumaça real na chaminé da fábrica W4 — voluta estática saiu) + bloco canônico do LAGO de Priadus (3 ilhotas DENTRO do espelho, 2 pontes NA borda, com retry determinístico de âncoras) + refinetower/bench/isle/corpse nomeados p/ auditoria
+- fauna3d/faunaAI3d: FAUNA_PLAN + dog W1 (vira-lata raivoso, boldness .58, cabeça erguida) + vulture/jackal em W2 (DOCX: "Abutres, Chacais e Corpos Apodrecendo"); buildDog + animator
+- world3d: skyline de montanhas GATED por cânon — Ckesalth SEM cordilheira de fundo (DOCX do resort: "apenas deserto e palmeiras caídas"); planos nomeados skyline-mountain
+
+Testes:
+- mundos-detalhes: +5 F66 (presença DOCX por mundo, exclusividade com donos múltiplos — skeleton agora W1+W2, âncoras do lago: ilhota dist<r*.8 e ponte na banda .6r–1.15r, determinismo byte-idêntico, skyline W3=0/others=4)
+- fauna3d: dog W1 ≥1, vulture/jackal W2, dog==0 em W2
+- SUÍTE COMPLETA: 1359 testes — 1346 pass / 0 fail / 13 skip (DB adapters); tsc 0 erros; build root OK
+
+E2E visual (vite 5199 + swiftshader + canvas.toDataURL, showcase dirigido por bbox com restore anti-culling):
+- 11 capturas OK em download/f66-evidencias: W1 coreto/banco+musgo/corpo/cão; W2 lago+pontes+ilhotas/abutre; CIGKV casa dos oficiais; W3 horizonte SEM montanhas; W4 cerca em curto/fábrica
+- Honestidade: fumaça da chaminé (grammar F33 de emitters) fraca em still headless — emitter registrado (probe confirmou world-particles + counts), leitura visual plena segue no navegador real
+
+GitHub:
+- Branch feat/f66-mundos-cenario-docx + PR; token validado em runtime (.secrets/gh_token_runtime, PB-07 sem echo)

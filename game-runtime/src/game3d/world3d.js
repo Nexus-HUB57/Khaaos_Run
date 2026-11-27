@@ -696,6 +696,10 @@ export function applyGltfProps(scene) {
 
 // ---------- Fase 6 — cordilheira de fundo ----------
 function buildMountains(scene, scenario) {
+  // F66 — W3 Ckesalth (DOCX de referência: "sem as montanhas e o mar ao fundo,
+  // APENAS deserto e palmeiras caídas"): o horizonte do deserto é duna+céu,
+  // sem cordilheira de fundo (os outros mundos mantêm a marca de skyline).
+  if (scenario.id === 'Ckesalth') return;
   const tint = '#' + new THREE.Color(scenario.sky.horizon).multiplyScalar(.5).getHexString();
   const mat = new THREE.MeshBasicMaterial({
     map: mountainTexture(tint), transparent: true, depthWrite: false, fog: false,
@@ -703,6 +707,7 @@ function buildMountains(scene, scenario) {
   const R = 560, W = 760, H = 190;
   for (let i = 0; i < 4; i++) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+    m.name = 'skyline-mountain';                 // F66 — nome p/ auditoria de cânon
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
     m.position.set(Math.sin(a) * R, H * .32, Math.cos(a) * R);
     m.rotation.y = a + Math.PI; // voltada para o centro

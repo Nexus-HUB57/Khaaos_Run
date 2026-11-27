@@ -28,6 +28,7 @@ import {
   runeMaterial, riftMaterial, awningMaterial, plankMaterial,
   duneMaterial, bannerMaterial, signTexture,
   quicksandMaterial, mistMaterial, // F43 — areia movediça (W3) + neblina alucinógena (W2)
+  mossMaterial, dryLakeMaterial,   // F66 — musgo invasor (W1) + lago seco (W1)
 } from './textures3d.js';
 
 // ============================================================================
@@ -61,7 +62,7 @@ const KITS = {
     0: { tent: 3, flagmast: 2, holowall: 2, patioring: 1 },   // Pátio de Armamento
     1: { tirerow: 2, bleacher: 1, tent: 1 },           // Proving Grounds
     2: { bleacher: 1, flagmast: 2, ancienttree: 2, boulder: 3, stream: 2 }, // Parque Abandonado
-    3: { fanunit: 2 },                                 // Setor Industrial
+    3: { fanunit: 2, officerhouse: 4 },                // Urbano Denso (F66: vila abandonada das casas dos oficiais)
     4: {},                                             // Terminal ZEX (praça limpa)
   },
   Barburhen: {
@@ -70,10 +71,13 @@ const KITS = {
     // F42 — trilhos no setor da ESTAÇÃO (README W1: ZEX = estação ferroviária)
     // F43 — README W1: "construções inacabadas... desabamentos": esqueletos de
     // concreto + lajes tombadas sobre entulho nos 4 distritos da cidade.
-    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1, skeleton: 1, collapse: 1 },      // Área Urbana e Comercial
-    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1, rail: 2, skeleton: 1 }, // Setor Industrial (estação)
-    2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1, collapse: 1 },     // Parque Abandonado
-    3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1, skeleton: 1 }, // Zona de Extração
+    // F66 — DOCX de referência: "a floresta tomando a cidade, MUSGO e GRAMAS
+    // por todos os lados, pouco concreto, pouco asfalto"; Parque com CORETO,
+    // LAGO SECO e BANCOS QUEBRADOS; corpos estáticos (lore: não despawnam).
+    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1, skeleton: 1, collapse: 1, moss: 3, grasstuft: 6, rotcorpse: 1 },      // Área Urbana e Comercial
+    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1, rail: 2, skeleton: 1, moss: 2, grasstuft: 3 }, // Setor Industrial (estação)
+    2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1, collapse: 1, gazebo: 1, brokenbench: 3, drylake: 1, moss: 3, grasstuft: 4 },     // Parque Abandonado
+    3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1, skeleton: 1, moss: 2, grasstuft: 3, rotcorpse: 1 }, // Zona de Extração
     4: {},
   },
   Priadus: {
@@ -81,9 +85,12 @@ const KITS = {
     // área de caça com totens e o Templo Antigo dos Duazhs
     // F43 — README W2: "flora carnívora" + "neblina alucinógena": plantas-bulbo
     // ácidas com dentes/tentáculos e bancos de névoa rasteira pulsante.
-    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1, roots: 2, coral: 2, carnplant: 2, mist: 2 },   // Área Pantanosa
-    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1, labdome: 1, fallenlog: 2, sporesac: 2, carnplant: 2, mist: 2 }, // O Bosque
-    2: { waterpool: 1, walkway: 1, statue: 2, totem: 2, sporesac: 1, roots: 1, mist: 1 },             // Área de Caça
+    // F66 — DOCX de referência: LAGO com "pontes em deterioração" + "pequenas
+    // ilhas espalhadas" (ancorados ao espelho d'água, ver bloco canônico
+    // adiante); "esqueletos e corpos apodrecendo em meio às folhagens".
+    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1, roots: 2, coral: 2, carnplant: 2, mist: 2, lake: 1, skeleton: 1, rotcorpse: 1 },   // Área Pantanosa
+    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1, labdome: 1, fallenlog: 2, sporesac: 2, carnplant: 2, mist: 2, skeleton: 1, rotcorpse: 1 }, // O Bosque
+    2: { waterpool: 1, walkway: 1, statue: 2, totem: 2, sporesac: 1, roots: 1, mist: 1, rotcorpse: 1 },             // Área de Caça
     3: { templestep: 1, statue: 2, brazier: 2, fallenlog: 1, mist: 1 },                                // Templo Antigo
     4: {},
   },
@@ -93,10 +100,12 @@ const KITS = {
     // T74 — README W3: "palmeiras DERRUBADAS" (fallenpalm) nos 3 setores de areia
     0: { dune: 2, banner: 2, palmstump: 2, fallenpalm: 2, resortwall: 1, oilpool: 2 },  // Resort Abandonado
     1: { tent: 2, campfire: 1, banner: 1, bones: 2, palmstump: 1, fallenpalm: 1 },      // Vilarejo Beduíno
-    2: { refinetower: 1, oiltank: 2, pipeline: 2, lavapatch: 2, minecart: 1, oilpool: 1 }, // Refinaria de Petróleo
+    2: { refinetower: 1, oiltank: 2, pipeline: 2, lavapatch: 2, minecart: 1, oilpool: 1, smokecolumn: 1 }, // Refinaria (F66: fumaça tóxica visível)
     // F43 — README W3: "areia movediça" ganha o patch visual do terreno que
     // engole no setor canônico (a mecânica de afundamento segue UE5).
-    3: { dune: 2, bones: 2, palmstump: 1, fallenpalm: 2, quicksand: 2 },                // Cemitério de Areia
+    // F66 — DOCX de referência: "os caídos são alimento dos abutres" no
+    // Cemitério de Areia — corpo apodrecendo estático (mesh de lore).
+    3: { dune: 2, bones: 2, palmstump: 1, fallenpalm: 2, quicksand: 2, rotcorpse: 1 },                // Cemitério de Areia
     4: {},
   },
   Arukheea: {
@@ -107,7 +116,9 @@ const KITS = {
     // Farol mantido; barris de óleo em chamas na marina (F48); aves carnicentas
     // (fauna3d) circulam o Cemitério das Baleias.
     0: { palmtree: 3, burnthut: 2, strawhut: 1 },                              // Bosque dos Perdidos
-    1: { prisonwall: 2, prisonkeep: 1, heli: 1, lighthouse: 1, strawhut: 2 },  // Prisão do Sol da Noite + fuga
+    // F66 — DOCX de referência: prisão ameaçadora — "mais arames farpados,
+    // cercas em curto circuito e faíscas" (barbwire com ponta de energia).
+    1: { prisonwall: 2, prisonkeep: 1, heli: 1, lighthouse: 1, strawhut: 2, barbwire: 3 },  // Prisão do Sol da Noite + fuga
     2: { whaleribs: 2, bones: 2, whalefactory: 1, strawhut: 1 },               // Fábrica / Cemitério das Baleias
     3: { shipwreck: 2, palmtree: 2, burnthut: 1, oilbarrel: 3 },               // Marina Fantasma
     4: {},
@@ -119,7 +130,7 @@ const KITS = {
 // alucinógena) entram na MESMA gramática de patch de solo.
 // F48 — 'stream' (README CIGKV: "riachos" do Parque Abandonado) na mesma
 // gramática — faixa d'água alongada com margens.
-const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist', 'stream', 'patioring']);
+const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist', 'stream', 'patioring', 'moss', 'drylake', 'lake']);
 
 /**
  * Placements determinísticos do dressing por cenário.
@@ -199,7 +210,15 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
     for (const [type, count] of Object.entries(recipe)) {
       const n = Math.max(type.endsWith('patch') || type === 'runering' ? 1 : 0, Math.round(count * density));
       if (PATCH_TYPES.has(type)) {
-        scatterPatch(district, type, n, type === 'runering' ? { rMin: 3.2, rMax: 4.4 } : {});
+        // F66 — raio canônico por patch: o LAGO de Priadus precisa de espelho
+        // grande (ilhotas dentro + pontes na borda); o LAGO SECO do Parque W1
+        // é uma bacia média rachada; patioring mantém o anel do Pátio.
+        scatterPatch(district, type, n, {
+          lake: { rMin: 5.5, rMax: 7.5, tries: 44 },
+          drylake: { rMin: 4.4, rMax: 6.2, tries: 34 },
+          moss: { rMin: 3.4, rMax: 5.4, tries: 30 },
+          patioring: { rMin: 3.2, rMax: 4.4 },
+        }[type] ?? {});
         continue;
       }
       // assinatura de tamanho por tipo (grandes marcos de distrito × micro props)
@@ -244,8 +263,48 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         heli: { sMin: 1, sMax: 1, size: 2.4, gap: 9 },          // helicóptero de fuga W4
         whalefactory: { sMin: 1, sMax: 1, size: 3.0, gap: 10 }, // fábrica de óleo W4
         holowall: { sMin: .95, sMax: 1.15, size: 1.9, gap: 6 }, // parede holográfica CIGKV
+        // F66 — DOCX de referência: coreto/bancos/grama W1, casas dos oficiais
+        // CIGKV, cerca em curto W4, corpo apodrecendo W1/W2/W3
+        gazebo: { sMin: 1, sMax: 1, size: 2.6, gap: 12 },
+        brokenbench: { sMin: .9, sMax: 1.1, size: 1.4, gap: 5 },
+        grasstuft: { sMin: .7, sMax: 1.3, size: .5, gap: 2.2 },
+        officerhouse: { sMin: .95, sMax: 1.1, size: 3.2, gap: 12 },
+        barbwire: { sMin: 1, sMax: 1.1, size: 2.4, gap: 8 },
+        rotcorpse: { sMin: .9, sMax: 1.1, size: 1.6, gap: 5 },
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
       scatter(district, type, n, spec);
+    }
+  }
+
+  // F66 — W2 DOCX: "O mundo deve ter um lago, onde deve haver pontes em
+  // deterioração, com pequenas ilhas espalhadas" — ilhotas DENTRO do espelho
+  // do lago e pontes NA BORDA (atravessando para a água), ancoradas ao lago
+  // e não espalhadas pelo distrito; mesmas garantias de aceitação.
+  if (scenario.id === 'Priadus') {
+    const lake = patches.find((p) => p.type === 'lake');
+    if (lake) {
+      for (let i = 0; i < 3; i++) {
+        const a0 = rng.next() * Math.PI * 2;
+        for (let t = 0; t < 6; t++) {
+          const a = a0 + t * 1.05;
+          const r = lake.r * (.3 + rng.next() * .34);
+          const x = lake.x + Math.cos(a) * r, z = lake.z + Math.sin(a) * r;
+          if (!accept(x, z, .9)) continue;
+          pushItem('isle', x, z, rng.next() * Math.PI * 2, .9 + rng.next() * .35);
+          break;
+        }
+      }
+      for (let i = 0; i < 2; i++) {
+        const a0 = (i === 0 ? .4 : 3.6) + rng.next() * .7;
+        for (let t = 0; t < 8; t++) {
+          const a = a0 + t * .8;
+          const r = lake.r * (.86 + rng.next() * .18);
+          const x = lake.x + Math.cos(a) * r, z = lake.z + Math.sin(a) * r;
+          if (!accept(x, z, .9)) continue;
+          pushItem('brokenbridge', x, z, a + Math.PI / 2, 1);
+          break;
+        }
+      }
     }
   }
 
@@ -280,6 +339,9 @@ const SHADOW_SIZE = {
   strawhut: 3.0, oilbarrel: 1.0, boulder: 2.0, ancienttree: 5.0,
   // T74 — canon W3/W4/CIGKV
   fallenpalm: 3.0, burnthut: 2.2, prisonkeep: 2.6, heli: 2.4, whalefactory: 3.4, holowall: 2.0,
+  // F66 — DOCX de referência
+  gazebo: 3.6, brokenbench: 1.6, grasstuft: .7, officerhouse: 4.4,
+  brokenbridge: 4.4, isle: 2.4, rotcorpse: 1.8, barbwire: 2.6,
 };
 
 const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
@@ -643,6 +705,7 @@ const BUILDERS = {
   },
   refinetower(m) {
     const g = new THREE.Group();
+    g.name = 'refinetower';
     const column = new THREE.Mesh(new THREE.CylinderGeometry(.42, .55, 6.4, 10), m.steel);
     column.position.y = 3.2; column.castShadow = true;
     g.add(column);
@@ -1345,13 +1408,11 @@ const BUILDERS = {
     roof.position.y = 1.58; roof.rotation.z = .04; g.add(roof);
     const chimney = new THREE.Mesh(new THREE.CylinderGeometry(.18, .22, 1.5, 8), m.rust);
     chimney.position.set(1.15, 2.1, -.4); chimney.rotation.z = .08; chimney.castShadow = true;
-    const smoke = new THREE.Mesh(new THREE.SphereGeometry(.22, 6, 5),
-      new THREE.MeshStandardMaterial({ color: '#3a3a3e', transparent: true, opacity: .5, roughness: 1 }));
-    smoke.position.set(1.28, 3.0, -.4); smoke.name = 'chimneySmoke';
+    // F66 — a voluta ESTÁTICA saiu: a chaminé fumega de verdade (emitter de
+    // partículas no buildDistrictDressing, boca em (1.28, 3.0, -.4) local).
     const tank = new THREE.Mesh(new THREE.CylinderGeometry(.4, .4, .9, 10), m.rust);
     tank.rotation.z = Math.PI / 2; tank.position.set(-1.8, .4, .9); tank.castShadow = true;
-    g.add(shed, roof, chimney, smoke, tank);
-    g.userData.floatMesh = smoke;
+    g.add(shed, roof, chimney, tank);
     return g;
   },
 
@@ -1381,6 +1442,221 @@ const BUILDERS = {
     base.position.y = .05; g.add(base);
     return g;
   },
+
+  // ---------- F66 — DOCX de referência: coreto/bancos/grama de Barburhen,
+  // casas dos oficiais do CIGKV, lago de Priadus, corpos apodrecendo e a
+  // cerca em curto-circuito da Prisão de Arukheea -------------------------
+
+  // CORETO CENTRAL (W1 Parque Abandonado — DOCX: "Coreto central"): base
+  // octogonal de pedra com banda de musgo, 6 colunas (1 tombada) e cúpula.
+  gazebo(m) {
+    const g = new THREE.Group();
+    g.name = 'gazebo';
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.75, .38, 8), m.stone);
+    base.position.y = .19; base.castShadow = base.receiveShadow = true;
+    const mossBand = new THREE.Mesh(new THREE.CylinderGeometry(1.78, 1.78, .16, 8),
+      ST('#46622e', { rough: .95, flat: true }));
+    mossBand.position.y = .3;
+    g.add(base, mossBand);
+    const postGeo = new THREE.CylinderGeometry(.07, .09, 2.1, 6);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const broken = i === 2;                     // coluna tombada pela floresta
+      const post = new THREE.Mesh(postGeo, m.woodDark);
+      const h = broken ? 1.0 : 2.1;
+      post.scale.y = h / 2.1;
+      post.position.set(Math.cos(a) * 1.3, .38 + h / 2, Math.sin(a) * 1.3);
+      if (broken) { post.rotation.z = .8; post.position.x += .35; }
+      post.castShadow = true;
+      g.add(post);
+    }
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.05, 8), m.woodDark);
+    roof.position.y = 2.75; roof.castShadow = true;
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(.11, 6, 5), m.stoneDark);
+    finial.position.y = 3.32;
+    g.add(roof, finial);
+    return g;
+  },
+
+  // BANCO QUEBRADO (W1 Parque — DOCX: "bancos quebrados"): assento estourado,
+  // perna arrancada e musgo no encosto — mobiliário tomado pela vegetação.
+  brokenbench(m) {
+    const g = new THREE.Group();
+    g.name = 'brokenbench';
+    const seatA = new THREE.Mesh(new THREE.BoxGeometry(1.3, .07, .42), m.woodDark);
+    seatA.position.set(-.3, .42, 0); seatA.rotation.z = .06; seatA.castShadow = true;
+    const seatB = new THREE.Mesh(new THREE.BoxGeometry(.55, .07, .42), m.woodDark);
+    seatB.position.set(.52, .3, .1); seatB.rotation.z = -.32; seatB.rotation.y = .4; // ripa estourada
+    const legA = new THREE.Mesh(new THREE.BoxGeometry(.09, .42, .4), m.woodDark);
+    legA.position.set(-.5, .21, 0);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.25, .3, .06), m.woodDark);
+    back.position.set(-.3, .62, -.22); back.rotation.x = .25; back.rotation.z = -.07;
+    const mossSeat = new THREE.Mesh(new THREE.BoxGeometry(.7, .03, .34), ST('#3f5a28', { rough: .95, flat: true }));
+    mossSeat.position.set(-.35, .47, 0);
+    g.add(seatA, seatB, legA, back, mossSeat);
+    return g;
+  },
+
+  // GRAMA INVASORA (W1 — DOCX: "gramas por todos os lados"): tufo fino
+  // nascendo das rachaduras do concreto/asfalto (o inverso da F58: a cidade
+  // urbana PERDE asfalto para a natureza, como o cânon pede).
+  grasstuft(m) {
+    const g = new THREE.Group();
+    const bladeGeo = new THREE.ConeGeometry(.032, .42, 4);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + (i % 3) * .35;
+      const blade = new THREE.Mesh(bladeGeo,
+        ST(i % 2 ? '#5d7a34' : '#6f8a3c', { rough: .92, flat: true }));
+      const tilt = .18 + (i % 4) * .07;
+      blade.position.set(Math.cos(a) * .09, .17, Math.sin(a) * .09);
+      blade.rotation.set(Math.cos(a) * tilt, 0, -Math.sin(a) * tilt);
+      blade.scale.y = .7 + (i % 3) * .3;
+      g.add(blade);
+    }
+    return g;
+  },
+
+  // CASA DOS OFICIAIS (CIGKV — DOCX: "Vila abandonada de Casas dos oficiais"):
+  // casa térrea com telhado de duas águas, janelas escurecidas com ripas
+  // tortas, porta entreaberta e banda de musgo na base (abandonada há anos);
+  // variante 1 = telhado parcialmente colapsado.
+  officerhouse(m, variant) {
+    const g = new THREE.Group();
+    g.name = 'officerhouse';
+    const burnt = variant === 1;
+    const wall = ST(burnt ? '#6e6254' : '#b0a898', { rough: .92, flat: true });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.9, 2.4), wall);
+    body.position.y = .95; body.castShadow = body.receiveShadow = true;
+    const roofL = new THREE.Mesh(new THREE.BoxGeometry(1.9, .09, 2.7), m.woodDark);
+    roofL.position.set(-.85, 2.28, 0); roofL.rotation.z = .52;
+    const roofR = roofL.clone(); roofR.position.x = .85; roofR.rotation.z = -.52;
+    if (burnt) { roofL.rotation.z = .95; roofL.position.y = 2.05; roofR.rotation.z = -.2; }
+    g.add(body, roofL, roofR);
+    for (const wx of [-.85, .85]) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(.52, .6, .06),
+        new THREE.MeshStandardMaterial({ color: '#12100c', roughness: 1 }));
+      win.position.set(wx, 1.25, 1.21);
+      g.add(win);
+      for (const bx of [-.12, .13]) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(.05, .62, .02), m.woodDark);
+        bar.position.set(wx + bx, 1.25, 1.25); bar.rotation.z = (bx > 0 ? .1 : -.14);
+        g.add(bar);
+      }
+    }
+    const door = new THREE.Mesh(new THREE.BoxGeometry(.72, 1.45, .06), m.woodDark);
+    door.position.set(.15, .74, 1.21); door.rotation.y = .22; g.add(door);
+    const mossBand = new THREE.Mesh(new THREE.BoxGeometry(3.28, .4, 2.48), ST('#46622e', { rough: .95, flat: true }));
+    mossBand.position.y = .2;
+    g.add(mossBand);
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(.34, .8, .34), m.stoneDark);
+    chimney.position.set(-1.1, 2.5, -.7); chimney.rotation.z = burnt ? .18 : .04;
+    g.add(chimney);
+    return g;
+  },
+
+  // PONTE DETERIORADA (W2 — DOCX: "pontes em deterioração" do lago): dois
+  // vãos com verga cedida, pranchas faltando e guarda-corpo torto — ancorada
+  // à borda do lago pelo placement canônico (perpendicular à margem).
+  brokenbridge(m) {
+    const g = new THREE.Group();
+    g.name = 'brokenbridge';
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.09, .11, .95, 6), m.woodDark);
+      post.position.set(0, .2, s * .42); post.castShadow = true;
+      g.add(post);
+    }
+    const deckA = new THREE.Mesh(new THREE.BoxGeometry(2.2, .09, .9), m.wood);
+    deckA.position.set(-1.05, .62, 0); deckA.rotation.z = .1; deckA.castShadow = true;
+    const deckB = new THREE.Mesh(new THREE.BoxGeometry(2.2, .09, .9), m.wood);
+    deckB.position.set(1.05, .5, 0); deckB.rotation.z = -.16; deckB.castShadow = true;
+    g.add(deckA, deckB);
+    for (const [px, tilt] of [[-.9, 0], [.2, .22], [1.5, -.3]]) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(.5, .05, .82), m.woodDark);
+      plank.position.set(px, .66, 0); plank.rotation.z = tilt;
+      g.add(plank);
+    }
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(3.4, .05, .05), m.woodDark);
+    rail.position.set(.3, .95, .44); rail.rotation.z = .14; rail.rotation.y = .05;
+    g.add(rail);
+    return g;
+  },
+
+  // ILHOTA DO LAGO (W2 — DOCX: "pequenas ilhas espalhadas"): montículo de
+  // lama com mangue anão e capim, nascendo do espelho d'água.
+  isle(m) {
+    const g = new THREE.Group();
+    g.name = 'isle';
+    const mound = new THREE.Mesh(new THREE.ConeGeometry(1.1, .5, 9), ST('#5a4a32', { rough: .96, flat: true }));
+    mound.position.y = .22; mound.scale.set(1, .8, .8); mound.castShadow = true;
+    g.add(mound);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.05, .08, .9, 6), m.mangroveTrunk);
+    trunk.rotation.z = .18; trunk.position.set(.3, .85, 0); g.add(trunk);
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(.55, .5, 7), m.mangroveCanopy);
+    canopy.position.set(.42, 1.35, 0); canopy.rotation.z = .1; g.add(canopy);
+    for (let i = 0; i < 4; i++) {
+      const reed = new THREE.Mesh(new THREE.ConeGeometry(.03, .5, 4),
+        ST('#5d7a34', { rough: .92, flat: true }));
+      reed.position.set(Math.cos(i * 1.7) * .5, .5, Math.sin(i * 1.7) * .4);
+      reed.rotation.z = Math.cos(i * 1.7) * .25;
+      g.add(reed);
+    }
+    return g;
+  },
+
+  // CORPO APONDORECENDO (W1 "corpos estáticos" de lore / W2 "corpos apodrecendo
+  // em meio às folhagens" / W3 "os caídos são alimento dos abutres"): torso
+  // caído com crânio e braço expostos, coberto por trepadeiras — mesh
+  // ESTÁTICO que não despawna (cânon de lore).
+  rotcorpse(m) {
+    const g = new THREE.Group();
+    g.name = 'rotcorpse';
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(.24, 8, 6),
+      ST('#5a5244', { rough: .98, flat: true }));
+    torso.scale.set(.75, .42, 1.5); torso.position.y = .12; torso.castShadow = true;
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(.095, 7, 6), m.bone);
+    skull.position.set(0, .14, .56);
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(.16, .022, 5, 9, Math.PI), m.bone);
+    rib.rotation.x = Math.PI / 2; rib.rotation.z = Math.PI; rib.position.set(0, .16, .1);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(.04, .03, .5, 5), m.bone);
+    arm.rotation.z = Math.PI / 2; arm.rotation.y = .5; arm.position.set(.3, .07, .18);
+    g.add(torso, skull, rib, arm);
+    for (let i = 0; i < 3; i++) {
+      const vine = new THREE.Mesh(new THREE.BoxGeometry(.9, .02, .16),
+        ST('#3f6b2a', { rough: .92 }));
+      vine.position.set(0, .1 + i * .04, -.25 + i * .22);
+      vine.rotation.y = (i - 1) * .5;
+      g.add(vine);
+    }
+    return g;
+  },
+
+  // CERCA DE ARAME FARPADO EM CURTO (W4 Prisão — DOCX: "mais arames farpados,
+  // cercas em curto circuito e faíscas"): dois postes tortos enferrujados,
+  // 3 fios com farpes e ponta de energia — as FAÍSCAS são emitter real.
+  barbwire(m) {
+    const g = new THREE.Group();
+    g.name = 'barbwire';
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.055, .07, 1.15, 6), m.rust);
+      post.position.set(s * 1.05, .5, 0); post.rotation.z = s * .09; post.castShadow = true;
+      g.add(post);
+    }
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 5),
+      ST('#bfe6ff', { emissive: '#7fc4ff', ei: 1.4, rough: .4 }));
+    tip.position.set(1.13, 1.12, 0); g.add(tip);
+    const wireGeo = new THREE.BoxGeometry(2.15, .014, .014);
+    for (const [h, sag] of [[.45, .015], [.72, .04], [1.0, .02]]) {
+      const wire = new THREE.Mesh(wireGeo, m.rust);
+      wire.position.set(0, h - sag, 0); wire.rotation.z = sag * .8;
+      g.add(wire);
+      for (let b = 0; b < 3; b++) {
+        const barb = new THREE.Mesh(new THREE.OctahedronGeometry(.032), m.rust);
+        barb.position.set(-.7 + b * .7, h - sag + .03, 0);
+        g.add(barb);
+      }
+    }
+    return g;
+  },
 };
 
 // materiais de patch por tipo
@@ -1398,6 +1674,9 @@ function patchMaterial(type, scenario) {
     case 'mist': return mistMaterial();         // F43 — neblina alucinógena (W2)
     case 'stream': return waterPoolMaterial('#3f6f62'); // F48 — riacho do Parque CIGKV
     case 'patioring': return patioRingMaterial(); // T74 — anel do Pátio de Armamento (CIGKV, energia ciano)
+    case 'moss': return mossMaterial();         // F66 — musgo invasor (W1)
+    case 'drylake': return dryLakeMaterial();   // F66 — lago seco do Parque (W1)
+    case 'lake': return waterPoolMaterial('#2e6b63'); // F66 — espelho do lago (W2, mesma água do pântano)
     default: return mudMaterial(2);
   }
 }
@@ -1526,6 +1805,34 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
           drag: .4, gravity: -0.45, alpha: .32,
           color: [.23, .21, .2], endColor: [.5, .48, .46],
         }));
+      } else if (item.type === 'barbwire') {
+        // F66 — W4 DOCX: "cercas em curto circuito e faíscas": fagulhas
+        // quentes saltam da ponta em curto (vida breve, gravidade puxa).
+        addEmitter({
+          x: item.x + Math.cos(item.rot) * 1.13 * item.s,
+          y: 1.12 * item.s,
+          z: item.z - Math.sin(item.rot) * 1.13 * item.s,
+        }, 2.2, () => ({
+          dx: (particleRng.next() - .5) * .12, dy: 0, dz: (particleRng.next() - .5) * .12,
+          vx: (particleRng.next() - .5) * 1.6, vy: 1.4 + particleRng.next() * 1.4, vz: (particleRng.next() - .5) * 1.6,
+          size: .09 + particleRng.next() * .08, growth: -.04, life: .3 + particleRng.next() * .3,
+          drag: .05, gravity: 3.4, alpha: .95,
+          color: [1, .82, .3], endColor: [.5, .14, .03],
+        }));
+      } else if (item.type === 'whalefactory') {
+        // F66 — W4 DOCX: "fábrica de óleo de baleia enferrujada com chaminé
+        // fumegante": coluna REAL na boca da chaminé (offset local
+        // (1.28, 3.0, -.4) rotacionado pelo rot do item) — a voluta estática
+        // do builder saiu (F66).
+        const smokeX = item.x + (1.28 * Math.cos(item.rot) + (-.4) * Math.sin(item.rot)) * item.s;
+        const smokeZ = item.z + (-1.28 * Math.sin(item.rot) + (-.4) * Math.cos(item.rot)) * item.s;
+        addEmitter({ x: smokeX, y: 3.0 * item.s, z: smokeZ }, 2.6, () => ({
+          dx: (particleRng.next() - .5) * .16, dy: 0, dz: (particleRng.next() - .5) * .16,
+          vx: .35 + particleRng.next() * .35, vy: 1.1 + particleRng.next() * .8, vz: (particleRng.next() - .5) * .3,
+          size: .4 + particleRng.next() * .4, growth: .7, life: 2.4 + particleRng.next() * 1.6,
+          drag: .4, gravity: -0.4, alpha: .36,
+          color: [.3, .29, .28], endColor: [.52, .5, .48],
+        }));
       }
     }
     for (const p of placements.patches) {
@@ -1589,6 +1896,7 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   for (const [type, list] of byType) {
     const mat = patchMaterial(type, scenario);
     const im = new THREE.InstancedMesh(patchGeo, mat, list.length);
+    im.name = `patch-${type}`;                    // F66 — nome p/ auditoria de cânon
     const dummy = new THREE.Object3D();
     list.forEach((p, i) => {
       dummy.position.set(p.x, .018 + i * .0009, p.z); // stagger anti z-fight

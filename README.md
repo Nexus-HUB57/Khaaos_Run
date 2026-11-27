@@ -21,6 +21,7 @@
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
 - [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
+- [Desenvolvimento recente — Cenário dos Mundos 1:1 com o DOCX de referência (F66, 2026-11-28)](#desenvolvimento-recente--cenário-dos-mundos-11-com-o-docx-de-referência-f66-2026-11-28)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -405,6 +406,21 @@ Distribuição de mundos: 7 em Barburhen (coração urbano pós-guerra), 7 no CI
 1. Merge do PR deste branch na `main` e novo deploy de staging com o viewer 3D das figuras ativo.
 2. Validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs (bloqueio: 0 self-hosted runners `[self-hosted, linux, gpu, ue5.8, x64]`).
 3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset — `figureGlbSrc()` e o contrato `figures-glb-viewer.test.ts` já garantem a troca transparente).
+
+## Desenvolvimento recente — Cenário dos Mundos 1:1 com o DOCX de referência (F66, 2026-11-28)
+
+> Cânon dos cenários guiado pelo **DOCX de referência oficial dos Mundos** ("Khaaos Ville — Ref. Mundos"), com **Free Fire** e **Call of Duty** como benchmark de realismo. Matriz completa em `docs/FASE66_CENARIO_MUNDOS_DOCX.md`. Esta fase vem depois da F48/T74 (fauna de carniça + chalés/barris W4 + Pátio holográfico CIGKV, PRs #419/#420).
+
+| Mundo | Exigência do DOCX agora materializada no RUNTIME |
+|-------|---------------------------------------------------|
+| **W1 Barburhen** | "a floresta tomando a cidade, **musgo e gramas por todos os lados**, pouco concreto, pouco asfalto": discos de musgo com falhas de concreto + tufos de grama nas rachaduras (10 musgos + 16 tufos por mapa); Parque Abandonado com **coreto central** (1 coluna tombada), **lago seco** de barro rachado e **bancos quebrados**; **corpos estáticos** de lore (não despawnam) |
+| **W2 Priadus** | "**lago**, onde deve haver **pontes em deterioração**, com **pequenas ilhas espalhadas**": espelho d'água canônico com **3 ilhotas DENTRO** (mangue anão + capim) e **2 pontes NA borda** (pranchas faltando, verga cedida); "**abutres, chacais** e corpos apodrecendo": térmico de abutres + matilha de chacais + corpos/esqueletos entre as folhagens |
+| **W3 Ckesalth** | resort "**sem as montanhas e o mar ao fundo, apenas deserto**": cordilheira de fundo REMOVIDA do skyline (testado em 2 seeds; demais mundos mantêm); refinaria com fumaça tóxica; "os caídos são alimento dos abutres" no Cemitério de Areia |
+| **W4 Arukheea** | prisão ameaçadora: **arames farpados** com **cercas em curto circuito e faíscas** (emitter real); fábrica de óleo de baleia com **chaminé fumegante** (fumaça real na boca da chaminé; voluta estática removida) |
+| **CIGKV** | "**vila abandonada de casas dos oficiais**": 4 casas com telhado de duas águas, janelas escurecidas com ripas tortas e musgo na base (variante colapsada) |
+| **Fauna canônica** | lista oficial "Animais do Jogo" completada: **cão raivoso** (W1 Plus− "cães raivosos" — vira-lata territorial, boldness > chacal) + abutres/chacais em W2 |
+
+**Garantias:** determinismo por seed (byte-idêntico), zero collider novo, exclusividade por mundo, patches como InstancedMesh (contrato de draw calls da T70). **Validação:** suíte game-runtime 1359 testes (1346 pass / 0 fail / 13 skip de DB), tsc 0 erros, build OK, 11 capturas E2E headless dirigidas por bbox em `download/f66-evidencias/` (coreto, banco+musgo, corpo, cão, lago+pontes+ilhotas, abutre, casa dos oficiais, cerca em curto, fábrica, horizonte do deserto).
 
 ## Ontologia dos Mundos
 

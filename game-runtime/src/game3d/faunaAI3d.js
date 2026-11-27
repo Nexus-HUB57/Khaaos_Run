@@ -62,6 +62,14 @@ export const SPECIES_AI = Object.freeze({
     idleMin: 0.4, idleMax: 1.8, states: ['idle', 'wander', 'flee', 'investigate'],
     boldness: 0.42, huntable: true, groupFlee: true,
   }),
+  // F66 — cão raivoso (W1 Barburhen, DOCX "Plus −: cães raivosos"): territorial
+  // e OUSADO — boldness acima do chacal (investiga o jogador de longe e manda
+  // alerta em vez de fugir; só recua com passada direta bem perto).
+  dog: Object.freeze({
+    baseSpeed: 2.4, fleeSpeed: 5.8, fearRadius: 11, homePull: 0.34,
+    idleMin: 0.3, idleMax: 1.4, states: ['idle', 'wander', 'flee', 'investigate'],
+    boldness: 0.58, huntable: true, groupFlee: false,
+  }),
   // F48 — abutre (W1/W3) e ave carnicenta (W4): termal de carniça — voo em
   // círculo (flock) que ignora o jogador a menos que passe direto por baixo.
   vulture: Object.freeze({

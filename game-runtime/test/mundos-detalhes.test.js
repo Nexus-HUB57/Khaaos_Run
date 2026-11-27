@@ -53,10 +53,12 @@ test('F43 placements: cada mundo materializa os detalhes que o README cita', () 
 });
 
 test('F43 exclusividade: os detalhes novos não vazam para outros mundos', () => {
+  // F66 — OWNER aceita LISTA de donos (skeleton agora é canônico em W1 e W2:
+  // "esqueletos e corpos apodrecendo em meio às folhagens" do DOCX de W2).
   const OWNER = {
-    skeleton: 'Barburhen', collapse: 'Barburhen',
-    carnplant: 'Priadus', mist: 'Priadus',
-    quicksand: 'Ckesalth',
+    skeleton: ['Barburhen', 'Priadus'], collapse: ['Barburhen'],
+    carnplant: ['Priadus'], mist: ['Priadus'],
+    quicksand: ['Ckesalth'],
   };
   const IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
   const placements = {};
@@ -64,13 +66,111 @@ test('F43 exclusividade: os detalhes novos não vazam para outros mundos', () =>
     const scenario = resolveScenario(id);
     placements[id] = districtDressing(getWorldLayout(`F43-EX-${id}`, scenario.id), scenario, { density: 1 });
   }
-  for (const [type, owner] of Object.entries(OWNER)) {
+  for (const [type, owners] of Object.entries(OWNER)) {
     for (const other of IDS) {
-      if (other === owner) continue;
+      if (owners.includes(other)) continue;
       const leaked = placements[other].items.some((p) => p.type === type)
         || placements[other].patches.some((p) => p.type === type);
-      assert.ok(!leaked, `${type} não deveria existir em ${other} (exclusivo de ${owner})`);
+      assert.ok(!leaked, `${type} não deveria existir em ${other} (exclusivo de ${owners.join('/')})`);
     }
+  }
+});
+
+// ============================================================================
+// F66 — DOCX de referência dos Mundos (novas exigências canônicas):
+//  W1 Barburhen  — "a floresta tomando a cidade, musgo e gramas por todos os
+//                  lados, pouco concreto, pouco asfalto" + coreto/lago seco/
+//                  bancos quebrados + corpos estáticos;
+//  W2 Priadus    — lago com pontes em deterioração + pequenas ilhas + corpos;
+//  W3 Ckesalth   — refinaria com fumaça tóxica + os caídos do Cemitério;
+//  W4 Arukheea   — prisão ameaçadora (arames farpados em curto/faíscas);
+//  CIGKV         — vila abandonada das casas dos oficiais.
+// ============================================================================
+
+const F66_IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
+function f66Placements(id, seedSuffix) {
+  const scenario = resolveScenario(id);
+  return districtDressing(getWorldLayout(`F66-${seedSuffix}-${id}`, scenario.id), scenario, { density: 1 });
+}
+
+test('F66 presença: cada mundo materializa as NOVAS exigências do DOCX de referência', () => {
+  const EXPECT = {
+    CIGKV:     { officerhouse: 4 },                                      // vila dos oficiais
+    Barburhen: { moss: 8, grasstuft: 12, gazebo: 1, brokenbench: 2, drylake: 1, rotcorpse: 1 },
+    Priadus:   { lake: 1, brokenbridge: 2, isle: 3, skeleton: 1, rotcorpse: 2 },
+    Ckesalth:  { smokecolumn: 1, rotcorpse: 1 },
+    Arukheea:  { barbwire: 3 },
+  };
+  for (const [id, kinds] of Object.entries(EXPECT)) {
+    const d = f66Placements(id, 'PRES');
+    for (const [kind, min] of Object.entries(kinds)) {
+      assert.ok((d.counts[kind] ?? 0) >= min, `${id}: ${kind} >= ${min} (${d.counts[kind] ?? 0})`);
+    }
+  }
+});
+
+test('F66 exclusividade: os itens do DOCX não vazam para mundos que não os citam', () => {
+  const OWNER = {
+    moss: ['Barburhen'], drylake: ['Barburhen'], gazebo: ['Barburhen'],
+    brokenbench: ['Barburhen'], grasstuft: ['Barburhen'],
+    lake: ['Priadus'], brokenbridge: ['Priadus'], isle: ['Priadus'],
+    barbwire: ['Arukheea'], officerhouse: ['CIGKV'],
+  };
+  const placements = {};
+  for (const id of F66_IDS) placements[id] = f66Placements(id, 'EX');
+  for (const [type, owners] of Object.entries(OWNER)) {
+    for (const other of F66_IDS) {
+      if (owners.includes(other)) continue;
+      const leaked = placements[other].items.some((p) => p.type === type)
+        || placements[other].patches.some((p) => p.type === type);
+      assert.ok(!leaked, `${type} não deveria existir em ${other} (exclusivo de ${owners.join('/')})`);
+    }
+  }
+});
+
+test('F66 âncoras do lago: ilhotas DENTRO do espelho e pontes NA borda (Priadus)', () => {
+  const d = f66Placements('Priadus', 'LAKE');
+  const lake = d.patches.find((p) => p.type === 'lake');
+  assert.ok(lake, 'lago presente em Priadus');
+  assert.ok(lake.r >= 5.5, `espelho do lago grande (r=${lake.r})`);
+  const isles = d.items.filter((p) => p.type === 'isle');
+  assert.ok(isles.length >= 2, `ilhotas dentro do lago (${isles.length})`);
+  for (const isle of isles) {
+    const dist = Math.hypot(isle.x - lake.x, isle.z - lake.z);
+    assert.ok(dist < lake.r * .8, `ilhota (${isle.x},${isle.z}) fora do espelho (dist ${dist.toFixed(1)} < ${ (lake.r * .8).toFixed(1) })`);
+  }
+  const bridges = d.items.filter((p) => p.type === 'brokenbridge');
+  assert.ok(bridges.length >= 2, `pontes na margem (${bridges.length})`);
+  for (const br of bridges) {
+    const dist = Math.hypot(br.x - lake.x, br.z - lake.z);
+    assert.ok(dist >= lake.r * .6 && dist <= lake.r * 1.15, `ponte (${br.x},${br.z}) fora do barranco (dist ${dist.toFixed(1)})`);
+  }
+});
+
+test('F66 determinismo: placements com as novas exigências são byte-idênticos por seed', () => {
+  for (const id of F66_IDS) {
+    const scenario = resolveScenario(id);
+    const layout = getWorldLayout(`F66-DET-${id}`, scenario.id);
+    const a = districtDressing(layout, scenario, { density: 1 });
+    const b = districtDressing(layout, scenario, { density: 1 });
+    assert.deepEqual(a, b, `${id}: placements estáveis`);
+  }
+});
+
+test('F66 Ckesalth: horizonte SEM cordilheira de fundo (canon "apenas deserto")', () => {
+  // DOCX W3 (referência do resort): "mas sem as montanhas e o mar ao fundo,
+  // apenas deserto e palmeiras caídas" — os 4 planos de skyline não existem.
+  const countMountains = (id, seed) => {
+    const { scene } = buildScene(seed, id, null, 'high');
+    let count = 0;
+    scene.traverse((o) => { if (o.name === 'skyline-mountain') count++; });
+    return count;
+  };
+  assert.equal(countMountains('Ckesalth', 4242), 0, 'Ckesalth não tem montanhas de fundo');
+  assert.equal(countMountains('Ckesalth', 77), 0, 'Ckesalth sem montanhas em outra seed');
+  // os demais mundos mantêm a marca de skyline (4 planos)
+  for (const id of ['CIGKV', 'Barburhen', 'Priadus', 'Arukheea']) {
+    assert.equal(countMountains(id, 4242), 4, `${id}: cordilheira de fundo intacta`);
   }
 });
 
