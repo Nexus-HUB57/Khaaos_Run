@@ -54,11 +54,17 @@ test('fauna: espécies canônicas presentes por mundo (cânon README/worlds.ts)'
   // F48 — README W1: "alimentos dos ABUTRES e CHACAIS famintos"
   assert.ok(barburhen.userData.fauna.counts.vulture >= 1, 'F48: abutres (termal de carniça) W1');
   assert.ok(barburhen.userData.fauna.counts.jackal >= 2, 'F48: chacais (matilha) W1');
+  // F66 — DOCX W1 (Plus−): "Cães raivosos" — o CACHORRO da lista de Animais
+  assert.ok(barburhen.userData.fauna.counts.dog >= 1, 'F66: cães raivosos W1');
 
   const priadus = build('FAUNA-1', 'Priadus');
   assert.ok(priadus.userData.fauna.counts.croc >= 2, 'JACARÉS canônicos da Área Pantanosa');
   assert.ok(priadus.userData.fauna.counts.mosquito >= 2, 'mosquitos na neblina');
   assert.equal(priadus.userData.fauna.counts.rat ?? 0, 0, 'selva não tem ratos urbanos');
+  // F66 — DOCX W2: "Abutres, Chacais e Corpos Apodrecendo" (lago da Pantanosa)
+  assert.ok(priadus.userData.fauna.counts.vulture >= 1, 'F66: abutres no lago W2');
+  assert.ok(priadus.userData.fauna.counts.jackal >= 1, 'F66: chacais no Bosque/Caça W2');
+  assert.equal(priadus.userData.fauna.counts.dog ?? 0, 0, 'cão é faixa urbana de W1, não da selva');
 
   const ckesalth = build('FAUNA-1', 'Ckesalth');
   assert.ok(ckesalth.userData.fauna.counts.locust >= 2, 'gafanhotos canônicos do deserto');

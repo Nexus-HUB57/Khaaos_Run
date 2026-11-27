@@ -1282,3 +1282,78 @@ export function mistMaterial() {
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   }));
 }
+
+// F66 — MUSGO INVASOR (Barburhen, DOCX de referência W1: "a floresta tomando
+// a cidade, musgo e gramas por todos os lados, pouco concreto"): disco de
+// musgo com falhas de concreto aparecendo — decal de chão que pinta o asfalto.
+function mossCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#3d5724';
+  x.fillRect(0, 0, 256, 256);
+  // falhas de concreto/musgo seco mostrando o solo por baixo
+  for (let i = 0; i < 26; i++) {
+    x.fillStyle = `rgba(${106 + random() * 30 | 0},${100 + random() * 24 | 0},${88 + random() * 18 | 0},${.25 + random() * .3})`;
+    x.beginPath();
+    x.ellipse(random() * 256, random() * 256, 8 + random() * 26, 6 + random() * 18, random() * Math.PI, 0, Math.PI * 2);
+    x.fill();
+  }
+  // tufos vivos (verde mais claro no miolo)
+  for (let i = 0; i < 46; i++) {
+    x.fillStyle = `rgba(${70 + random() * 46 | 0},${112 + random() * 44 | 0},${44 + random() * 26 | 0},${.4 + random() * .34})`;
+    x.beginPath();
+    x.arc(random() * 256, random() * 256, 3 + random() * 12, 0, Math.PI * 2);
+    x.fill();
+  }
+  noise(x, 256, .16, .45);
+  return c;
+}
+export function mossMaterial() {
+  return dressMemo('moss', () => new THREE.MeshStandardMaterial({
+    map: tex(mossCanvas(), { repeat: 1 }),
+    roughness: .94, metalness: .02,
+    transparent: true, opacity: .93,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  }));
+}
+
+// F66 — LAGO SECO (Barburhen Parque Abandonado, DOCX W1: "lago seco" do
+// Parque): barro claro rachado pelo sol — grietas radiais de evaporação.
+function dryLakeCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#8a7f6a';
+  x.fillRect(0, 0, 256, 256);
+  // grietas radiais (o centro seca primeiro e abre do meio para fora)
+  x.strokeStyle = 'rgba(58,50,38,.78)';
+  for (let i = 0; i < 14; i++) {
+    const a = random() * Math.PI * 2;
+    x.lineWidth = 1.5 + random() * 2.2;
+    x.beginPath();
+    x.moveTo(128 + Math.cos(a) * 6, 128 + Math.sin(a) * 6);
+    // caminho aleatório para fora com dobras (grieta orgânica)
+    let px = 128 + Math.cos(a) * 6, py = 128 + Math.sin(a) * 6;
+    for (let k = 0; k < 6; k++) {
+      const aa = a + (random() - .5) * 1.1;
+      px += Math.cos(aa) * (12 + random() * 22);
+      py += Math.sin(aa) * (12 + random() * 22);
+      x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+  // pequenas placas de lama curvada
+  for (let i = 0; i < 34; i++) {
+    x.fillStyle = `rgba(${122 + random() * 26 | 0},${112 + random() * 22 | 0},${92 + random() * 18 | 0},.5)`;
+    x.beginPath();
+    x.ellipse(random() * 256, random() * 256, 6 + random() * 16, 5 + random() * 12, random() * Math.PI, 0, Math.PI * 2);
+    x.fill();
+  }
+  noise(x, 256, .13, .5);
+  return c;
+}
+export function dryLakeMaterial() {
+  return dressMemo('drylake', () => new THREE.MeshStandardMaterial({
+    map: tex(dryLakeCanvas(), { repeat: 1 }),
+    roughness: .96, metalness: .02,
+    transparent: true, opacity: .9,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  }));
+}

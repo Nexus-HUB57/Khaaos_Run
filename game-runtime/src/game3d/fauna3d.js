@@ -40,6 +40,12 @@
 //               ESCORPIÕES (areia / refinaria);
 //   Arukheea  — TUBARÕES (mar, anel 205–268 m FORA da arena), gaivotas,
 //               esqueletos de baleia (Cemitério das Baleias), CARANGUEJOS (costão).
+// F66 (DOCX de referência "Animais do Jogo": abutre, CACHORRO, chacal, rato,
+// crocodilo, tubarão, gaivota):
+//   Barburhen — CÃES RAIVOSOS (DOCX W1 "Plus −: cães raivosos"), territoriais
+//               e ousados no urbano/extração;
+//   Priadus   — ABUTRES + CHACAIS (DOCX W2: "Abutres, Chacais e Corpos
+//               Apodrecendo" no lago da Área Pantanosa) + corpos no dressing.
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { terrainHeightAt } from './terrain3d.js';
@@ -73,10 +79,18 @@ export const FAUNA_PLAN = Object.freeze({
     // de chacais vasculha o urbano e a Zona de Extração.
     vulture: { bands: 1, birdsPerBand: 3, districts: [0, 1], roam: 26, orbit: 15, height: 24 },
     jackal: { count: 3, districts: [0, 3], roam: 22 },
+    // F66 — DOCX W1 (Plus−): "Cães raivosos" — territorial e ousado, late e
+    // INVESTIGA o jogador de longe (boldness acima do chacal).
+    dog: { count: 2, districts: [0, 3], roam: 24 },
   }),
   Priadus: Object.freeze({
     croc: { count: 4, districts: [0], roam: 22 },
     mosquito: { count: 3, districts: [0, 2], roam: 12 },
+    // F66 — DOCX W2: "Abutres, Chacais e Corpos Apodrecendo" (lago da Área
+    // Pantanosa) — térmico sobre a água/lago e matilha no Bosque/Caça; os
+    // corpos/esqueletos são meshes de lore no districts3d.
+    vulture: { bands: 1, birdsPerBand: 3, districts: [0, 2], roam: 26, orbit: 15, height: 22 },
+    jackal: { count: 2, districts: [1, 2], roam: 22 },
   }),
   Ckesalth: Object.freeze({
     locust: { swarms: 3, districts: [1, 2, 3], roam: 34 },
@@ -194,6 +208,12 @@ export function faunaPlacements(layout, scenarioId, { density = 1 } = {}) {
   if (plan.jackal) push('jackal', plan.jackal.count, () => {
     const dIdx = plan.jackal.districts[Math.floor(rng.next() * plan.jackal.districts.length)];
     return { ...anchor(dIdx, plan.jackal.roam), homeR: plan.jackal.roam, district: dIdx };
+  });
+  // F66 — cão raivoso (W1): quadrúpede territorial, mesma passada do canídeo
+  // com cabeça erguida (late/alerta em vez de farejar).
+  if (plan.dog) push('dog', plan.dog.count, () => {
+    const dIdx = plan.dog.districts[Math.floor(rng.next() * plan.dog.districts.length)];
+    return { ...anchor(dIdx, plan.dog.roam), homeR: plan.dog.roam, district: dIdx };
   });
   if (plan.scorpion) push('scorpion', plan.scorpion.count, () => {
     const dIdx = plan.scorpion.districts[Math.floor(rng.next() * plan.scorpion.districts.length)];
@@ -478,6 +498,52 @@ function buildJackal(rng) {
   g.userData.legs = legs;
   g.userData.head = head;
   g.scale.setScalar(.85 + rng.next() * .3);
+  return g;
+}
+
+/** Cão raivoso (Barburhen W1, F66). Mais atarracado que o chacal: orelhas
+ *  caídas, focinho curto, pelagem malhada (manchas de pelo falhado) e cauda
+ *  baixa — silhueta de cão vira-lata agressivo, não de canídeo selvagem. */
+function buildDog(rng) {
+  const g = new THREE.Group();
+  const fur = mat('#7a6450', { rough: .92 });
+  const patch = mat('#4a3c30', { rough: .95 });
+  const body = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.24, 8, 6), fur));
+  body.scale.set(.85, .78, 1.55); body.position.y = .38; g.add(body);
+  // manchas de pelo falhado (vira-lata de rua)
+  for (const [px, pz] of [[.06, .18], [-.08, -.14]]) {
+    const spot = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.11, 6, 5), patch));
+    spot.scale.set(.7, .5, 1.1); spot.position.set(px, .44, pz);
+    g.add(spot);
+  }
+  const neck = noShadow(new THREE.Mesh(new THREE.CylinderGeometry(.1, .14, .26, 6), fur));
+  neck.rotation.x = .8; neck.position.set(0, .52, .3); g.add(neck);
+  const head = new THREE.Group();
+  const skull = noShadow(new THREE.Mesh(new THREE.SphereGeometry(.13, 7, 6), fur));
+  skull.scale.set(.9, .85, 1.05); head.add(skull);
+  const snout = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.09, .07, .16), patch));
+  snout.position.set(0, -.03, .17); head.add(snout);
+  // orelhas CAÍDAS (dobradas para o lado — vira-lata)
+  for (const s of [-1, 1]) {
+    const ear = noShadow(new THREE.Mesh(new THREE.BoxGeometry(.05, .11, .08), patch));
+    ear.position.set(s * .1, .05, -.02); ear.rotation.z = s * 1.1;
+    head.add(ear);
+  }
+  head.position.set(0, .62, .44); g.add(head);
+  const legs = [];
+  for (const [sx, sz] of [[-1, .5], [1, .5], [-1, -.5], [1, -.5]]) {
+    const leg = noShadow(new THREE.Mesh(new THREE.CylinderGeometry(.045, .035, .38, 5), patch));
+    leg.geometry.translate(0, -.06, 0);          // pivô no quadril p/ passada
+    leg.position.set(sx * .17, .19, sz * .7);
+    g.add(leg); legs.push(leg);
+  }
+  // cauda BAIXA (entre as pernas — postura hostil, não abanando)
+  const tail = noShadow(new THREE.Mesh(new THREE.ConeGeometry(.05, .34, 6), fur));
+  tail.rotation.x = Math.PI / 2 + 1.35; tail.position.set(0, .34, -.52);
+  g.add(tail); g.userData.tail = tail;
+  g.userData.legs = legs;
+  g.userData.head = head;
+  g.scale.setScalar(.9 + rng.next() * .25);
   return g;
 }
 
@@ -791,6 +857,36 @@ export function buildFauna(scene, layout, scenario, q = {}) {
           body.userData.head.rotation.x = (brain.speed > .2 ? -.08 : .3)
             - brain.alert * .35 + Math.sin(t * 1.9 + brain.seed) * .05;
         }
+      });
+    } else if (item.kind === 'dog') {
+      // F66 — cão raivoso (W1): passada de canídeo + cabeça ERGUIDA rastreado
+      // (não fareja: late) + alerta sobe o humor do gancho de agressão.
+      const body = buildDog(rng);
+      body.userData.species = 'dog';
+      body.position.set(item.x, groundY(item.x, item.z), item.z);
+      group.add(body);
+      const brain = createBrain('dog', {
+        x: item.x, z: item.z, homeX: item.x, homeZ: item.z, homeR: item.homeR,
+        seed: rng.next() * 1000,
+      });
+      brains.push(brain);
+      let gaitT = rng.next() * 10;
+      animators.push((dt, t) => {
+        brain.step(dt, t, ctx);
+        applyGroundBrain(body, brain, t, 7);
+        gaitT += dt * (3.4 + brain.speed * 2.6);
+        const legs = body.userData.legs;
+        if (legs) for (let i = 0; i < legs.length; i++) {
+          const ph = gaitT + (i % 2) * Math.PI + Math.floor(i / 2) * .5;
+          legs[i].rotation.x = Math.sin(ph) * (brain.speed > .2 ? .6 : .06);
+        }
+        if (body.userData.head) {
+          // cabeça ERGUIDA o tempo todo (rastreado) — abaixa só no flee
+          body.userData.head.rotation.x = (brain.speed > .2 ? -.05 : -.02)
+            + brain.alert * -.18 + Math.sin(t * 2.3 + brain.seed) * .07;
+          body.userData.head.rotation.z = Math.sin(t * 5.1 + brain.seed) * (.02 + brain.alert * .06);
+        }
+        if (body.userData.tail) body.userData.tail.rotation.z = Math.sin(t * 3.2) * .08;
       });
     } else if (item.kind === 'scorpion') {
       const body = buildScorpion(rng);
